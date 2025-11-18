@@ -649,11 +649,35 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     event.sender.send('flash-progress', `Environment: ${envName}\n`);
     event.sender.send('flash-progress', `Port: ${port}\n\n`);
     
-    // Use -p flag to specify upload port (more reliable than environment variable)
-    const buildArgs = ['run', '-e', envName, '-p', port, '-t', 'upload'];
+    // Handle UNC paths on Windows (\\wsl.localhost\... paths)
+    // CMD.EXE doesn't support UNC paths as working directories
+    let workingDir = projectPath;
+    let useShell = process.platform === 'win32';
+    
+    if (process.platform === 'win32' && projectPath.startsWith('\\\\')) {
+      // UNC path - convert to forward slashes for better compatibility
+      // Node.js can handle forward slashes on Windows
+      workingDir = projectPath.replace(/\\/g, '/');
+      event.sender.send('flash-progress', `Note: Converting UNC path for Windows compatibility\n`);
+      // Use shell: true but with cmd /c to handle UNC paths better
+      useShell = true;
+    } else if (process.platform === 'win32') {
+      // Regular Windows path - convert to forward slashes for Node.js
+      workingDir = projectPath.replace(/\\/g, '/');
+    }
+    
+    // PlatformIO uses PLATFORMIO_UPLOAD_PORT environment variable, not -p flag
+    const env = { ...process.env };
+    env.PLATFORMIO_UPLOAD_PORT = port;
+    
+    const buildArgs = ['run', '-e', envName, '-t', 'upload'];
+    
+    // On Windows with batch files, we need shell: true
+    // But we'll use the workingDir with forward slashes which Node.js handles
     const pio = spawn(pioCmd, buildArgs, {
-      cwd: projectPath,
-      shell: process.platform === 'win32'
+      cwd: workingDir,
+      env: env,
+      shell: useShell
     });
     
     let output = '';
