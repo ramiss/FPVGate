@@ -678,6 +678,23 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       env.CHCP = '65001';
     }
     
+    // Clean build directory first to avoid file locking issues on Windows
+    event.sender.send('flash-progress', 'Cleaning previous build artifacts...\n');
+    const cleanArgs = ['run', '-e', envName, '-t', 'clean'];
+    const cleanPio = spawn(pioCmd, cleanArgs, {
+      cwd: workingDir,
+      env: env,
+      shell: useShell
+    });
+    
+    // Wait for clean to complete (don't fail if it errors - might be first build)
+    await new Promise((resolve) => {
+      cleanPio.on('close', () => resolve());
+      cleanPio.on('error', () => resolve()); // Ignore errors, continue anyway
+      // Set timeout to prevent hanging
+      setTimeout(resolve, 10000); // 10 second timeout
+    });
+    
     const buildArgs = ['run', '-e', envName, '-t', 'upload'];
     
     // On Windows with batch files, we need shell: true
