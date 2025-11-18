@@ -95,7 +95,10 @@ function createWrappers() {
 '\n' +
 '# Add bundled PlatformIO to Python path and run\n' +
 'export PYTHONPATH="$PLATFORMIO_DIR:$PYTHONPATH"\n' +
-'exec "$PYTHON" -m platformio "$@"\n';
+'export PYTHONUNBUFFERED=1\n' +
+'\n' +
+'# Use -u flag for unbuffered output (real-time console updates)\n' +
+'exec "$PYTHON" -u -m platformio "$@"\n';
 
   // Windows wrapper
   const winWrapper = `@echo off
@@ -122,8 +125,10 @@ set "PYTHONPATH=%PLATFORMIO_DIR%;%PYTHONPATH%"
 REM Set Python UTF-8 encoding environment variables
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
+set "PYTHONUNBUFFERED=1"
 
-"%PYTHON%" -m platformio %*
+REM Use -u flag for unbuffered output (real-time console updates)
+"%PYTHON%" -u -m platformio %*
 `;
 
   // Write macOS wrapper

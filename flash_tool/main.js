@@ -670,13 +670,15 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     const env = { ...process.env };
     env.PLATFORMIO_UPLOAD_PORT = port;
     
-    // Fix Unicode encoding issues on Windows
+    // Fix Unicode encoding issues on Windows and enable unbuffered output
     if (process.platform === 'win32') {
       env.PYTHONIOENCODING = 'utf-8';
       env.PYTHONUTF8 = '1';
       // Also set console codepage to UTF-8
       env.CHCP = '65001';
     }
+    // Enable unbuffered Python output for real-time console updates (all platforms)
+    env.PYTHONUNBUFFERED = '1';
     
     // On Windows, try to remove specific problematic files that commonly get locked
     if (process.platform === 'win32') {
