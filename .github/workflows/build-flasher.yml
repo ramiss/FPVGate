@@ -37,6 +37,11 @@ jobs:
       with:
         node-version: '20'
     
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
     - name: Install dependencies
       working-directory: flash_tool
       run: npm install
@@ -53,12 +58,29 @@ jobs:
           exit 1
         fi
     
+    - name: Setup PlatformIO Core
+      working-directory: flash_tool
+      run: npm run setup-platformio
+      shell: bash
+    
     - name: Build Electron app (macOS)
       if: matrix.os == 'macos-latest'
       working-directory: flash_tool
       run: npm run build:mac
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+    
+    - name: Remove quarantine attributes (macOS)
+      if: matrix.os == 'macos-latest'
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        # Remove quarantine attributes to prevent "app is damaged" error
+        find dist -name "*.app" -exec xattr -cr {} \;
+        find dist -name "*.dmg" -exec xattr -cr {} \;
+        find dist -name "*.zip" -exec xattr -cr {} \;
+        echo "✅ Quarantine attributes removed"
     
     - name: Build Electron app (Windows)
       if: matrix.os == 'windows-latest'

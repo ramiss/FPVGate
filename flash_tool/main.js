@@ -450,7 +450,61 @@ async function generateCustomSPIFFS(customConfig) {
   });
 }
 
-// Flash firmware using esptool.py
+// Check if a path is a PlatformIO project
+async function isPlatformIOProject(folderPath) {
+  const platformioIni = path.join(folderPath, 'platformio.ini');
+  try {
+    await fs.access(platformioIni);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Find PlatformIO CLI command
+function findPlatformIO() {
+  // Determine platform-specific binary name
+  let binaryName;
+  if (process.platform === 'darwin') {
+    binaryName = 'platformio-macos';
+  } else if (process.platform === 'win32') {
+    binaryName = 'platformio-win64.bat';  // Use .bat on Windows
+  } else {
+    binaryName = 'platformio-linux';
+  }
+  
+  // Try bundled version first (production)
+  if (app.isPackaged) {
+    const bundledPath = path.join(process.resourcesPath, 'resources', 'bin', binaryName);
+    if (require('fs').existsSync(bundledPath)) {
+      return bundledPath;
+    }
+  }
+  
+  // Try development version (running from source)
+  const devPath = path.join(__dirname, 'resources', 'bin', binaryName);
+  if (require('fs').existsSync(devPath)) {
+    return devPath;
+  }
+  
+  // Fallback: try system PlatformIO (for development without bundled binaries)
+  const commands = process.platform === 'win32' 
+    ? ['pio', 'platformio', 'pio.exe', 'platformio.exe']
+    : ['pio', 'platformio'];
+  
+  for (const cmd of commands) {
+    try {
+      require('child_process').execSync(`${cmd} --version`, { stdio: 'ignore' });
+      return cmd;
+    } catch (e) {
+      // Command not found, try next
+    }
+  }
+  
+  return null;
+}
+
+// Flash firmware using esptool.py or PlatformIO
 ipcMain.handle('flash-firmware', async (event, options) => {
   const { port, boardType, firmwarePath, baudRate = 921600, customConfig = null } = options;
   const config = BOARD_CONFIGS[boardType];
@@ -459,6 +513,15 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     throw new Error('Invalid board type');
   }
   
+  // Check if this is a PlatformIO project (source code)
+  const isPIOProject = await isPlatformIOProject(firmwarePath);
+  
+  if (isPIOProject) {
+    // Use PlatformIO to build and upload
+    return flashWithPlatformIO(event, firmwarePath, boardType, port, customConfig);
+  }
+  
+  // Otherwise, use esptool with pre-built binaries
   return new Promise(async (resolve, reject) => {
     let esptoolCmd;
     try {
@@ -486,12 +549,20 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       spiffs: path.join(firmwarePath, 'spiffs.bin')
     };
     
-    // Check which files exist and add them
+    // Check which files exist
+    const existingFiles = [];
     Object.keys(files).forEach(key => {
       if (require('fs').existsSync(files[key])) {
+        existingFiles.push(key);
         args.push(config.flashAddresses[key], files[key]);
       }
     });
+    
+    // If no firmware.bin found, that's an error
+    if (!existingFiles.includes('firmware')) {
+      reject(new Error('No firmware files found, expected firmware.bin. If this is source code, make sure platformio.ini exists in the folder.'));
+      return;
+    }
     
     // If custom config is provided, generate and add custom SPIFFS
     if (customConfig) {
@@ -544,6 +615,155 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     });
   });
 });
+
+// Flash using PlatformIO CLI
+async function flashWithPlatformIO(event, projectPath, boardType, port, customConfig) {
+  return new Promise(async (resolve, reject) => {
+    const pioCmd = findPlatformIO();
+    
+    if (!pioCmd) {
+      reject(new Error('PlatformIO CLI not found. Please install PlatformIO:\n  pip install platformio\n  or\n  pip install --user platformio'));
+      return;
+    }
+    
+    // Map board type to PlatformIO environment name
+    const envMap = {
+      'esp32-c3-supermini': 'esp32-c3-supermini',
+      'esp32-c3': 'esp32-c3',
+      'esp32-c6': 'esp32-c6',
+      'esp32dev': 'esp32dev',
+      'esp32-s3': 'esp32-s3',
+      'esp32-s3-touch': 'esp32-s3-touch',
+      'esp32-s2': 'esp32-s2',
+      'jc2432w328c': 'jc2432w328c'
+    };
+    
+    const envName = envMap[boardType];
+    if (!envName) {
+      reject(new Error(`Unknown board type: ${boardType}`));
+      return;
+    }
+    
+    // Build and upload firmware
+    event.sender.send('flash-progress', `\n=== Building and uploading with PlatformIO ===\n`);
+    event.sender.send('flash-progress', `Environment: ${envName}\n`);
+    event.sender.send('flash-progress', `Port: ${port}\n\n`);
+    
+    // Use -p flag to specify upload port (more reliable than environment variable)
+    const buildArgs = ['run', '-e', envName, '-p', port, '-t', 'upload'];
+    const pio = spawn(pioCmd, buildArgs, {
+      cwd: projectPath,
+      shell: process.platform === 'win32'
+    });
+    
+    let output = '';
+    
+    pio.stdout.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+      event.sender.send('flash-progress', text);
+      
+      // Parse progress from PlatformIO output
+      const progressMatch = text.match(/(\d+)%/);
+      if (progressMatch) {
+        event.sender.send('flash-percent', parseInt(progressMatch[1]));
+      }
+    });
+    
+    pio.stderr.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+      event.sender.send('flash-progress', text);
+    });
+    
+    pio.on('close', (code) => {
+      if (code === 0) {
+        // If custom config is provided, upload SPIFFS separately
+        if (customConfig) {
+          event.sender.send('flash-progress', '\n=== Generating and uploading custom SPIFFS ===\n');
+          uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType)
+            .then(() => {
+              resolve({ success: true, output });
+            })
+            .catch((error) => {
+              event.sender.send('flash-progress', `⚠ Custom SPIFFS upload failed: ${error.message}\n`);
+              event.sender.send('flash-progress', 'Firmware uploaded successfully, but custom config not applied.\n');
+              resolve({ success: true, output, warning: 'Custom SPIFFS upload failed' });
+            });
+        } else {
+          resolve({ success: true, output });
+        }
+      } else {
+        reject(new Error(`PlatformIO build/upload failed with code ${code}\n${output}`));
+      }
+    });
+    
+    pio.on('error', (err) => {
+      reject(new Error(`Failed to start PlatformIO: ${err.message}`));
+    });
+  });
+}
+
+// Upload custom SPIFFS using PlatformIO
+async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType) {
+  // Generate SPIFFS image
+  event.sender.send('flash-progress', 'Generating custom SPIFFS image...\n');
+  const spiffsPath = await generateCustomSPIFFS(customConfig);
+  
+  // Use esptool to upload SPIFFS to the correct address
+  const config = BOARD_CONFIGS[boardType];
+  
+  if (!config) {
+    throw new Error('Could not determine board config for SPIFFS upload');
+  }
+  
+  let esptoolCmd;
+  try {
+    esptoolCmd = findEsptool();
+  } catch (error) {
+    throw new Error('esptool not found for SPIFFS upload');
+  }
+  
+  return new Promise((resolve, reject) => {
+    const args = [
+      '--chip', config.chip,
+      '--port', port,
+      '--baud', '921600',
+      '--before', 'default_reset',
+      '--after', 'hard_reset',
+      'write_flash',
+      config.flashAddresses.spiffs,
+      spiffsPath
+    ];
+    
+    const esptool = spawn(esptoolCmd, args);
+    let output = '';
+    
+    esptool.stdout.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+      event.sender.send('flash-progress', text);
+    });
+    
+    esptool.stderr.on('data', (data) => {
+      output += data.toString();
+      event.sender.send('flash-progress', data.toString());
+    });
+    
+    esptool.on('close', (code) => {
+      if (code === 0) {
+        event.sender.send('flash-progress', '✓ Custom SPIFFS uploaded successfully\n');
+        resolve();
+      } else {
+        reject(new Error(`SPIFFS upload failed: ${output}`));
+      }
+    });
+    
+    esptool.on('error', (err) => {
+      reject(new Error(`Failed to upload SPIFFS: ${err.message}`));
+    });
+  });
+}
 
 // Erase flash
 ipcMain.handle('erase-flash', async (event, options) => {

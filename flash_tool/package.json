@@ -10,7 +10,9 @@
     "build:win": "electron-builder --win",
     "build:all": "electron-builder --mac --win",
     "dist": "electron-builder --mac --win --publish never",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "setup-platformio": "node scripts/setup-platformio.js",
+    "prebuild": "npm run setup-platformio"
   },
   "keywords": [
     "ESP32",
@@ -42,7 +44,12 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.inherit.plist",
+      "identity": null
     },
     "win": {
       "target": [
@@ -60,7 +67,15 @@
         "from": "resources/bin/",
         "to": "resources/bin/",
         "filter": [
-          "esptool-*"
+          "esptool-*",
+          "platformio-*"
+        ]
+      },
+      {
+        "from": "resources/platformio/",
+        "to": "resources/platformio/",
+        "filter": [
+          "**/*"
         ]
       }
     ],
