@@ -5,6 +5,8 @@ let selectedPort = null;
 let firmwareSource = 'github';
 let localFirmwarePath = null;
 let customPinsEnabled = false;
+let allReleases = [];
+let selectedRelease = null; // Will be set to latest on load
 
 // Console output buffering for real-time updates
 let consoleBuffer = '';
@@ -67,7 +69,10 @@ async function init() {
     radio.addEventListener('change', (e) => {
       firmwareSource = e.target.value;
       const localFolderGroup = document.getElementById('local-folder-group');
+      const githubReleaseGroup = document.getElementById('github-release-group');
+      
       localFolderGroup.style.display = firmwareSource === 'local' ? 'block' : 'none';
+      githubReleaseGroup.style.display = firmwareSource === 'github' ? 'block' : 'none';
       
       // Scroll to local folder section when it's shown
       if (firmwareSource === 'local') {
@@ -77,6 +82,9 @@ async function init() {
       }
     });
   });
+  
+  // Load GitHub releases on startup
+  await loadReleases();
   
   // Setup progress listeners
   window.flasher.onFlashProgress((text) => {
@@ -95,6 +103,69 @@ async function init() {
   window.flasher.onEraseProgress((text) => {
     appendToConsole(text);
   });
+}
+
+// Load and populate GitHub releases
+async function loadReleases() {
+  try {
+    const releaseSelect = document.getElementById('release-select');
+    const releaseHelp = document.getElementById('release-help');
+    
+    releaseSelect.innerHTML = '<option value="">Loading releases...</option>';
+    releaseSelect.disabled = true;
+    releaseHelp.textContent = 'Loading available releases...';
+    
+    allReleases = await window.flasher.fetchGitHubReleases();
+    
+    if (allReleases.length === 0) {
+      releaseSelect.innerHTML = '<option value="">No releases found</option>';
+      releaseHelp.textContent = '⚠️ No releases available';
+      return;
+    }
+    
+    // Populate dropdown
+    releaseSelect.innerHTML = '';
+    allReleases.forEach((release, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      const label = release.isPrerelease 
+        ? `${release.name || release.tag} (Pre-release)`
+        : release.name || release.tag;
+      option.textContent = label;
+      releaseSelect.appendChild(option);
+    });
+    
+    // Default to latest (first in array) - ensure it's selected
+    if (allReleases.length > 0) {
+      releaseSelect.value = '0';
+      selectedRelease = allReleases[0];
+      releaseSelect.disabled = false;
+      const releaseName = selectedRelease.name || selectedRelease.tag;
+      releaseHelp.textContent = `✅ ${allReleases.length} release${allReleases.length > 1 ? 's' : ''} available. Latest selected: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
+      
+      // Trigger change event to ensure state is consistent
+      releaseSelect.dispatchEvent(new Event('change'));
+    }
+    
+    // Add change listener (only add once)
+    if (!releaseSelect.hasAttribute('data-listener-added')) {
+      releaseSelect.setAttribute('data-listener-added', 'true');
+      releaseSelect.addEventListener('change', (e) => {
+        const index = parseInt(e.target.value);
+        if (index >= 0 && index < allReleases.length) {
+          selectedRelease = allReleases[index];
+          const releaseName = selectedRelease.name || selectedRelease.tag;
+          releaseHelp.textContent = `Selected: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
+        }
+      });
+    }
+  } catch (error) {
+    const releaseSelect = document.getElementById('release-select');
+    const releaseHelp = document.getElementById('release-help');
+    releaseSelect.innerHTML = '<option value="">Error loading releases</option>';
+    releaseHelp.textContent = `❌ Error: ${error.message}`;
+    showStatus('Failed to load releases: ' + error.message, 'error');
+  }
 }
 
 // Populate board select dropdown
@@ -259,22 +330,33 @@ async function startFlashing() {
     
     if (firmwareSource === 'github') {
       // Download from GitHub
-      showStatus('Fetching latest release...', 'info');
+      // If no release is selected, try to use the latest (first in array)
+      if (!selectedRelease) {
+        if (allReleases.length > 0) {
+          selectedRelease = allReleases[0];
+          const releaseSelect = document.getElementById('release-select');
+          if (releaseSelect) {
+            releaseSelect.value = '0';
+          }
+        } else {
+          throw new Error('No releases available. Please check your internet connection and try again.');
+        }
+      }
+      
+      showStatus(`Fetching ${selectedRelease.name || selectedRelease.tag}...`, 'info');
       // Show progress bar for downloads
       const progressBar = document.getElementById('progress-bar');
       progressBar.style.display = 'block';
       updateProgress(0);
       
-      const release = await window.flasher.fetchGitHubReleases();
-      
       // Find the asset for this board
-      const asset = release.assets.find(a => a.name.includes(selectedBoard));
+      const asset = selectedRelease.assets.find(a => a.name.includes(selectedBoard));
       
       if (!asset) {
-        throw new Error(`No firmware found for ${selectedBoard} in latest release`);
+        throw new Error(`No firmware found for ${selectedBoard} in ${selectedRelease.name || selectedRelease.tag}`);
       }
       
-      showStatus(`Downloading ${release.name}...`, 'info');
+      showStatus(`Downloading ${selectedRelease.name || selectedRelease.tag}...`, 'info');
       const download = await window.flasher.downloadFirmware(asset.url, selectedBoard);
       firmwarePath = download.path;
     } else {

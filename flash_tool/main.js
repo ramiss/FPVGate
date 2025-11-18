@@ -269,7 +269,7 @@ ipcMain.handle('get-board-configs', async () => {
 // Fetch releases from GitHub
 ipcMain.handle('fetch-github-releases', async () => {
   try {
-    // Fetch all releases (including pre-releases), then get the first one
+    // Fetch all releases (including pre-releases)
     const response = await axios.get(
       'https://api.github.com/repos/RaceFPV/StarForgeOS/releases',
       {
@@ -284,18 +284,18 @@ ipcMain.handle('fetch-github-releases', async () => {
       throw new Error('No releases found');
     }
     
-    // Get the first release (most recent, including pre-releases)
-    const latestRelease = response.data[0];
-    
-    return {
-      tag: latestRelease.tag_name,
-      name: latestRelease.name,
-      assets: latestRelease.assets.map(asset => ({
+    // Return all releases, formatted for the UI
+    return response.data.map(release => ({
+      tag: release.tag_name,
+      name: release.name || release.tag_name,
+      publishedAt: release.published_at,
+      isPrerelease: release.prerelease,
+      assets: release.assets.map(asset => ({
         name: asset.name,
         url: asset.browser_download_url,
         size: asset.size
       }))
-    };
+    }));
   } catch (error) {
     console.error('Error fetching releases:', error);
     if (error.response) {

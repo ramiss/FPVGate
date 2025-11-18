@@ -42,13 +42,22 @@
         <div class="radio-group">
           <div class="radio-option">
             <input type="radio" id="source-github" name="source" value="github" checked>
-            <label for="source-github">📦 Latest Release</label>
+            <label for="source-github">📦 GitHub Release</label>
           </div>
           <div class="radio-option">
             <input type="radio" id="source-local" name="source" value="local">
             <label for="source-local">📁 Local Folder</label>
           </div>
         </div>
+      </div>
+
+      <!-- GitHub Release Selection (shown when GitHub is selected) -->
+      <div class="form-group" id="github-release-group">
+        <label for="release-select">Select Release</label>
+        <select id="release-select" style="width: 100%;">
+          <option value="">Loading releases...</option>
+        </select>
+        <p class="help-text" id="release-help">Loading available releases...</p>
       </div>
 
       <!-- Local Folder Selection (hidden by default) -->
