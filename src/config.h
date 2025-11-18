@@ -48,6 +48,17 @@
     // BATTERY_ADC_PIN is defined later in the LCD UI section (GPIO34, repurposed from light sensor)
     #define USE_DMA_ADC         0     // Disabled for battery monitoring compatibility
     #define UART_BAUD_RATE      921600  // Fast baud rate (works with most UART bridges)
+#elif defined(BOARD_ESP32_S3_DEVKITC)
+    // ESP32-S3-DevKitC-1 (standard development board)
+    // Standard pinout for ESP32-S3-DevKitC-1
+    // Available GPIOs: 1-21, 35-48 (avoid 43-46 if using USB/JTAG)
+    #define RSSI_INPUT_PIN      4     // GPIO4 (ADC1_CH3) - RSSI input from RX5808
+    #define RX5808_DATA_PIN     11    // GPIO11 - DATA (SPI MOSI) to RX5808
+    #define RX5808_CLK_PIN      12    // GPIO12 - CLK (SPI SCK) to RX5808
+    #define RX5808_SEL_PIN      10    // GPIO13 - LE (Latch Enable / SPI CS) to RX5808
+    #define MODE_SWITCH_PIN     9     // GPIO9 - Mode selection switch (tie to 3.3v for WiFi mode)
+    #define USE_DMA_ADC         1     // Enabled for best RSSI performance
+    #define UART_BAUD_RATE      921600  // USB CDC for serial communication
 #else
     // Generic ESP32 DevKit / ESP32-WROOM-32 (ESP32-D0WD-V3, NodeMCU-32S, etc)
     // Pin mapping compatible with standard ESP32 dev boards

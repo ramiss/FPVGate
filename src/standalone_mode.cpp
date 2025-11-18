@@ -203,8 +203,15 @@ void StandaloneMode::process() {
         }
         
 #if ENABLE_AUDIO
+        // Calculate lap time (difference from previous lap or start)
+        uint32_t lapTime = 0;
+        if (_laps.size() == 1) {
+            lapTime = lap.timestamp_ms - _raceStartTime;
+        } else {
+            lapTime = lap.timestamp_ms - _laps[_laps.size() - 2].timestamp_ms;
+        }
         // Speak lap announcement with time
-        speakLapAnnouncement(_laps.size(), lap.timestamp_ms);
+        speakLapAnnouncement(_laps.size(), lapTime);
 #endif
 #endif
     }
@@ -364,6 +371,14 @@ void StandaloneMode::handleStartRace() {
     _raceActive = true;
     _raceStartTime = millis();
     _laps.clear();
+    
+    // Drain any pending laps from timing core that may have been detected before race start
+    // This ensures the first lap after race start is counted as lap 1
+    if (_timingCore) {
+        while (_timingCore->hasNewLap()) {
+            _timingCore->getNextLap();  // Discard stale laps
+        }
+    }
     
 #if ENABLE_LCD_UI
     if (_lcdUI) {
@@ -658,10 +673,22 @@ void StandaloneMode::playLapBeep() {
 
 // Speak lap announcement using word fragment TTS
 void StandaloneMode::speakLapAnnouncement(uint16_t lapNumber, uint32_t lapTimeMs) {
+    // Calculate minutes and seconds from lap time
+    uint32_t totalSeconds = lapTimeMs / 1000;
+    uint32_t minutes = totalSeconds / 60;
+    uint32_t seconds = totalSeconds % 60;
+    
     #if defined(BOARD_JC2432W328C)
     // TODO: Implement SimpleTTS with pre-recorded word fragments
     // For now, use simple beep until audio files are generated
     // Audio files needed: "lap", "1"-"20", "0"-"59", "seconds", "minutes"
+    // Format: Only announce minutes if > 0, then seconds
+    // Example: "Lap 1, 45 seconds" or "Lap 2, 1 minute, 23 seconds"
+    if (minutes > 0) {
+        // TODO: Play "lap", lap number, minutes, "minutes", seconds, "seconds"
+    } else {
+        // TODO: Play "lap", lap number, seconds, "seconds" (skip "0 minutes")
+    }
     playLapBeep();
     #else
     // Fallback to beep for boards without TTS
@@ -676,6 +703,14 @@ void StandaloneMode::lcdStartCallback() {
         _lcdInstance->_raceActive = true;
         _lcdInstance->_raceStartTime = millis();
         _lcdInstance->_laps.clear();
+        
+        // Drain any pending laps from timing core that may have been detected before race start
+        // This ensures the first lap after race start is counted as lap 1
+        if (_lcdInstance->_timingCore) {
+            while (_lcdInstance->_timingCore->hasNewLap()) {
+                _lcdInstance->_timingCore->getNextLap();  // Discard stale laps
+            }
+        }
         
         if (_lcdInstance->_lcdUI) {
             _lcdInstance->_lcdUI->updateRaceStatus(true);
