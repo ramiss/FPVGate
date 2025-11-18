@@ -687,12 +687,32 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       shell: useShell
     });
     
+    // Capture clean output (but don't show it unless there's an error)
+    let cleanOutput = '';
+    cleanPio.stdout?.on('data', (data) => {
+      cleanOutput += data.toString();
+    });
+    cleanPio.stderr?.on('data', (data) => {
+      cleanOutput += data.toString();
+    });
+    
     // Wait for clean to complete (don't fail if it errors - might be first build)
     await new Promise((resolve) => {
-      cleanPio.on('close', () => resolve());
-      cleanPio.on('error', () => resolve()); // Ignore errors, continue anyway
+      cleanPio.on('close', (code) => {
+        if (code === 0) {
+          event.sender.send('flash-progress', '✓ Build directory cleaned\n');
+        }
+        resolve();
+      });
+      cleanPio.on('error', () => {
+        // Ignore errors, continue anyway (might be first build)
+        resolve();
+      });
       // Set timeout to prevent hanging
-      setTimeout(resolve, 10000); // 10 second timeout
+      setTimeout(() => {
+        event.sender.send('flash-progress', '⚠ Clean step timed out, continuing...\n');
+        resolve();
+      }, 15000); // 15 second timeout
     });
     
     const buildArgs = ['run', '-e', envName, '-t', 'upload'];
