@@ -101,6 +101,9 @@ function createWrappers() {
   const winWrapper = `@echo off
 setlocal
 
+REM Set UTF-8 encoding for console output (fixes Unicode errors)
+chcp 65001 >nul 2>&1
+
 set "SCRIPT_DIR=%~dp0"
 set "PLATFORMIO_DIR=%SCRIPT_DIR%..\\platformio"
 
@@ -115,6 +118,10 @@ if %ERRORLEVEL% EQU 0 (
 
 REM Add bundled PlatformIO to Python path
 set "PYTHONPATH=%PLATFORMIO_DIR%;%PYTHONPATH%"
+
+REM Set Python UTF-8 encoding environment variables
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 
 "%PYTHON%" -m platformio %*
 `;

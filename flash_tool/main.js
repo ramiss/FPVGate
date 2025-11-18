@@ -670,6 +670,14 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     const env = { ...process.env };
     env.PLATFORMIO_UPLOAD_PORT = port;
     
+    // Fix Unicode encoding issues on Windows
+    if (process.platform === 'win32') {
+      env.PYTHONIOENCODING = 'utf-8';
+      env.PYTHONUTF8 = '1';
+      // Also set console codepage to UTF-8
+      env.CHCP = '65001';
+    }
+    
     const buildArgs = ['run', '-e', envName, '-t', 'upload'];
     
     // On Windows with batch files, we need shell: true
