@@ -83,11 +83,11 @@ async function init() {
     appendToConsole(text);
   });
   
-  window.flasher.onFlashPercent((percent) => {
-    updateProgress(percent);
-  });
+  // Removed flash-percent listener - progress bar was inaccurate
+  // Users can see progress in the console output instead
   
   window.flasher.onDownloadProgress((percent) => {
+    // Only show progress for downloads (GitHub releases), not for local builds
     updateProgress(percent);
     document.getElementById('progress-bar').textContent = `Downloading ${percent}%`;
   });
@@ -244,7 +244,9 @@ async function startFlashing() {
   const progressSection = document.getElementById('progress-section');
   progressSection.classList.add('active');
   clearConsole();
-  updateProgress(0);
+  // Hide progress bar for local builds (only show for downloads)
+  const progressBar = document.getElementById('progress-bar');
+  progressBar.style.display = 'none';
   showStatus('Starting flash process...', 'info');
   
   // Scroll to progress section so user can see the debug output
@@ -258,6 +260,11 @@ async function startFlashing() {
     if (firmwareSource === 'github') {
       // Download from GitHub
       showStatus('Fetching latest release...', 'info');
+      // Show progress bar for downloads
+      const progressBar = document.getElementById('progress-bar');
+      progressBar.style.display = 'block';
+      updateProgress(0);
+      
       const release = await window.flasher.fetchGitHubReleases();
       
       // Find the asset for this board

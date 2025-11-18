@@ -589,11 +589,8 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       output += text;
       event.sender.send('flash-progress', text);
       
-      // Parse progress from esptool output
-      const progressMatch = text.match(/Writing at 0x[0-9a-f]+\.\.\. \((\d+) %\)/);
-      if (progressMatch) {
-        event.sender.send('flash-percent', parseInt(progressMatch[1]));
-      }
+      // Removed progress percentage parsing - esptool percentages are also unreliable
+      // Users can see progress in the console output instead
     });
     
     esptool.stderr.on('data', (data) => {
@@ -804,12 +801,8 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       const text = data.toString();
       output += text;
       event.sender.send('flash-progress', text);
-      
-      // Parse progress from PlatformIO output
-      const progressMatch = text.match(/(\d+)%/);
-      if (progressMatch) {
-        event.sender.send('flash-percent', parseInt(progressMatch[1]));
-      }
+      // Removed progress percentage parsing - PlatformIO outputs multiple percentages
+      // (build, upload, memory) that conflict, making the progress bar inaccurate
     });
     
     pio.stderr.on('data', (data) => {
