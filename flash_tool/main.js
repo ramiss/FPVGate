@@ -678,6 +678,43 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       env.CHCP = '65001';
     }
     
+    // On Windows, try to remove specific problematic files that commonly get locked
+    if (process.platform === 'win32') {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const buildDir = path.join(workingDir, '.pio', 'build', envName);
+        const problematicFiles = [
+          'bootloader.bin',
+          'partitions.bin',
+          'firmware.bin'
+        ];
+        
+        for (const file of problematicFiles) {
+          const filePath = path.join(buildDir, file);
+          try {
+            if (fs.existsSync(filePath)) {
+              // Try to delete with a small delay between attempts
+              for (let i = 0; i < 3; i++) {
+                try {
+                  fs.unlinkSync(filePath);
+                  break; // Success, exit retry loop
+                } catch (err) {
+                  if (i < 2) {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms and retry
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            // Ignore errors - file might not exist or be locked
+          }
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    }
+    
     // Clean build directory first to avoid file locking issues on Windows
     event.sender.send('flash-progress', 'Cleaning previous build artifacts...\n');
     const cleanArgs = ['run', '-e', envName, '-t', 'clean'];
@@ -714,6 +751,35 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
         resolve();
       }, 15000); // 15 second timeout
     });
+    
+    // Give Windows time to release file locks after clean
+    // This is especially important on Windows where file locks can persist briefly
+    event.sender.send('flash-progress', 'Waiting for file locks to release...\n');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+    
+    // On Windows, also try to manually remove the build directory if it exists
+    // This helps with stubborn file locks
+    if (process.platform === 'win32') {
+      const fs = require('fs');
+      const path = require('path');
+      const buildDir = path.join(workingDir, '.pio', 'build', envName);
+      try {
+        if (fs.existsSync(buildDir)) {
+          // Try to remove the directory (will fail silently if locked, that's OK)
+          try {
+            fs.rmSync(buildDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+            event.sender.send('flash-progress', '✓ Build directory removed\n');
+          } catch (err) {
+            // Ignore errors - files might still be locked, PlatformIO clean will handle it
+            event.sender.send('flash-progress', '⚠ Some files still locked, PlatformIO will handle cleanup\n');
+          }
+          // Give it another moment after manual removal
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (err) {
+        // Ignore errors, continue with build
+      }
+    }
     
     const buildArgs = ['run', '-e', envName, '-t', 'upload'];
     
