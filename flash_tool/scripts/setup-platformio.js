@@ -78,9 +78,9 @@ function createWrappers() {
   console.log('\n📝 Creating wrapper scripts...');
   
   // macOS/Linux wrapper
-  // Note: Need to escape ${} in template strings to prevent JS interpolation
-  const unixWrapper = `#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "\\${BASH_SOURCE[0]}")" && pwd)"
+  // Note: Use String.raw to prevent template string interpolation of ${BASH_SOURCE[0]}
+  const unixWrapper = String.raw`#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORMIO_DIR="$SCRIPT_DIR/../platformio"
 
 # Use system Python with bundled PlatformIO package
