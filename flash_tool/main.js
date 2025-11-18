@@ -269,33 +269,50 @@ ipcMain.handle('get-board-configs', async () => {
 // Fetch releases from GitHub
 ipcMain.handle('fetch-github-releases', async () => {
   try {
-    // Fetch all releases (including pre-releases)
-    const response = await axios.get(
-      'https://api.github.com/repos/RaceFPV/StarForgeOS/releases',
-      {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'StarForge-Flasher'
+    // Fetch all releases (including pre-releases) and the latest stable release
+    const [allReleasesResponse, latestResponse] = await Promise.all([
+      axios.get(
+        'https://api.github.com/repos/RaceFPV/StarForgeOS/releases',
+        {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'StarForge-Flasher'
+          }
         }
-      }
-    );
+      ),
+      axios.get(
+        'https://api.github.com/repos/RaceFPV/StarForgeOS/releases/latest',
+        {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'StarForge-Flasher'
+          }
+        }
+      ).catch(() => ({ data: null })) // If latest fails, continue without it
+    ]);
     
-    if (!response.data || response.data.length === 0) {
+    if (!allReleasesResponse.data || allReleasesResponse.data.length === 0) {
       throw new Error('No releases found');
     }
     
-    // Return all releases, formatted for the UI
-    return response.data.map(release => ({
-      tag: release.tag_name,
-      name: release.name || release.tag_name,
-      publishedAt: release.published_at,
-      isPrerelease: release.prerelease,
-      assets: release.assets.map(asset => ({
-        name: asset.name,
-        url: asset.browser_download_url,
-        size: asset.size
-      }))
-    }));
+    // Get the latest stable release tag (excludes pre-releases)
+    const latestTag = latestResponse.data ? latestResponse.data.tag_name : null;
+    
+    // Return all releases with latest indicator
+    return {
+      releases: allReleasesResponse.data.map(release => ({
+        tag: release.tag_name,
+        name: release.name || release.tag_name,
+        publishedAt: release.published_at,
+        isPrerelease: release.prerelease,
+        assets: release.assets.map(asset => ({
+          name: asset.name,
+          url: asset.browser_download_url,
+          size: asset.size
+        }))
+      })),
+      latestTag: latestTag // The actual latest stable release tag
+    };
   } catch (error) {
     console.error('Error fetching releases:', error);
     if (error.response) {

@@ -6,7 +6,8 @@ let firmwareSource = 'github';
 let localFirmwarePath = null;
 let customPinsEnabled = false;
 let allReleases = [];
-let selectedRelease = null; // Will be set to latest on load
+let selectedRelease = null; // Will be set to latest stable release on load
+let latestReleaseTag = null; // The actual latest stable release tag from GitHub
 
 // Console output buffering for real-time updates
 let consoleBuffer = '';
@@ -115,7 +116,9 @@ async function loadReleases() {
     releaseSelect.disabled = true;
     releaseHelp.textContent = 'Loading available releases...';
     
-    allReleases = await window.flasher.fetchGitHubReleases();
+    const releasesData = await window.flasher.fetchGitHubReleases();
+    allReleases = releasesData.releases;
+    latestReleaseTag = releasesData.latestTag;
     
     if (allReleases.length === 0) {
       releaseSelect.innerHTML = '<option value="">No releases found</option>';
@@ -125,27 +128,35 @@ async function loadReleases() {
     
     // Populate dropdown
     releaseSelect.innerHTML = '';
+    let latestIndex = 0; // Default to first if we can't find latest
+    
     allReleases.forEach((release, index) => {
       const option = document.createElement('option');
       option.value = index;
-      const label = release.isPrerelease 
+      let label = release.isPrerelease 
         ? `${release.name || release.tag} (Pre-release)`
         : release.name || release.tag;
+      
+      // Mark the latest stable release
+      if (latestReleaseTag && release.tag === latestReleaseTag) {
+        label = `${label} (Latest)`;
+        latestIndex = index;
+      }
+      
       option.textContent = label;
       releaseSelect.appendChild(option);
     });
     
-    // Default to latest (first in array) - ensure it's selected
-    if (allReleases.length > 0) {
-      releaseSelect.value = '0';
-      selectedRelease = allReleases[0];
-      releaseSelect.disabled = false;
-      const releaseName = selectedRelease.name || selectedRelease.tag;
-      releaseHelp.textContent = `✅ ${allReleases.length} release${allReleases.length > 1 ? 's' : ''} available. Latest selected: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
-      
-      // Trigger change event to ensure state is consistent
-      releaseSelect.dispatchEvent(new Event('change'));
-    }
+    // Default to latest stable release (or first if latest not found)
+    releaseSelect.value = latestIndex.toString();
+    selectedRelease = allReleases[latestIndex];
+    releaseSelect.disabled = false;
+    const releaseName = selectedRelease.name || selectedRelease.tag;
+    const isLatest = latestReleaseTag && selectedRelease.tag === latestReleaseTag;
+    releaseHelp.textContent = `✅ ${allReleases.length} release${allReleases.length > 1 ? 's' : ''} available. ${isLatest ? 'Latest stable' : 'Selected'}: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
+    
+    // Trigger change event to ensure state is consistent
+    releaseSelect.dispatchEvent(new Event('change'));
     
     // Add change listener (only add once)
     if (!releaseSelect.hasAttribute('data-listener-added')) {
@@ -155,7 +166,8 @@ async function loadReleases() {
         if (index >= 0 && index < allReleases.length) {
           selectedRelease = allReleases[index];
           const releaseName = selectedRelease.name || selectedRelease.tag;
-          releaseHelp.textContent = `Selected: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
+          const isLatest = latestReleaseTag && selectedRelease.tag === latestReleaseTag;
+          releaseHelp.textContent = `${isLatest ? 'Latest stable' : 'Selected'}: ${releaseName}${selectedRelease.isPrerelease ? ' (Pre-release)' : ''}`;
         }
       });
     }
