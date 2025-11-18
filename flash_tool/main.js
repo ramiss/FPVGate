@@ -679,6 +679,8 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     }
     // Enable unbuffered Python output for real-time console updates (all platforms)
     env.PYTHONUNBUFFERED = '1';
+    // Force PlatformIO to use unbuffered output
+    env.PLATFORMIO_FORCE_UNBUFFERED = '1';
     
     // On Windows, try to remove specific problematic files that commonly get locked
     if (process.platform === 'win32') {
@@ -719,11 +721,12 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     
     // Clean build directory first to avoid file locking issues on Windows
     event.sender.send('flash-progress', 'Cleaning previous build artifacts...\n');
-    const cleanArgs = ['run', '-e', envName, '-t', 'clean'];
+    const cleanArgs = ['run', '-e', envName, '-t', 'clean', '--verbose'];
     const cleanPio = spawn(pioCmd, cleanArgs, {
       cwd: workingDir,
       env: env,
-      shell: useShell
+      shell: useShell,
+      stdio: ['ignore', 'pipe', 'pipe'] // Explicitly pipe stdout/stderr for real-time output
     });
     
     // Capture clean output (but don't show it unless there's an error)
@@ -783,14 +786,16 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       }
     }
     
-    const buildArgs = ['run', '-e', envName, '-t', 'upload'];
+    const buildArgs = ['run', '-e', envName, '-t', 'upload', '--verbose'];
     
     // On Windows with batch files, we need shell: true
     // But we'll use the workingDir with forward slashes which Node.js handles
+    // Use explicit stdio configuration to ensure real-time output
     const pio = spawn(pioCmd, buildArgs, {
       cwd: workingDir,
       env: env,
-      shell: useShell
+      shell: useShell,
+      stdio: ['ignore', 'pipe', 'pipe'] // Explicitly pipe stdout/stderr for real-time output
     });
     
     let output = '';

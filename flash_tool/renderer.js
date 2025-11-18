@@ -6,6 +6,10 @@ let firmwareSource = 'github';
 let localFirmwarePath = null;
 let customPinsEnabled = false;
 
+// Console output buffering for real-time updates
+let consoleBuffer = '';
+let consoleUpdateScheduled = false;
+
 // Pin presets for different boards
 const pinPresets = {
   'esp32c3-default': {
@@ -62,8 +66,15 @@ async function init() {
   document.querySelectorAll('input[name="source"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
       firmwareSource = e.target.value;
-      document.getElementById('local-folder-group').style.display = 
-        firmwareSource === 'local' ? 'block' : 'none';
+      const localFolderGroup = document.getElementById('local-folder-group');
+      localFolderGroup.style.display = firmwareSource === 'local' ? 'block' : 'none';
+      
+      // Scroll to local folder section when it's shown
+      if (firmwareSource === 'local') {
+        setTimeout(() => {
+          localFolderGroup.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+      }
     });
   });
   
@@ -230,10 +241,16 @@ async function startFlashing() {
   setButtonsEnabled(false);
   
   // Show progress section
-  document.getElementById('progress-section').classList.add('active');
+  const progressSection = document.getElementById('progress-section');
+  progressSection.classList.add('active');
   clearConsole();
   updateProgress(0);
   showStatus('Starting flash process...', 'info');
+  
+  // Scroll to progress section so user can see the debug output
+  setTimeout(() => {
+    progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
   
   try {
     let firmwarePath;
@@ -297,9 +314,15 @@ async function eraseFlash() {
   }
   
   setButtonsEnabled(false);
-  document.getElementById('progress-section').classList.add('active');
+  const progressSection = document.getElementById('progress-section');
+  progressSection.classList.add('active');
   clearConsole();
   showStatus('Erasing flash...', 'info');
+  
+  // Scroll to progress section so user can see the debug output
+  setTimeout(() => {
+    progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
   
   try {
     appendToConsole('=== Erasing flash ===\n');
@@ -328,12 +351,48 @@ function updateProgress(percent) {
 }
 
 function appendToConsole(text) {
+  // Buffer the text for batched updates
+  consoleBuffer += text;
+  
+  // Schedule a DOM update if not already scheduled
+  if (!consoleUpdateScheduled) {
+    consoleUpdateScheduled = true;
+    requestAnimationFrame(flushConsoleBuffer);
+  }
+}
+
+function flushConsoleBuffer() {
+  if (consoleBuffer.length === 0) {
+    consoleUpdateScheduled = false;
+    return;
+  }
+  
   const console = document.getElementById('console-output');
-  console.textContent += text;
-  console.scrollTop = console.scrollHeight;
+  const textToAppend = consoleBuffer;
+  consoleBuffer = ''; // Clear buffer before DOM update
+  consoleUpdateScheduled = false;
+  
+  // Use appendChild with text nodes for better performance
+  // This avoids full re-render of existing content
+  const textNode = document.createTextNode(textToAppend);
+  console.appendChild(textNode);
+  
+  // Scroll to bottom (use scrollTop for immediate scroll, no animation)
+  // Use setTimeout(0) to ensure scroll happens after DOM update
+  setTimeout(() => {
+    console.scrollTop = console.scrollHeight;
+  }, 0);
+  
+  // If more data arrived during the update, schedule another flush
+  if (consoleBuffer.length > 0) {
+    consoleUpdateScheduled = true;
+    requestAnimationFrame(flushConsoleBuffer);
+  }
 }
 
 function clearConsole() {
+  consoleBuffer = '';
+  consoleUpdateScheduled = false;
   document.getElementById('console-output').textContent = '';
 }
 
