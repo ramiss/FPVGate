@@ -78,25 +78,24 @@ function createWrappers() {
   console.log('\n📝 Creating wrapper scripts...');
   
   // macOS/Linux wrapper
-  // Note: Use String.raw to prevent template string interpolation of ${BASH_SOURCE[0]}
-  const unixWrapper = String.raw`#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORMIO_DIR="$SCRIPT_DIR/../platformio"
-
-# Use system Python with bundled PlatformIO package
-if command -v python3 &> /dev/null; then
-    PYTHON="python3"
-elif command -v python &> /dev/null; then
-    PYTHON="python"
-else
-    echo "Error: Python not found. Please install Python 3.7+" >&2
-    exit 1
-fi
-
-# Add bundled PlatformIO to Python path and run
-export PYTHONPATH="$PLATFORMIO_DIR:$PYTHONPATH"
-exec "$PYTHON" -m platformio "$@"
-`;
+  // Note: Use string concatenation to avoid template literal interpolation of ${BASH_SOURCE[0]}
+  const unixWrapper = '#!/bin/bash\n' +
+'SCRIPT_DIR="$(cd "$(dirname "${' + 'BASH_SOURCE[0]}")" && pwd)"\n' +
+'PLATFORMIO_DIR="$SCRIPT_DIR/../platformio"\n' +
+'\n' +
+'# Use system Python with bundled PlatformIO package\n' +
+'if command -v python3 &> /dev/null; then\n' +
+'    PYTHON="python3"\n' +
+'elif command -v python &> /dev/null; then\n' +
+'    PYTHON="python"\n' +
+'else\n' +
+'    echo "Error: Python not found. Please install Python 3.7+" >&2\n' +
+'    exit 1\n' +
+'fi\n' +
+'\n' +
+'# Add bundled PlatformIO to Python path and run\n' +
+'export PYTHONPATH="$PLATFORMIO_DIR:$PYTHONPATH"\n' +
+'exec "$PYTHON" -m platformio "$@"\n';
 
   // Windows wrapper
   const winWrapper = `@echo off
