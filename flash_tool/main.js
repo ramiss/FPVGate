@@ -830,17 +830,17 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     
     pio.on('close', (code) => {
       if (code === 0) {
-        // If custom config is provided, upload SPIFFS separately
+        // If custom config is provided, upload SPIFFS with config.json included
         if (customConfig) {
-          event.sender.send('flash-progress', '\n=== Generating and uploading custom SPIFFS ===\n');
-          uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType)
+          event.sender.send('flash-progress', '\n=== Uploading SPIFFS with custom config ===\n');
+          uploadSPIFFSWithConfig(event, projectPath, envName, port, customConfig, pioCmd, env, useShell, workingDir)
             .then(() => {
               resolve({ success: true, output });
             })
             .catch((error) => {
-              event.sender.send('flash-progress', `⚠ Custom SPIFFS upload failed: ${error.message}\n`);
+              event.sender.send('flash-progress', `⚠ SPIFFS upload failed: ${error.message}\n`);
               event.sender.send('flash-progress', 'Firmware uploaded successfully, but custom config not applied.\n');
-              resolve({ success: true, output, warning: 'Custom SPIFFS upload failed' });
+              resolve({ success: true, output, warning: 'SPIFFS upload failed' });
             });
         } else {
           resolve({ success: true, output });
@@ -856,7 +856,83 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
   });
 }
 
-// Upload custom SPIFFS using PlatformIO
+// Upload SPIFFS with custom config using PlatformIO uploadfs
+// This ensures config.json is included along with web files (index.html, style.css, app.js)
+async function uploadSPIFFSWithConfig(event, projectPath, envName, port, customConfig, pioCmd, env, useShell, workingDir) {
+  const dataDir = path.join(projectPath, 'data');
+  const configJsonPath = path.join(dataDir, 'config.json');
+  let configFileCreated = false;
+  
+  try {
+    // Ensure data directory exists
+    await fs.mkdir(dataDir, { recursive: true });
+    
+    // Write config.json to data directory
+    event.sender.send('flash-progress', 'Writing config.json to data/ directory...\n');
+    await fs.writeFile(configJsonPath, JSON.stringify(customConfig, null, 2));
+    configFileCreated = true;
+    event.sender.send('flash-progress', '✓ config.json created\n');
+    
+    // Set upload port for PlatformIO
+    const uploadEnv = { ...env };
+    uploadEnv.PLATFORMIO_UPLOAD_PORT = port;
+    
+    // Run PlatformIO uploadfs to upload SPIFFS (includes data/ directory contents)
+    event.sender.send('flash-progress', 'Uploading SPIFFS filesystem (includes web files + config.json)...\n');
+    return new Promise((resolve, reject) => {
+      const uploadfsArgs = ['run', '-e', envName, '-t', 'uploadfs', '--verbose'];
+      const pio = spawn(pioCmd, uploadfsArgs, {
+        cwd: workingDir,
+        env: uploadEnv,
+        shell: useShell,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      
+      let output = '';
+      
+      pio.stdout.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      
+      pio.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      
+      pio.on('close', (code) => {
+        if (code === 0) {
+          event.sender.send('flash-progress', '✓ SPIFFS uploaded successfully (web files + config.json)\n');
+          resolve();
+        } else {
+          reject(new Error(`SPIFFS upload failed with code ${code}\n${output}`));
+        }
+      });
+      
+      pio.on('error', (err) => {
+        reject(new Error(`Failed to start SPIFFS upload: ${err.message}`));
+      });
+    });
+  } catch (error) {
+    throw new Error(`Failed to prepare SPIFFS upload: ${error.message}`);
+  } finally {
+    // Clean up: remove config.json from data/ directory if we created it
+    // This prevents it from being included in future builds unless explicitly set
+    if (configFileCreated) {
+      try {
+        await fs.unlink(configJsonPath);
+        event.sender.send('flash-progress', '✓ Cleaned up config.json from data/ directory\n');
+      } catch (err) {
+        // Ignore cleanup errors - file might not exist or be locked
+        event.sender.send('flash-progress', `⚠ Could not remove config.json (non-critical): ${err.message}\n`);
+      }
+    }
+  }
+}
+
+// Upload custom SPIFFS using esptool (fallback for GitHub releases)
 async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType) {
   // Generate SPIFFS image
   event.sender.send('flash-progress', 'Generating custom SPIFFS image...\n');

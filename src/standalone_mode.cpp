@@ -672,6 +672,8 @@ void StandaloneMode::playLapBeep() {
 }
 
 // Speak lap announcement using word fragment TTS
+// NOTE: Only announces lap number and time - NO comparisons to previous laps
+// (No "faster lap" or "slower lap" announcements)
 void StandaloneMode::speakLapAnnouncement(uint16_t lapNumber, uint32_t lapTimeMs) {
     // Calculate minutes and seconds from lap time
     uint32_t totalSeconds = lapTimeMs / 1000;
@@ -682,12 +684,15 @@ void StandaloneMode::speakLapAnnouncement(uint16_t lapNumber, uint32_t lapTimeMs
     // TODO: Implement SimpleTTS with pre-recorded word fragments
     // For now, use simple beep until audio files are generated
     // Audio files needed: "lap", "1"-"20", "0"-"59", "seconds", "minutes"
-    // Format: Only announce minutes if > 0, then seconds
+    // Format: Only announce lap number and time (no faster/slower comparisons)
     // Example: "Lap 1, 45 seconds" or "Lap 2, 1 minute, 23 seconds"
+    // DO NOT include: "faster lap", "slower lap", "personal best", etc.
     if (minutes > 0) {
         // TODO: Play "lap", lap number, minutes, "minutes", seconds, "seconds"
+        // NO comparison to previous lap times
     } else {
         // TODO: Play "lap", lap number, seconds, "seconds" (skip "0 minutes")
+        // NO comparison to previous lap times
     }
     playLapBeep();
     #else

@@ -117,10 +117,13 @@
 
 // LCD/Touchscreen configuration
 // LCD UI is only available on boards with integrated displays
-#if defined(BOARD_JC2432W328C) || defined(BOARD_ESP32_S3_TOUCH)
-    #define ENABLE_LCD_UI   1     // JC2432W328C and ESP32-S3-Touch have integrated displays
-#else
-    #define ENABLE_LCD_UI   0     // No LCD by default on other boards
+// Note: Can be explicitly disabled via build flag -DENABLE_LCD_UI=0
+#ifndef ENABLE_LCD_UI
+    #if defined(BOARD_JC2432W328C) || defined(BOARD_ESP32_S3_TOUCH)
+        #define ENABLE_LCD_UI   1     // JC2432W328C and ESP32-S3-Touch have integrated displays
+    #else
+        #define ENABLE_LCD_UI   0     // No LCD by default on other boards
+    #endif
 #endif
 
 #if ENABLE_LCD_UI
@@ -137,21 +140,31 @@
         #define LCD_BACKLIGHT       1     // Backlight control pin
         
         // Battery monitoring (onboard 3:1 voltage divider)
-        #define BATTERY_ADC_PIN             5     // GPIO5 (ADC1_CH4)
-        #define ENABLE_BATTERY_MONITOR      1
-        #define BATTERY_VOLTAGE_DIVIDER     3.0   // Onboard 3:1 divider
-        #define BATTERY_ADC_CALIBRATION     1.0
-        #define BATTERY_MIN_VOLTAGE         3.0   // 1S LiPo minimum (empty)
-        #define BATTERY_MAX_VOLTAGE         4.2   // 1S LiPo maximum (full)
-        #define BATTERY_SAMPLES             10
+        // Note: Can be explicitly disabled via build flag -DENABLE_BATTERY_MONITOR=0
+        #if !defined(ENABLE_BATTERY_MONITOR)
+            #define ENABLE_BATTERY_MONITOR      1
+        #endif
+        #if ENABLE_BATTERY_MONITOR
+            #define BATTERY_ADC_PIN             5     // GPIO5 (ADC1_CH4)
+            #define BATTERY_VOLTAGE_DIVIDER     3.0   // Onboard 3:1 divider
+            #define BATTERY_ADC_CALIBRATION     1.0
+            #define BATTERY_MIN_VOLTAGE         3.0   // 1S LiPo minimum (empty)
+            #define BATTERY_MAX_VOLTAGE         4.2   // 1S LiPo maximum (full)
+            #define BATTERY_SAMPLES             10
+        #endif
         
         // Audio (ESP32-S3 has no built-in DAC)
         #define ENABLE_AUDIO        0
         #define AUDIO_DAC_PIN       -1
         
         // Power button (GPIO0 boot button)
-        #define ENABLE_POWER_BUTTON         1
-        #define POWER_BUTTON_LONG_PRESS_MS  3000
+        // Note: Can be explicitly disabled via build flag -DENABLE_POWER_BUTTON=0
+        #if !defined(ENABLE_POWER_BUTTON)
+            #define ENABLE_POWER_BUTTON         1
+        #endif
+        #if ENABLE_POWER_BUTTON
+            #define POWER_BUTTON_LONG_PRESS_MS  3000
+        #endif
         
     #elif defined(BOARD_JC2432W328C)
         // === JC2432W328C (2.8" ST7789, CST820 touch, ESP32-D0WD-V3) ===
@@ -164,13 +177,18 @@
         
         // Battery monitoring (external 2:1 voltage divider)
         // Circuit: Battery+ -> 100kΩ -> GPIO34 -> 100kΩ -> GND + 100nF cap to GND
-        #define BATTERY_ADC_PIN             34    // GPIO34 (ADC1_CH6, repurposed from light sensor)
-        #define ENABLE_BATTERY_MONITOR      1
-        #define BATTERY_VOLTAGE_DIVIDER     2.0   // External 2:1 divider (100kΩ + 100kΩ)
-        #define BATTERY_ADC_CALIBRATION     1.0
-        #define BATTERY_MIN_VOLTAGE         3.0   // 1S LiPo minimum (empty)
-        #define BATTERY_MAX_VOLTAGE         4.2   // 1S LiPo maximum (full)
-        #define BATTERY_SAMPLES             10
+        // Note: Can be explicitly disabled via build flag -DENABLE_BATTERY_MONITOR=0
+        #if !defined(ENABLE_BATTERY_MONITOR)
+            #define ENABLE_BATTERY_MONITOR      1
+        #endif
+        #if ENABLE_BATTERY_MONITOR
+            #define BATTERY_ADC_PIN             34    // GPIO34 (ADC1_CH6, repurposed from light sensor)
+            #define BATTERY_VOLTAGE_DIVIDER     2.0   // External 2:1 divider (100kΩ + 100kΩ)
+            #define BATTERY_ADC_CALIBRATION     1.0
+            #define BATTERY_MIN_VOLTAGE         3.0   // 1S LiPo minimum (empty)
+            #define BATTERY_MAX_VOLTAGE         4.2   // 1S LiPo maximum (full)
+            #define BATTERY_SAMPLES             10
+        #endif
         
         // Audio (ESP32 has built-in DAC)
         #define ENABLE_AUDIO        1
@@ -178,7 +196,10 @@
         #define BEEP_DURATION_MS    100
         
         // Power button disabled (GPIO22 repurposed for USB detection)
-        #define ENABLE_POWER_BUTTON  0
+        // Note: Can be explicitly enabled via build flag -DENABLE_POWER_BUTTON=1
+        #if !defined(ENABLE_POWER_BUTTON)
+            #define ENABLE_POWER_BUTTON  0
+        #endif
         
         // USB detection via D+ line monitoring
         // Hardware: D+ breakout -> 100kΩ resistor -> GPIO22

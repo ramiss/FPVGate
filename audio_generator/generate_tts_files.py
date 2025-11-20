@@ -48,9 +48,8 @@ for i in range(1, 21):
     generate_audio(str(i), f"lap_num_{i}.wav")
 
 # Generate special phrases
-generate_audio("Fastest lap", "fastest_lap.wav")
+# NOTE: Do NOT generate "faster lap", "slower lap", or "fastest lap" - only announce lap number and time
 generate_audio("Race complete", "race_complete.wav")
-generate_audio("New lap", "new_lap.wav")
 
 # Run the engine to generate all files
 print("\nGenerating audio files...")

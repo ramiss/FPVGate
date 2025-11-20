@@ -4,27 +4,33 @@
 
 const char* ConfigLoader::CONFIG_FILE_PATH = "/config.json";
 
-bool ConfigLoader::loadCustomConfig(CustomPinConfig* config) {
+bool ConfigLoader::loadCustomConfig(CustomPinConfig* config, bool allowSerialOutput) {
     if (!config) {
         return false;
     }
     
     // Initialize SPIFFS if not already mounted
     if (!SPIFFS.begin(true)) {
-        Serial.println("ConfigLoader: SPIFFS mount failed - using config.h defaults");
+        if (allowSerialOutput) {
+            Serial.println("ConfigLoader: SPIFFS mount failed - using config.h defaults");
+        }
         return false;
     }
     
     // Check if config file exists
     if (!SPIFFS.exists(CONFIG_FILE_PATH)) {
-        Serial.println("ConfigLoader: No custom config found - using config.h defaults");
+        if (allowSerialOutput) {
+            Serial.println("ConfigLoader: No custom config found - using config.h defaults");
+        }
         return false;
     }
     
     // Open config file
     File configFile = SPIFFS.open(CONFIG_FILE_PATH, "r");
     if (!configFile) {
-        Serial.println("ConfigLoader: Failed to open config.json - using config.h defaults");
+        if (allowSerialOutput) {
+            Serial.println("ConfigLoader: Failed to open config.json - using config.h defaults");
+        }
         return false;
     }
     
@@ -34,14 +40,18 @@ bool ConfigLoader::loadCustomConfig(CustomPinConfig* config) {
     configFile.close();
     
     if (error) {
-        Serial.printf("ConfigLoader: JSON parse error: %s - using config.h defaults\n", error.c_str());
+        if (allowSerialOutput) {
+            Serial.printf("ConfigLoader: JSON parse error: %s - using config.h defaults\n", error.c_str());
+        }
         return false;
     }
     
     // Check if custom pins are enabled
     JsonObject customPins = doc["custom_pins"];
     if (!customPins || !customPins["enabled"].as<bool>()) {
-        Serial.println("ConfigLoader: Custom pins disabled - using config.h defaults");
+        if (allowSerialOutput) {
+            Serial.println("ConfigLoader: Custom pins disabled - using config.h defaults");
+        }
         return false;
     }
     
@@ -90,12 +100,14 @@ bool ConfigLoader::loadCustomConfig(CustomPinConfig* config) {
         config->lcd_backlight = customPins["lcd_backlight"].as<int8_t>();
     }
     
-    Serial.println("ConfigLoader: Custom pin configuration loaded successfully!");
-    Serial.printf("  RSSI Input: GPIO%d\n", config->rssi_input_pin);
-    Serial.printf("  RX5808 Data: GPIO%d\n", config->rx5808_data_pin);
-    Serial.printf("  RX5808 CLK: GPIO%d\n", config->rx5808_clk_pin);
-    Serial.printf("  RX5808 SEL: GPIO%d\n", config->rx5808_sel_pin);
-    Serial.printf("  Mode Switch: GPIO%d\n", config->mode_switch_pin);
+    if (allowSerialOutput) {
+        Serial.println("ConfigLoader: Custom pin configuration loaded successfully!");
+        Serial.printf("  RSSI Input: GPIO%d\n", config->rssi_input_pin);
+        Serial.printf("  RX5808 Data: GPIO%d\n", config->rx5808_data_pin);
+        Serial.printf("  RX5808 CLK: GPIO%d\n", config->rx5808_clk_pin);
+        Serial.printf("  RX5808 SEL: GPIO%d\n", config->rx5808_sel_pin);
+        Serial.printf("  Mode Switch: GPIO%d\n", config->mode_switch_pin);
+    }
     
     return true;
 }

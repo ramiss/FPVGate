@@ -32,7 +32,7 @@ public:
     // Load configuration from SPIFFS /config.json
     // Returns true if custom config loaded successfully and enabled
     // Returns false if no config, parsing error, or disabled (use config.h defaults)
-    static bool loadCustomConfig(CustomPinConfig* config);
+    static bool loadCustomConfig(CustomPinConfig* config, bool allowSerialOutput = true);
     
     // Save configuration to SPIFFS /config.json (for future: web UI config editor)
     static bool saveCustomConfig(const CustomPinConfig* config);
