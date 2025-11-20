@@ -540,6 +540,12 @@ ipcMain.handle('flash-firmware', async (event, options) => {
   
   // Otherwise, use esptool with pre-built binaries
   return new Promise(async (resolve, reject) => {
+    // Debug: Show what we're flashing
+    event.sender.send('flash-progress', `\n=== Flashing pre-built firmware ===\n`);
+    event.sender.send('flash-progress', `Board Type: ${boardType}\n`);
+    event.sender.send('flash-progress', `Firmware Path: ${firmwarePath}\n`);
+    event.sender.send('flash-progress', `Port: ${port}\n\n`);
+    
     let esptoolCmd;
     try {
       esptoolCmd = findEsptool();
