@@ -43,6 +43,9 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
+      # Run up to 8 jobs in parallel (one per board type)
+      # Adjust this based on your runner's CPU cores and available resources
+      max-parallel: 8
       matrix:
         environment:
           - esp32-c3-supermini
@@ -63,24 +66,22 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Cache PlatformIO
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.platformio
-          .pio
-        # Cache key includes environment and platformio.ini hash
-        # When platformio.ini changes (e.g., build flags), cache is invalidated
-        # Environment-specific to avoid cross-contamination between board configs
-        key: ${{ runner.os }}-pio-${{ matrix.environment }}-${{ hashFiles('**/platformio.ini') }}
-        restore-keys: |
-          ${{ runner.os }}-pio-${{ matrix.environment }}-
-          ${{ runner.os }}-pio-
+    # For self-hosted runners, PlatformIO packages persist in ~/.platformio
+    # No need for GitHub Actions cache - packages are already cached locally
+    # This significantly speeds up builds on self-hosted runners
+    - name: Check PlatformIO cache
+      run: |
+        echo "PlatformIO packages location: ~/.platformio"
+        du -sh ~/.platformio 2>/dev/null || echo "No PlatformIO cache yet"
+        echo "First build will be slower (downloads packages), subsequent builds use cache"
     
     - name: Install PlatformIO
       run: |
         python -m pip install --upgrade pip
+        # Use --user flag to avoid permission issues, or install system-wide
         pip install platformio
+        # Verify PlatformIO installation
+        pio --version
     
     - name: Clean build directory for ${{ matrix.environment }}
       run: pio run -e ${{ matrix.environment }} -t clean
