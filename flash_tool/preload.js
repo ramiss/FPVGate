@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('flasher', {
   // Serial port operations
   getSerialPorts: () => ipcRenderer.invoke('get-serial-ports'),
   detectBoard: (port) => ipcRenderer.invoke('detect-board', port),
+  startSerialMonitor: (options) => ipcRenderer.invoke('start-serial-monitor', options),
+  stopSerialMonitor: () => ipcRenderer.invoke('stop-serial-monitor'),
   
   // Board configurations
   getBoardConfigs: () => ipcRenderer.invoke('get-board-configs'),
@@ -33,6 +35,12 @@ contextBridge.exposeInMainWorld('flasher', {
   },
   onEraseProgress: (callback) => {
     ipcRenderer.on('erase-progress', (event, text) => callback(text));
+  },
+  onSerialMonitorData: (callback) => {
+    ipcRenderer.on('serial-monitor-data', (event, text) => callback(text));
+  },
+  onSerialMonitorStatus: (callback) => {
+    ipcRenderer.on('serial-monitor-status', (event, status) => callback(status));
   }
 });
 

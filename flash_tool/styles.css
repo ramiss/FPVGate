@@ -376,6 +376,40 @@ button:disabled {
   border-radius: 4px;
 }
 
+.serial-monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.serial-monitor-output {
+  margin-top: 5px;
+  max-height: 160px;
+}
+
+.serial-monitor-help-text {
+  text-align: center;
+}
+
+.serial-baud-select {
+  width: auto;
+  min-width: 80px;
+  padding: 8px 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Make the serial monitor button more prominent than the baud dropdown */
+.serial-monitor-header #serial-monitor-btn {
+  flex: 0 0 60%;
+}
+
+.serial-monitor-header .serial-baud-select {
+  flex: 0 0 30%;
+}
+
 .status-message {
   margin-top: 15px;
   padding: 12px;

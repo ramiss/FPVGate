@@ -13,6 +13,11 @@ let latestReleaseTag = null; // The actual latest stable release tag from GitHub
 let consoleBuffer = '';
 let consoleUpdateScheduled = false;
 
+// Serial monitor buffering
+let serialMonitorBuffer = '';
+let serialMonitorUpdateScheduled = false;
+let serialMonitoring = false;
+
 // Pin presets for different boards
 const pinPresets = {
   'esp32c3-default': {
@@ -103,6 +108,32 @@ async function init() {
   
   window.flasher.onEraseProgress((text) => {
     appendToConsole(text);
+  });
+
+  // Serial monitor listeners
+  window.flasher.onSerialMonitorData((text) => {
+    appendToSerialMonitor(text);
+  });
+
+  window.flasher.onSerialMonitorStatus((status) => {
+    const btn = document.getElementById('serial-monitor-btn');
+    const help = document.getElementById('serial-monitor-help');
+    if (!btn || !help) return;
+
+    if (status.type === 'open') {
+      serialMonitoring = true;
+      btn.textContent = '🛑 Stop Serial Monitor';
+      help.textContent = `Connected to ${status.port} @ ${status.baudRate} baud.`;
+    } else if (status.type === 'close') {
+      serialMonitoring = false;
+      btn.textContent = '🖥️ Show Serial Output';
+      help.textContent = 'Uses the selected serial port at 115200 baud.';
+    } else if (status.type === 'error') {
+      serialMonitoring = false;
+      btn.textContent = '🖥️ Show Serial Output';
+      help.textContent = `Error: ${status.message}`;
+      showStatus('Serial monitor error: ' + status.message, 'error');
+    }
   });
 }
 
@@ -319,6 +350,13 @@ async function startFlashing() {
     showStatus('Please select a firmware folder', 'error');
     return;
   }
+
+  // Ensure serial monitor is stopped before flashing
+  try {
+    await window.flasher.stopSerialMonitor();
+  } catch (e) {
+    // Ignore monitor stop errors
+  }
   
   // Disable buttons
   setButtonsEnabled(false);
@@ -422,6 +460,13 @@ async function eraseFlash() {
   if (!confirm('This will erase all data on the device. Continue?')) {
     return;
   }
+
+  // Ensure serial monitor is stopped before erasing
+  try {
+    await window.flasher.stopSerialMonitor();
+  } catch (e) {
+    // Ignore monitor stop errors
+  }
   
   setButtonsEnabled(false);
   const progressSection = document.getElementById('progress-section');
@@ -506,6 +551,54 @@ function clearConsole() {
   document.getElementById('console-output').textContent = '';
 }
 
+function appendToSerialMonitor(text) {
+  serialMonitorBuffer += text;
+
+  if (!serialMonitorUpdateScheduled) {
+    serialMonitorUpdateScheduled = true;
+    requestAnimationFrame(flushSerialMonitorBuffer);
+  }
+}
+
+function flushSerialMonitorBuffer() {
+  if (serialMonitorBuffer.length === 0) {
+    serialMonitorUpdateScheduled = false;
+    return;
+  }
+
+  const consoleEl = document.getElementById('serial-monitor-output');
+  if (!consoleEl) {
+    serialMonitorBuffer = '';
+    serialMonitorUpdateScheduled = false;
+    return;
+  }
+
+  const textToAppend = serialMonitorBuffer;
+  serialMonitorBuffer = '';
+  serialMonitorUpdateScheduled = false;
+
+  const textNode = document.createTextNode(textToAppend);
+  consoleEl.appendChild(textNode);
+
+  setTimeout(() => {
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }, 0);
+
+  if (serialMonitorBuffer.length > 0) {
+    serialMonitorUpdateScheduled = true;
+    requestAnimationFrame(flushSerialMonitorBuffer);
+  }
+}
+
+function clearSerialMonitor() {
+  serialMonitorBuffer = '';
+  serialMonitorUpdateScheduled = false;
+  const consoleEl = document.getElementById('serial-monitor-output');
+  if (consoleEl) {
+    consoleEl.textContent = '';
+  }
+}
+
 function showStatus(message, type) {
   const statusEl = document.getElementById('status-message');
   statusEl.textContent = message;
@@ -517,6 +610,53 @@ function setButtonsEnabled(enabled) {
   document.getElementById('erase-btn').disabled = !enabled;
   document.getElementById('board-select').disabled = !enabled;
   document.getElementById('port-select').disabled = !enabled;
+}
+
+// Serial monitor UI
+async function toggleSerialMonitor() {
+  if (!selectedPort) {
+    showStatus('Please select a serial port before starting the serial monitor', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('serial-monitor-btn');
+  const help = document.getElementById('serial-monitor-help');
+  if (!btn || !help) return;
+
+  if (!serialMonitoring) {
+    clearSerialMonitor();
+    btn.disabled = true;
+    help.textContent = 'Connecting to serial port...';
+    try {
+      const baudSelect = document.getElementById('serial-baud');
+      const baudRate = baudSelect ? parseInt(baudSelect.value, 10) || 115200 : 115200;
+      await window.flasher.startSerialMonitor({
+        port: selectedPort,
+        baudRate
+      });
+      // Status handler will update UI
+    } catch (error) {
+      serialMonitoring = false;
+      btn.textContent = '🖥️ Show Serial Output';
+      help.textContent = 'Failed to open serial port.';
+      showStatus('Failed to start serial monitor: ' + error.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  } else {
+    btn.disabled = true;
+    help.textContent = 'Stopping serial monitor...';
+    try {
+      await window.flasher.stopSerialMonitor();
+      // Status handler will update UI
+    } catch (error) {
+      serialMonitoring = false;
+      btn.textContent = '🖥️ Show Serial Output';
+      help.textContent = 'Serial monitor stopped.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
 }
 
 // Advanced Config UI Functions

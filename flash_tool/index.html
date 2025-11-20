@@ -130,6 +130,25 @@
                 Double-check your board's pinout before flashing.
               </div>
             </div>
+
+            <!-- Serial Monitor (read-only) -->
+            <div class="form-group">
+              <label>Serial Monitor</label>
+              <div class="serial-monitor-header">
+                <button class="btn-secondary" id="serial-monitor-btn" onclick="toggleSerialMonitor()">
+                  🖥️ Show Serial Output
+                </button>
+                <select id="serial-baud" class="serial-baud-select">
+                  <option value="9600">9600</option>
+                  <option value="115200" selected>115200</option>
+                  <option value="921600">921600</option>
+                </select>
+              </div>
+              <p class="help-text serial-monitor-help-text" id="serial-monitor-help">
+                Uses the selected serial port at the baud rate above.
+              </p>
+              <div class="console-output serial-monitor-output" id="serial-monitor-output"></div>
+            </div>
           </div>
         </div>
       </div>

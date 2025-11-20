@@ -8,6 +8,10 @@ const extractZip = require('extract-zip');
 
 let mainWindow;
 
+// Serial monitor state
+let monitorPort = null;
+let monitorPortPath = null;
+
 // Board configurations matching platformio.ini
 const BOARD_CONFIGS = {
   'esp32-c3-supermini': {
@@ -149,6 +153,113 @@ ipcMain.handle('get-serial-ports', async () => {
     console.error('Error listing serial ports:', error);
     return [];
   }
+});
+
+// Start serial monitor (read-only)
+ipcMain.handle('start-serial-monitor', async (event, options) => {
+  const { port, baudRate = 115200 } = options || {};
+
+  if (!port) {
+    throw new Error('No serial port specified for monitor');
+  }
+
+  // If we're already monitoring this port, do nothing
+  if (monitorPort && monitorPortPath === port && monitorPort.readable) {
+    return { success: true };
+  }
+
+  // Close any existing monitor port first
+  if (monitorPort) {
+    try {
+      monitorPort.close();
+    } catch (e) {
+      // Ignore errors on close
+    }
+    monitorPort = null;
+    monitorPortPath = null;
+  }
+
+  return new Promise((resolve, reject) => {
+    const sp = new SerialPort({
+      path: port,
+      baudRate,
+      autoOpen: true
+    });
+
+    sp.on('open', () => {
+      monitorPort = sp;
+      monitorPortPath = port;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('serial-monitor-status', {
+          type: 'open',
+          port,
+          baudRate
+        });
+      }
+      resolve({ success: true });
+    });
+
+    sp.on('data', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('serial-monitor-data', data.toString());
+      }
+    });
+
+    sp.on('error', (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('serial-monitor-status', {
+          type: 'error',
+          port,
+          message: err.message
+        });
+      }
+      // Only reject if this happened before open
+      if (!monitorPort || monitorPort !== sp) {
+        reject(new Error(`Serial monitor error: ${err.message}`));
+      }
+    });
+
+    sp.on('close', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('serial-monitor-status', {
+          type: 'close',
+          port
+        });
+      }
+      if (monitorPort === sp) {
+        monitorPort = null;
+        monitorPortPath = null;
+      }
+    });
+  });
+});
+
+// Stop serial monitor
+ipcMain.handle('stop-serial-monitor', async () => {
+  if (!monitorPort) {
+    return { success: true };
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const port = monitorPortPath;
+      monitorPort.close((/*err*/) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('serial-monitor-status', {
+            type: 'close',
+            port
+          });
+        }
+        monitorPort = null;
+        monitorPortPath = null;
+        resolve({ success: true });
+      });
+    } catch (e) {
+      monitorPort = null;
+      monitorPortPath = null;
+      resolve({ success: true });
+    }
+  });
 });
 
 // Helper to identify likely ESP32 ports
