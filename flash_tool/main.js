@@ -660,6 +660,7 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     
     // Build and upload firmware
     event.sender.send('flash-progress', `\n=== Building and uploading with PlatformIO ===\n`);
+    event.sender.send('flash-progress', `Board Type: ${boardType}\n`);
     event.sender.send('flash-progress', `Environment: ${envName}\n`);
     event.sender.send('flash-progress', `Port: ${port}\n\n`);
     
@@ -734,6 +735,7 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     }
     
     // Clean build directory first to avoid file locking issues on Windows
+    // This ensures build flags are properly applied and no stale artifacts remain
     event.sender.send('flash-progress', 'Cleaning previous build artifacts...\n');
     const cleanArgs = ['run', '-e', envName, '-t', 'clean', '--verbose'];
     const cleanPio = spawn(pioCmd, cleanArgs, {
@@ -776,31 +778,35 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     event.sender.send('flash-progress', 'Waiting for file locks to release...\n');
     await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
     
-    // On Windows, also try to manually remove the build directory if it exists
-    // This helps with stubborn file locks
-    if (process.platform === 'win32') {
-      const fs = require('fs');
-      const path = require('path');
-      const buildDir = path.join(workingDir, '.pio', 'build', envName);
-      try {
-        if (fs.existsSync(buildDir)) {
-          // Try to remove the directory (will fail silently if locked, that's OK)
-          try {
-            fs.rmSync(buildDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
-            event.sender.send('flash-progress', '✓ Build directory removed\n');
-          } catch (err) {
-            // Ignore errors - files might still be locked, PlatformIO clean will handle it
-            event.sender.send('flash-progress', '⚠ Some files still locked, PlatformIO will handle cleanup\n');
-          }
-          // Give it another moment after manual removal
-          await new Promise(resolve => setTimeout(resolve, 1000));
+    // On all platforms, try to manually remove the build directory if it exists
+    // This ensures a completely clean build and that build flags are properly applied
+    // This is especially important on Windows where file locks can persist
+    const fs = require('fs');
+    const path = require('path');
+    const buildDir = path.join(workingDir, '.pio', 'build', envName);
+    try {
+      if (fs.existsSync(buildDir)) {
+        // Try to remove the directory (will fail silently if locked, that's OK)
+        try {
+          fs.rmSync(buildDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+          event.sender.send('flash-progress', '✓ Build directory removed (ensures clean build with correct flags)\n');
+        } catch (err) {
+          // Ignore errors - files might still be locked, PlatformIO clean will handle it
+          event.sender.send('flash-progress', '⚠ Some files still locked, PlatformIO will handle cleanup\n');
         }
-      } catch (err) {
-        // Ignore errors, continue with build
+        // Give it another moment after manual removal
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+    } catch (err) {
+      // Ignore errors, continue with build
     }
     
     const buildArgs = ['run', '-e', envName, '-t', 'upload', '--verbose'];
+    
+    // Debug: Show exact command being run
+    event.sender.send('flash-progress', `Running: ${pioCmd} ${buildArgs.join(' ')}\n`);
+    event.sender.send('flash-progress', `Working directory: ${workingDir}\n`);
+    event.sender.send('flash-progress', `Environment: PLATFORMIO_UPLOAD_PORT=${port}\n\n`);
     
     // On Windows with batch files, we need shell: true
     // But we'll use the workingDir with forward slashes which Node.js handles
