@@ -160,6 +160,14 @@ jobs:
     runs-on: self-hosted
     
     steps:
+    - name: Install zip utility
+      run: |
+        # Install zip if not already installed (required for creating release packages)
+        if ! command -v zip &> /dev/null; then
+          sudo apt-get update && sudo apt-get install -y zip
+        fi
+        zip --version
+    
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
