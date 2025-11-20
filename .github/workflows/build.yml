@@ -1,26 +1,6 @@
 name: Build PlatformIO Firmware
 
 on:
-  push:
-    branches: [ main, master, develop ]
-    paths:
-      - 'src/**'
-      - 'data/**'
-      - 'platformio.ini'
-      - 'partitions_custom.csv'
-      - 'sdkconfig.defaults'
-      - '.github/workflows/build.yml'
-    tags:
-      - 'v*'  # Trigger on version tags (v1.0.0, v1.2.3, etc)
-  pull_request:
-    branches: [ main, master, develop ]
-    paths:
-      - 'src/**'
-      - 'data/**'
-      - 'platformio.ini'
-      - 'partitions_custom.csv'
-      - 'sdkconfig.defaults'
-      - '.github/workflows/build.yml'
   release:
     types: [ created, published ]  # Trigger on both created and published releases
   workflow_dispatch:  # Allows manual triggering
@@ -30,18 +10,9 @@ permissions:
   contents: write  # Needed to upload release assets
 
 jobs:
-  # Security: Only use self-hosted runner for trusted events to prevent malicious PRs
-  # Trusted events: pushes to main/master/develop, tags, releases, manual dispatch, same-repo PRs
-  # Untrusted events (fork PRs) are blocked by the 'if' condition below
+  # Build firmware only on releases (created or published) or manual dispatch
   build:
     runs-on: self-hosted
-    # Security: Explicitly block fork PRs and only allow trusted events
-    # This prevents malicious PRs from using the self-hosted runner
-    if: |
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))) ||
-      github.event_name == 'release' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       # Run up to 8 jobs in parallel (one per board type)
       # Adjust this based on your runner's CPU cores and available resources
