@@ -328,10 +328,29 @@ ipcMain.handle('download-firmware', async (event, url, boardType) => {
     const cacheDir = path.join(app.getPath('userData'), 'firmware-cache');
     await fs.mkdir(cacheDir, { recursive: true });
     
-    const zipPath = path.join(cacheDir, `${boardType}.zip`);
-    const extractPath = path.join(cacheDir, boardType);
+    // Include URL hash in cache key to ensure different releases get different cache entries
+    // This prevents stale firmware from being used when a new release is downloaded
+    const crypto = require('crypto');
+    const urlHash = crypto.createHash('md5').update(url).digest('hex').substring(0, 8);
+    const zipPath = path.join(cacheDir, `${boardType}-${urlHash}.zip`);
+    const extractPath = path.join(cacheDir, `${boardType}-${urlHash}`);
+    
+    // Clear extract directory if it exists to ensure fresh extraction
+    // This prevents stale files from previous extractions
+    try {
+      const stats = await fs.stat(extractPath).catch(() => null);
+      if (stats && stats.isDirectory()) {
+        // Remove directory (fs.rm is available in Node 14.14.0+, which Electron uses)
+        await fs.rm(extractPath, { recursive: true, force: true });
+        event.sender.send('flash-progress', `Cleared old cached firmware...\n`);
+      }
+    } catch (err) {
+      // Ignore errors - directory might not exist or be locked
+      // Continue with download anyway
+    }
     
     // Download
+    event.sender.send('flash-progress', `Downloading firmware from: ${url}\n`);
     const response = await axios({
       method: 'get',
       url: url,
@@ -350,8 +369,10 @@ ipcMain.handle('download-firmware', async (event, url, boardType) => {
       writer.on('error', reject);
     });
     
-    // Extract
+    // Extract to fresh directory
+    event.sender.send('flash-progress', `Extracting firmware...\n`);
     await extractZip(zipPath, { dir: extractPath });
+    event.sender.send('flash-progress', `✓ Firmware extracted to: ${extractPath}\n`);
     
     return {
       path: extractPath,

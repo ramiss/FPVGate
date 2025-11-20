@@ -293,6 +293,12 @@ void StandaloneMode::setupWiFiAP() {
         
         // Set WiFi protocol AFTER AP is started
         esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+        
+        // Set TX power for ESP32-C3 SuperMini (8.5dBm)
+        #if defined(BOARD_ESP32_C3_SUPERMINI) || (defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3))
+            WiFi.setTxPower(WIFI_POWER_8_5dBm);
+            Serial.println("WiFi TX power set to 8.5dBm (ESP32-C3)");
+        #endif
     } else {
         Serial.println("ERROR: WiFi AP failed to start");
     }
