@@ -30,8 +30,18 @@ permissions:
   contents: write  # Needed to upload release assets
 
 jobs:
+  # Security: Only use self-hosted runner for trusted events to prevent malicious PRs
+  # Trusted events: pushes to main/master/develop, tags, releases, manual dispatch, same-repo PRs
+  # Untrusted events (fork PRs) are blocked by the 'if' condition below
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    # Security: Explicitly block fork PRs and only allow trusted events
+    # This prevents malicious PRs from using the self-hosted runner
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))) ||
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
       matrix:
         environment:
@@ -145,7 +155,8 @@ jobs:
   release:
     needs: build
     if: github.event_name == 'release'
-    runs-on: ubuntu-latest
+    # Use self-hosted runner for releases (trusted event)
+    runs-on: self-hosted
     
     steps:
     - name: Download all artifacts
@@ -174,6 +185,7 @@ jobs:
   # Summary job to show build status
   summary:
     needs: build
+    # Summary can run on GitHub-hosted (lightweight)
     runs-on: ubuntu-latest
     if: always()
     

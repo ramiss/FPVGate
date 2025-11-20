@@ -362,7 +362,16 @@ async function startFlashing() {
       updateProgress(0);
       
       // Find the asset for this board
-      const asset = selectedRelease.assets.find(a => a.name.includes(selectedBoard));
+      // Match must be exact to prevent "esp32-s3" from matching "esp32-s3-touch"
+      // Check for exact pattern: "StarForge-{board}.zip" or ends with "-{board}.zip"
+      const asset = selectedRelease.assets.find(a => {
+        const expectedName = `StarForge-${selectedBoard}.zip`;
+        // Exact match
+        if (a.name === expectedName) return true;
+        // Ends with the board name followed by .zip (prevents substring matches)
+        if (a.name.endsWith(`-${selectedBoard}.zip`)) return true;
+        return false;
+      });
       
       if (!asset) {
         throw new Error(`No firmware found for ${selectedBoard} in ${selectedRelease.name || selectedRelease.tag}`);
