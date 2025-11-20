@@ -104,7 +104,6 @@ jobs:
         path: |
           flash_tool/dist/*.dmg
           flash_tool/dist/*.zip
-        retention-days: 90
     
     - name: Upload Windows artifacts
       if: matrix.os == 'windows-latest'
@@ -114,7 +113,6 @@ jobs:
         path: |
           flash_tool/dist/*.exe
           flash_tool/dist/*.msi
-        retention-days: 90
     
     - name: Upload to GitHub Release (macOS)
       if: github.event_name == 'release' && matrix.os == 'macos-latest'

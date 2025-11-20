@@ -114,7 +114,6 @@ jobs:
       with:
         name: firmware-${{ matrix.environment }}
         path: artifacts/${{ matrix.environment }}
-        retention-days: 90
     
     - name: Get firmware size info
       run: |
