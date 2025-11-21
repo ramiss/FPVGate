@@ -78,6 +78,10 @@ private:
     
     // Settings persistence (uses ESP32 Preferences library)
     void loadSettings();
+
+#if defined(BOARD_NUCLEARCOUNTER)
+    void initNuclearDisplay();
+#endif
 };
 
 #endif // STANDALONE_MODE_H

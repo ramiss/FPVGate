@@ -12,6 +12,8 @@
     #pragma message "BUILD: Waveshare ESP32-S3-Touch-LCD-2 detected"
 #elif defined(BOARD_JC2432W328C)
     #pragma message "BUILD: JC2432W328C detected"
+#elif defined(BOARD_NUCLEARCOUNTER)
+    #pragma message "BUILD: NuclearCounter (ESP32-C3) detected"
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
     #pragma message "BUILD: ESP32-C6 detected"
 #elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
@@ -122,13 +124,21 @@ void setup() {
       requested_mode = MODE_STANDALONE;  // Ensure both are in sync
     #endif
   #else
-    // Non-touch boards: Initialize mode selection pin (LOW=Standalone, HIGH/floating=RotorHazard)
+    // Non-touch boards: Initialize mode selection pin with internal pull-up
     pinMode(g_mode_switch_pin, INPUT_PULLUP);
     
     // Determine initial mode BEFORE any serial output
-    // LOW (GND) = Standalone mode, HIGH (floating/pullup) = RotorHazard mode
     bool initial_switch_state = digitalRead(g_mode_switch_pin);
-    current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
+
+    #if defined(BOARD_NUCLEARCOUNTER)
+      // NuclearCounter: always start in STANDALONE/WiFi mode for now.
+      // (Pin 1 hardware behavior is board-specific; we can re-enable pin-based
+      //  mode switching later if needed.)
+      current_mode = MODE_STANDALONE;
+    #else
+      // Default behavior: LOW (GND) = STANDALONE, HIGH/floating = ROTORHAZARD
+      current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
+    #endif
   #endif
   
   // Load custom pin configuration from SPIFFS (if available)

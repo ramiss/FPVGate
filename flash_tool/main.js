@@ -24,6 +24,16 @@ const BOARD_CONFIGS = {
       spiffs: '0x290000'
     }
   },
+  'nuclearcounter': {
+    name: 'NuclearCounter (ESP32-C3)',
+    chip: 'esp32c3',
+    flashAddresses: {
+      bootloader: '0x0',
+      partitions: '0x8000',
+      firmware: '0x10000',
+      spiffs: '0x290000'
+    }
+  },
   'esp32-c3': {
     name: 'ESP32-C3 Dev Module',
     chip: 'esp32c3',
@@ -360,7 +370,7 @@ function suggestBoardFromChip(chipType) {
   const chipLower = chipType.toLowerCase();
   
   if (chipLower.includes('esp32-c3')) {
-    return 'esp32-c3-supermini'; // Most common C3 board
+    return 'esp32-c3-supermini'; // Most common C3 board (NuclearCounter is C3-based as well)
   } else if (chipLower.includes('esp32-s3')) {
     return 'esp32-s3';
   } else if (chipLower.includes('esp32-s2')) {
@@ -781,6 +791,7 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     // Map board type to PlatformIO environment name
     const envMap = {
       'esp32-c3-supermini': 'esp32-c3-supermini',
+    'nuclearcounter': 'nuclearcounter',
       'esp32-c3': 'esp32-c3',
       'esp32-c6': 'esp32-c6',
       'esp32dev': 'esp32dev',
