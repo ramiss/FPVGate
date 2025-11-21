@@ -104,45 +104,37 @@ inline bool allowSerialOutput() {
 
 void setup() {
   Serial.begin(UART_BAUD_RATE);
-  delay(500);  // Longer delay to ensure all ESP-IDF boot messages complete
+  delay(200);  // Longer delay to ensure all ESP-IDF boot messages complete
   
   // Clear any bootloader/ESP-IDF messages (ESP32 ROM bootloader + ESP-IDF errors)
   // This prevents garbage data from interfering with RotorHazard node detection
   while (Serial.available()) {
     Serial.read();
   }
-  delay(200);  // Allow any remaining boot output to arrive
-  while (Serial.available()) {
-    Serial.read();
-  }
-  
-  // Additional delay for RotorHazard mode to ensure boot messages are done
-  // This prevents boot messages from being misinterpreted as protocol responses
-  delay(300);
   
   // CRITICAL: Determine mode FIRST (before any Serial output)
   // This ensures no debug messages appear in RotorHazard node mode
-#if ENABLE_LCD_UI
-  // Touch board: Mode is controlled via touchscreen button, not physical pin
-  // ALWAYS start in standalone mode on boot (LCD/WiFi mode)
-  current_mode = MODE_STANDALONE;
   #if ENABLE_LCD_UI
-  requested_mode = MODE_STANDALONE;  // Ensure both are in sync
+    // Touch board: Mode is controlled via touchscreen button, not physical pin
+    // ALWAYS start in standalone mode on boot (LCD/WiFi mode)
+    current_mode = MODE_STANDALONE;
+    #if ENABLE_LCD_UI
+      requested_mode = MODE_STANDALONE;  // Ensure both are in sync
+    #endif
+  #else
+    // Non-touch boards: Initialize mode selection pin (LOW=Standalone, HIGH/floating=RotorHazard)
+    pinMode(g_mode_switch_pin, INPUT_PULLUP);
+    
+    // Determine initial mode BEFORE any serial output
+    // LOW (GND) = Standalone mode, HIGH (floating/pullup) = RotorHazard mode
+    bool initial_switch_state = digitalRead(g_mode_switch_pin);
+    current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
   #endif
-#else
-  // Non-touch boards: Initialize mode selection pin (LOW=Standalone, HIGH/floating=RotorHazard)
-  pinMode(g_mode_switch_pin, INPUT_PULLUP);
-  
-  // Determine initial mode BEFORE any serial output
-  // LOW (GND) = Standalone mode, HIGH (floating/pullup) = RotorHazard mode
-  bool initial_switch_state = digitalRead(g_mode_switch_pin);
-  current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
-#endif
   
   // Load custom pin configuration from SPIFFS (if available)
   // This must happen AFTER mode is determined so we can suppress Serial output in node mode
   CustomPinConfig customConfig;
-  if (ConfigLoader::loadCustomConfig(&customConfig, allowSerialOutput())) {
+  if (ConfigLoader::loadCustomConfig(&customConfig)) {
     // Override pins with custom values from config.json
     g_rssi_input_pin = customConfig.rssi_input_pin;
     g_rx5808_data_pin = customConfig.rx5808_data_pin;
@@ -186,17 +178,17 @@ void setup() {
     }
     #endif
     
-    if (allowSerialOutput()) {
+    if (current_mode == MODE_STANDALONE) {
       Serial.println("Using custom pin configuration from /config.json");
     }
   } else {
-    if (allowSerialOutput()) {
+    if (current_mode == MODE_STANDALONE) {
       Serial.println("Using default pin configuration from config.h");
     }
   }
   
   // Debug: Print board configuration (only in standalone mode)
-  if (allowSerialOutput()) {
+  if (current_mode == MODE_STANDALONE) {
     Serial.println("\n=== BOARD CONFIGURATION ===");
     #if defined(BOARD_ESP32_S3_TOUCH)
       Serial.println("Board: Waveshare ESP32-S3-Touch-LCD-2");
@@ -214,16 +206,16 @@ void setup() {
       Serial.println("Defaulting to STANDALONE mode (user can switch via LCD button)");
     #endif
   }
-  
   // Only show startup messages in standalone mode (safe for debug output)
   if (current_mode == MODE_STANDALONE) {
+    delay(1000); // Give everything time to start up
     Serial.println();
     Serial.println("=== StarForge ESP32 Timer ===");
-    Serial.println("Version: 1.0.0");
     Serial.println();
     Serial.println("Mode: STANDALONE/WIFI");
     Serial.println("Initializing timing core...");
     WiFi.softAP("SFOS", ""); // WE NEED THIS HERE FOR SOME DUMB REASON, OTHERWISE THE WIFI DOESN'T START UP CORRECTLY
+    delay(300); // Give everything time to start up
   }
   
   // Initialize core timing system (creates task but keeps it INACTIVE)
@@ -261,9 +253,6 @@ void loop() {
   checkPowerButton();
 #endif
   
-  // Check for mode changes
-  checkModeSwitch();
-  
   // Always process core timing (now handled by FreeRTOS task)
   timing.process();
   
@@ -290,51 +279,6 @@ void serialEvent() {
   if (current_mode == MODE_ROTORHAZARD) {
     node.handleSerialInput();
   }
-}
-
-void checkModeSwitch() {
-#if ENABLE_LCD_UI
-  // Touch board: Check for mode change requests from UI button
-  if (requested_mode != current_mode) {
-    current_mode = requested_mode;
-    // Update debug mode for timing core
-    timing.setDebugMode(current_mode == MODE_STANDALONE);
-    initializeMode();
-  }
-#else
-  // Non-touch boards: Check physical mode switch pin
-  static unsigned long last_check = 0;
-  static bool last_switch_state = -1; // Initialize to invalid state to force first check
-  
-  // Only check every 100ms to avoid bouncing
-  if (millis() - last_check < 100) {
-    return;
-  }
-  
-  bool current_switch_state = digitalRead(g_mode_switch_pin);
-  
-  if (current_switch_state != last_switch_state) {
-    // Determine new mode
-    // LOW (GND) = Standalone/WiFi mode, HIGH (floating/pullup) = RotorHazard mode (default)
-    OperationMode new_mode;
-    if (current_switch_state == LOW) {
-      new_mode = MODE_STANDALONE;  // Switch to GND = Standalone mode (LCD active)
-    } else {
-      new_mode = MODE_ROTORHAZARD; // Switch floating/HIGH = RotorHazard mode
-    }
-    
-    if (new_mode != current_mode || !mode_initialized) {
-      current_mode = new_mode;
-      // Update debug mode for timing core
-      timing.setDebugMode(current_mode == MODE_STANDALONE);
-      initializeMode();
-    }
-    
-    last_switch_state = current_switch_state;
-  }
-  
-  last_check = millis();
-#endif
 }
 
 void initializeMode() {

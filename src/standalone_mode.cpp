@@ -60,7 +60,7 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     setupWiFiAP();
     
     // Give WiFi time to stabilize
-    delay(1000);
+    delay(600);
     
     // Initialize mDNS for .local hostname
     if (MDNS.begin(MDNS_HOSTNAME)) {
@@ -259,9 +259,9 @@ void StandaloneMode::process() {
 void StandaloneMode::setupWiFiAP() {
     Serial.println("=== Starting WiFi AP Setup ===");
     
-    // WiFi was pre-initialized in main.cpp BEFORE timing task starts
-    // This prevents the high-priority timing task from starving WiFi init
-    // Now we reconfigure it with proper SSID, IP, and settings
+    // WiFi was pre-initialized in main.cpp BEFORE timing task starts.
+    // This prevents the high-priority timing task from starving WiFi init.
+    // Now we reconfigure it with proper SSID, IP, and settings.
     
     // Create unique SSID with MAC address
     // Use softAPmacAddress() for AP mode, not macAddress() (which is for STA mode)
@@ -276,13 +276,18 @@ void StandaloneMode::setupWiFiAP() {
         _apSSID = String(WIFI_AP_SSID_PREFIX) + "-" + macAddr.substring(8);
     }
     
+    // For AP mode we want maximum stability, not power saving
+    WiFi.setSleep(false);
+
     // Configure AP IP settings
     WiFi.softAPConfig(
         IPAddress(192, 168, 4, 1),
         IPAddress(192, 168, 4, 1),
         IPAddress(255, 255, 255, 0)
     );
-    
+
+    //WiFi.softAPConfig(powerSaveMode(none));
+
     // Start AP with configured settings
     bool ap_started = WiFi.softAP(_apSSID.c_str(), WIFI_AP_PASSWORD, 1, 0, 4);
     
@@ -292,13 +297,8 @@ void StandaloneMode::setupWiFiAP() {
         Serial.printf("IP: %s\n", WiFi.softAPIP().toString().c_str());
         
         // Set WiFi protocol AFTER AP is started
-        esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-        
-        // Set TX power for ESP32-C3 SuperMini (8.5dBm)
-        #if defined(BOARD_ESP32_C3_SUPERMINI) || (defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3))
-            WiFi.setTxPower(WIFI_POWER_8_5dBm);
-            Serial.println("WiFi TX power set to 8.5dBm (ESP32-C3)");
-        #endif
+        esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11N);
+
     } else {
         Serial.println("ERROR: WiFi AP failed to start");
     }
@@ -563,25 +563,19 @@ void StandaloneMode::handleGetChannels() {
 
 // Web server task - runs at WEB_PRIORITY (2) - below timing (3)
 void StandaloneMode::webServerTask(void* parameter) {
-    StandaloneMode* mode = static_cast<StandaloneMode*>(parameter);
-    unsigned long last_wifi_check = 0;
-    
-    while (true) {
-        // Handle web server requests
-        mode->_server.handleClient();
-        
-        // Check WiFi status every 10 seconds in web server task
-        if (millis() - last_wifi_check > 10000) {
-            if (WiFi.getMode() != WIFI_AP) {
-                Serial.println("[WebServer] WiFi mode lost, attempting recovery...");
-                WiFi.mode(WIFI_AP);
-                delay(100);
-            }
-            last_wifi_check = millis();
-        }
-        
-        // Small delay to prevent task from consuming all CPU
-        vTaskDelay(pdMS_TO_TICKS(1));
+    // This task must never return or FreeRTOS will abort.
+    // It simply services HTTP requests in a loop.
+    StandaloneMode* self = static_cast<StandaloneMode*>(parameter);
+    if (!self) {
+        // Nothing we can do – delete this task to avoid aborting
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    for (;;) {
+        self->_server.handleClient();
+        // Yield to other tasks; 5–10ms is enough for responsive HTTP
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 

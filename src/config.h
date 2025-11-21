@@ -92,7 +92,7 @@
 // Note: ESP32-D0WD (dual core) can run timing + web server concurrently
 //       ESP32-C3/C6 (single core) shares CPU time between tasks
 #if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
-    #define TIMING_PRIORITY     3     // High priority for timing (critical on single core)
+    #define TIMING_PRIORITY     2     // High priority for timing (critical on single core)
     #define WEB_PRIORITY        1     // Lower priority for web server
 #else
     #define TIMING_PRIORITY     2     // Timing on Core 1 (dual core has plenty of resources)
