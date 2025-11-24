@@ -791,8 +791,26 @@ ipcMain.handle('flash-firmware', async (event, options) => {
           spiffsAddress = spiffsAddr;
           event.sender.send('flash-progress', `✓ Read SPIFFS address from partition table: ${spiffsAddress}\n`);
         } else {
-          // Debug: log partition table size for troubleshooting
-          event.sender.send('flash-progress', `⚠ Could not find SPIFFS in partition table (${partitionData.length} bytes), using default: ${spiffsAddress}\n`);
+          // Debug: Try to dump partition table entries for troubleshooting
+          event.sender.send('flash-progress', `⚠ Could not find SPIFFS in partition table (${partitionData.length} bytes)\n`);
+          // Try to list all partitions found for debugging
+          let offset = 0;
+          const foundPartitions = [];
+          while (offset + 32 <= partitionData.length && foundPartitions.length < 10) {
+            const nameBytes = partitionData.slice(offset, offset + 16);
+            const name = nameBytes.toString('utf8').split('\0')[0].trim();
+            if (name && name.length > 0 && name.charCodeAt(0) !== 0 && name.charCodeAt(0) !== 0xFF) {
+              const entryOffset = partitionData.readUInt32LE(offset + 20);
+              const subtype = partitionData.readUInt8(offset + 18);
+              foundPartitions.push(`${name}@0x${entryOffset.toString(16)} (subtype:0x${subtype.toString(16)})`);
+            }
+            offset += 32;
+            if (offset > 512) break;
+          }
+          if (foundPartitions.length > 0) {
+            event.sender.send('flash-progress', `   Found partitions: ${foundPartitions.join(', ')}\n`);
+          }
+          event.sender.send('flash-progress', `   Using default SPIFFS address: ${spiffsAddress}\n`);
         }
       } catch (error) {
         event.sender.send('flash-progress', `⚠ Could not read partition table: ${error.message}, using default: ${spiffsAddress}\n`);
@@ -816,9 +834,12 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       }
     });
     
-    // Second pass: Add SPIFFS LAST (to prevent any overwrite issues)
+    // SPIFFS will be uploaded separately using PlatformIO's uploadfs command
+    // This ensures PlatformIO handles the correct SPIFFS address from the partition table
+    let spiffsFile = null;
     if (require('fs').existsSync(files.spiffs)) {
       existingFiles.push('spiffs');
+      spiffsFile = files.spiffs;
       
       // Check SPIFFS file size and warn if suspiciously small
       const stats = require('fs').statSync(files.spiffs);
@@ -847,10 +868,7 @@ ipcMain.handle('flash-firmware', async (event, options) => {
         }
       }
       
-      // Add SPIFFS LAST to the command (ensures it's written after firmware)
-      // Use the address we read from partition table (or default)
-      fileArgs.push(spiffsAddress, files.spiffs);
-      event.sender.send('flash-progress', `✓ SPIFFS will be written LAST (after firmware) to prevent overwrite issues\n`);
+      event.sender.send('flash-progress', `✓ SPIFFS will be uploaded using PlatformIO (ensures correct address from partition table)\n`);
     } else {
       event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin not found in firmware package. SPIFFS filesystem will not be uploaded.\n`);
       event.sender.send('flash-progress', `   This means web files (index.html, etc.) will not be available.\n`);
@@ -931,30 +949,19 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       event.sender.send('flash-progress', text);
     });
     
-    esptool.on('close', (code) => {
+    esptool.on('close', async (code) => {
       if (code === 0) {
-        // Verify SPIFFS was written by checking output
-        // Normalize addresses (remove leading zeros) for comparison
-        const normalizedAddr = spiffsAddress.toLowerCase().replace(/^0x0+/, '0x');
-        const addrPattern = new RegExp(`0x0*${normalizedAddr.replace('0x', '')}`, 'i');
-        
-        // Check for SPIFFS write confirmation - look for address and write confirmation
-        const spiffsWritten = addrPattern.test(output) && 
-                             (output.includes('Wrote') || output.includes('Hash of data verified') || 
-                              output.includes('Writing at') || output.includes('at 0x'));
-        
-        if (existingFiles.includes('spiffs')) {
-          if (spiffsWritten) {
-            event.sender.send('flash-progress', `\n✅ SPIFFS filesystem written successfully to ${spiffsAddress}\n`);
-          } else {
-            // Check if SPIFFS address appears anywhere in output (even without explicit confirmation)
-            if (addrPattern.test(output)) {
-              event.sender.send('flash-progress', `\n✓ SPIFFS address ${spiffsAddress} found in output (write likely successful)\n`);
-            } else {
-              event.sender.send('flash-progress', `\n⚠️ WARNING: Could not verify SPIFFS write to ${spiffsAddress}\n`);
-              event.sender.send('flash-progress', `   Check the output above for SPIFFS write confirmation.\n`);
-              event.sender.send('flash-progress', `   If SPIFFS write failed, web files may not be available.\n\n`);
-            }
+        // If SPIFFS file exists, upload it using PlatformIO's uploadfs command
+        // This ensures PlatformIO reads the correct SPIFFS address from the partition table
+        if (spiffsFile && require('fs').existsSync(spiffsFile)) {
+          try {
+            event.sender.send('flash-progress', `\n=== Uploading SPIFFS using PlatformIO ===\n`);
+            await uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, spiffsFile);
+            event.sender.send('flash-progress', `\n✅ SPIFFS uploaded successfully using PlatformIO\n`);
+          } catch (spiffsError) {
+            event.sender.send('flash-progress', `\n⚠️ WARNING: SPIFFS upload failed: ${spiffsError.message}\n`);
+            event.sender.send('flash-progress', `   Firmware was flashed successfully, but SPIFFS may not be available.\n`);
+            // Don't fail the entire flash - firmware is already uploaded
           }
         }
         
@@ -1262,6 +1269,134 @@ async function uploadSPIFFS(event, projectPath, envName, port, pioCmd, env, useS
     });
   } catch (error) {
     throw new Error(`Failed to prepare SPIFFS upload: ${error.message}`);
+  }
+}
+
+// Upload SPIFFS from pre-built spiffs.bin using PlatformIO's esptool wrapper
+// PlatformIO will read the SPIFFS address from the partition table automatically
+async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, spiffsBinPath) {
+  const pioCmd = findPlatformIO();
+  if (!pioCmd) {
+    throw new Error('PlatformIO not found. Cannot upload SPIFFS using PlatformIO method.');
+  }
+  
+  // Map board type to PlatformIO environment name
+  const envMap = {
+    'esp32-c3-supermini': 'esp32-c3-supermini',
+    'nuclearcounter': 'nuclearcounter',
+    'esp32-c3': 'esp32-c3',
+    'esp32-c6': 'esp32-c6',
+    'esp32dev': 'esp32dev',
+    'esp32-s3': 'esp32-s3',
+    'esp32-s3-touch': 'esp32-s3-touch',
+    'jc2432w328c': 'jc2432w328c'
+  };
+  
+  const envName = envMap[boardType];
+  if (!envName) {
+    throw new Error(`Unknown board type: ${boardType}`);
+  }
+  
+  // Create temporary directory for PlatformIO project
+  const tempDir = require('path').join(require('os').tmpdir(), `sfos-pio-${Date.now()}`);
+  const tempDataDir = require('path').join(tempDir, 'data');
+  
+  try {
+    // Create temp directory structure
+    await fs.mkdir(tempDataDir, { recursive: true });
+    
+    // Copy partitions.bin to temp directory (PlatformIO needs it to read SPIFFS address)
+    const partitionsPath = require('path').join(firmwarePath, 'partitions.bin');
+    if (require('fs').existsSync(partitionsPath)) {
+      await fs.copyFile(partitionsPath, require('path').join(tempDir, 'partitions.bin'));
+    }
+    
+    // Extract spiffs.bin to data/ directory using Python script
+    const inspectScript = require('path').join(__dirname, 'scripts', 'inspect_spiffs.py');
+    if (!require('fs').existsSync(inspectScript)) {
+      throw new Error('SPIFFS extraction script not found. Cannot extract spiffs.bin to data/ directory.');
+    }
+    
+    event.sender.send('flash-progress', 'Extracting SPIFFS files to data/ directory...\n');
+    const { spawn } = require('child_process');
+    await new Promise((resolve, reject) => {
+      const python = spawn('python3', [inspectScript, spiffsBinPath, '-e', tempDataDir]);
+      let output = '';
+      python.stdout.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      python.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      python.on('close', (code) => {
+        if (code === 0) {
+          event.sender.send('flash-progress', '✓ SPIFFS files extracted\n');
+          resolve();
+        } else {
+          reject(new Error(`Failed to extract SPIFFS: ${output}`));
+        }
+      });
+      python.on('error', (err) => {
+        reject(new Error(`Failed to run extraction script: ${err.message}`));
+      });
+    });
+    
+    // Create minimal platformio.ini
+    const platformioIni = `[env:${envName}]
+platform = https://github.com/pioarduino/platform-espressif32/releases/download/stable/platform-espressif32.zip
+framework = arduino
+board_build.filesystem = spiffs
+`;
+    await fs.writeFile(require('path').join(tempDir, 'platformio.ini'), platformioIni);
+    
+    // Set upload port
+    const uploadEnv = { ...process.env };
+    uploadEnv.PLATFORMIO_UPLOAD_PORT = port;
+    
+    // Run PlatformIO uploadfs - this will read the SPIFFS address from partitions.bin
+    event.sender.send('flash-progress', 'Uploading SPIFFS using PlatformIO (reading address from partition table)...\n');
+    return new Promise((resolve, reject) => {
+      const uploadfsArgs = ['run', '-e', envName, '-t', 'uploadfs', '--verbose'];
+      const pio = spawn(pioCmd, uploadfsArgs, {
+        cwd: tempDir,
+        env: uploadEnv,
+        shell: process.platform === 'win32',
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      
+      let output = '';
+      pio.stdout.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      pio.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      pio.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`PlatformIO uploadfs failed with code ${code}\n${output}`));
+        }
+      });
+      pio.on('error', (err) => {
+        reject(new Error(`Failed to start PlatformIO uploadfs: ${err.message}`));
+      });
+    });
+  } finally {
+    // Clean up temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch (err) {
+      // Ignore cleanup errors
+    }
   }
 }
 
