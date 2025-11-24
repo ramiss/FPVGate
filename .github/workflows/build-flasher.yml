@@ -2,7 +2,7 @@ name: Build StarForge Flash Tool
 
 on:
   release:
-    types: [ created, published ]  # Trigger on both created and published releases
+    types: [ published ]  # Trigger only when release is published (runs once)
   workflow_dispatch:  # Allows manual triggering
 
 permissions:
