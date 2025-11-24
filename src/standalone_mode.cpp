@@ -817,25 +817,65 @@ void StandaloneMode::playLapBeep() {
 // Speak lap announcement using word fragment TTS
 // NOTE: Only announces lap number and time - NO comparisons to previous laps
 // (No "faster lap" or "slower lap" announcements)
+// Skips leading zero time units (days, hours, minutes) - only announces first non-zero unit and subsequent units
+// Examples: "3 minutes 5 seconds" or "3 minutes 0 seconds" (never "0 hours, 3 minutes")
 void StandaloneMode::speakLapAnnouncement(uint16_t lapNumber, uint32_t lapTimeMs) {
-    // Calculate minutes and seconds from lap time
+    // Calculate all time units from lap time
     uint32_t totalSeconds = lapTimeMs / 1000;
-    uint32_t minutes = totalSeconds / 60;
+    uint32_t days = totalSeconds / 86400;
+    uint32_t hours = (totalSeconds % 86400) / 3600;
+    uint32_t minutes = (totalSeconds % 3600) / 60;
     uint32_t seconds = totalSeconds % 60;
+    
+    // Determine which units to announce - skip leading zeros
+    // Only announce from the first non-zero unit onwards
+    bool announceDays = (days > 0);
+    bool announceHours = (hours > 0);
+    bool announceMinutes = (minutes > 0);
+    bool announceSeconds = true;  // Always announce seconds
+    
+    // If we're announcing a larger unit, we should also announce smaller units even if they're 0
+    // (e.g., "3 minutes 0 seconds" is valid, but "0 hours 3 minutes" should be "3 minutes")
+    if (announceDays) {
+        // If days > 0, announce all subsequent units
+        announceHours = true;
+        announceMinutes = true;
+    } else if (announceHours) {
+        // If hours > 0 (but days = 0), announce hours, minutes, seconds
+        announceMinutes = true;
+    }
+    // If only minutes > 0, announce minutes and seconds
+    // If only seconds > 0, announce only seconds
     
     #if defined(BOARD_JC2432W328C)
     // TODO: Implement SimpleTTS with pre-recorded word fragments
     // For now, use simple beep until audio files are generated
-    // Audio files needed: "lap", "1"-"20", "0"-"59", "seconds", "minutes"
+    // Audio files needed: "lap", "1"-"20", "0"-"59", "seconds", "minutes", "hours", "days"
     // Format: Only announce lap number and time (no faster/slower comparisons)
-    // Example: "Lap 1, 45 seconds" or "Lap 2, 1 minute, 23 seconds"
+    // Examples:
+    //   - "Lap 1, 45 seconds" (if < 1 minute, skip minutes/hours/days)
+    //   - "Lap 2, 3 minutes, 5 seconds" (if >= 1 minute, skip hours/days if 0)
+    //   - "Lap 2, 3 minutes, 0 seconds" (if minutes > 0 and seconds = 0, still announce seconds)
+    //   - "Lap 3, 2 hours, 15 minutes, 30 seconds" (if >= 1 hour, skip days if 0)
+    //   - "Lap 4, 1 day, 2 hours, 3 minutes, 5 seconds" (if >= 1 day)
     // DO NOT include: "faster lap", "slower lap", "personal best", etc.
-    if (minutes > 0) {
-        // TODO: Play "lap", lap number, minutes, "minutes", seconds, "seconds"
-        // NO comparison to previous lap times
+    // DO NOT announce leading zeros: "0 hours" should never be spoken (unless days > 0)
+    
+    if (announceDays) {
+        // TODO: Play "lap", lap number, days, "days"
+        // TODO: Play hours, "hours" (even if 0, since days > 0)
+        // TODO: Play minutes, "minutes" (even if 0, since days > 0)
+        // TODO: Play seconds, "seconds"
+    } else if (announceHours) {
+        // TODO: Play "lap", lap number, hours, "hours"
+        // TODO: Play minutes, "minutes" (even if 0, since hours > 0)
+        // TODO: Play seconds, "seconds"
+    } else if (announceMinutes) {
+        // TODO: Play "lap", lap number, minutes, "minutes"
+        // TODO: Play seconds, "seconds" (even if 0, since minutes > 0)
     } else {
-        // TODO: Play "lap", lap number, seconds, "seconds" (skip "0 minutes")
-        // NO comparison to previous lap times
+        // Only seconds (less than 1 minute)
+        // TODO: Play "lap", lap number, seconds, "seconds"
     }
     playLapBeep();
     #else
