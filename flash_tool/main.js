@@ -71,7 +71,7 @@ const BOARD_CONFIGS = {
       bootloader: '0x0',
       partitions: '0x8000',
       firmware: '0x10000',
-      spiffs: '0x290000'
+      spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
     }
   },
   'esp32-s3-touch': {
@@ -81,7 +81,7 @@ const BOARD_CONFIGS = {
       bootloader: '0x0',
       partitions: '0x8000',
       firmware: '0x10000',
-      spiffs: '0x290000'
+      spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
     }
   },
   'esp32-s2': {
@@ -549,63 +549,194 @@ function findEsptool() {
 }
 
 // Parse partition table to find SPIFFS address
-function findSPIFFSInPartitionTable(partitionData) {
-  // Partition table entry is 32 bytes:
-  // - 16 bytes: name (null-terminated)
-  // - 2 bytes: type
-  // - 1 byte: subtype
-  // - 4 bytes: offset (little-endian)
-  // - 4 bytes: size
-  // - remaining: flags/reserved
+function findSPIFFSInPartitionTable(partitionData, event = null) {
+  // ESP-IDF partition table binary format:
+  // - MD5 checksum at start (16 bytes) - this is OPTIONAL and may not be present
+  // - Partition entries are 32 bytes each:
+  //   - 2 bytes: magic (0xAA50, stored as little-endian = 0x50AA)
+  //   - 1 byte: type - 0x00=app, 0x01=data
+  //   - 1 byte: subtype - 0x00=app, 0x82=spiffs
+  //   - 4 bytes: offset (little-endian)
+  //   - 4 bytes: size (little-endian)
+  //   - 4 bytes: flags (little-endian)
+  //   - 16 bytes: name (null-terminated, padded with 0xFF)
   
-  // Partition table typically starts at offset 0x1000 (4096) in the binary
-  // But the .bin file might be just the table itself, starting at 0
-  let tableStart = 0;
-  
-  // Try to find partition table signature or start scanning from beginning
-  // PlatformIO partition tables can have different formats
-  let offset = tableStart;
-  
-  while (offset + 32 <= partitionData.length) {
-    // Read name (first 16 bytes, null-terminated)
-    const nameBytes = partitionData.slice(offset, offset + 16);
-    const name = nameBytes.toString('utf8').split('\0')[0].trim();
-    
-    // Check for end marker (all zeros or invalid name)
-    if (!name || name.length === 0 || name.charCodeAt(0) === 0 || name.charCodeAt(0) === 0xFF) {
-      // Skip empty entries, but continue scanning
-      offset += 32;
-      continue;
+  // Debug: Always show first 256 bytes as hex for troubleshooting
+  if (partitionData.length > 0) {
+    const preview = partitionData.slice(0, Math.min(256, partitionData.length));
+    const hexPreview = Array.from(preview).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    const hexLines = [];
+    for (let i = 0; i < hexPreview.length; i += 48) {
+      hexLines.push(hexPreview.substring(i, i + 48));
+    }
+    if (event) {
+      event.sender.send('flash-progress', `\nPartition table hex dump (first ${preview.length} bytes):\n`);
+      hexLines.forEach(line => {
+        event.sender.send('flash-progress', `  ${line}\n`);
+      });
     }
     
-    // Read type (2 bytes at offset 16)
-    const type = partitionData.readUInt16LE(offset + 16);
-    
-    // Read subtype (byte at offset 18)
-    const subtype = partitionData.readUInt8(offset + 18);
-    
-    // Read offset (4 bytes little-endian at offset 20)
-    const entryOffset = partitionData.readUInt32LE(offset + 20);
-    
-    // Read size (4 bytes little-endian at offset 24)
-    const entrySize = partitionData.readUInt32LE(offset + 24);
-    
-    // Check if this is SPIFFS partition
-    // Subtype 0x82 = SPIFFS (data), type 0x01 = app, type 0x82 = data
-    // Also check by name (case-insensitive)
-    const nameLower = name.toLowerCase();
-    if (subtype === 0x82 || nameLower === 'spiffs' || nameLower.includes('spiffs')) {
-      return `0x${entryOffset.toString(16)}`;
-    }
-    
-    offset += 32;
-    
-    // Safety: don't scan more than 16 entries (512 bytes)
-    if (offset > 512) {
-      break;
+    // Also try a simple string search for "spiffs" (case-insensitive)
+    // ESP-IDF partition table format: 2-byte magic (0xAA50), then type, subtype, offset, size, flags, name
+    const spiffsLower = Buffer.from('spiffs', 'utf8');
+    const spiffsUpper = Buffer.from('SPIFFS', 'utf8');
+    for (let i = 0; i < partitionData.length - 16; i++) {
+      const slice = partitionData.slice(i, i + 6);
+      if (slice.equals(spiffsLower) || slice.equals(spiffsUpper)) {
+        // Found "spiffs" at offset i
+        // The name is at bytes 16-31 of a 32-byte entry
+        // So the entry starts at i - 16
+        const entryStart = i - 16;
+        if (entryStart >= 0 && entryStart + 32 <= partitionData.length) {
+          // Check for magic bytes at start of entry
+          const magic = partitionData.readUInt16LE(entryStart);
+          if (magic === 0x50AA) { // Little-endian 0xAA50
+            // ESP-IDF format: magic(2) + type(1) + subtype(1) + offset(4) + size(4) + flags(4) + name(16)
+            const entryOffset = partitionData.readUInt32LE(entryStart + 4);
+            const entrySize = partitionData.readUInt32LE(entryStart + 8);
+            const subtype = partitionData.readUInt8(entryStart + 3);
+            
+            // Validate this looks like a valid SPIFFS partition
+            // Subtype 0x82 = SPIFFS
+            if (subtype === 0x82 && entryOffset > 0 && entryOffset < 0x10000000 && entrySize > 0 && entrySize < 0x8000000 && (entryOffset & 0xFFF) === 0) {
+              if (event) {
+                event.sender.send('flash-progress', `✓ Found "spiffs" string at offset 0x${i.toString(16)}, extracted address: 0x${entryOffset.toString(16)}\n`);
+              }
+              return `0x${entryOffset.toString(16)}`;
+            }
+          }
+        }
+      }
     }
   }
   
+  // Try to find valid partition entries by scanning the entire buffer
+  // ESP-IDF partition table format: magic(2) + type(1) + subtype(1) + offset(4) + size(4) + flags(4) + name(16) = 32 bytes
+  const foundPartitions = [];
+  const maxEntries = 25; // Reasonable max for partition table
+  
+  // Try different starting offsets to account for MD5 checksum or padding
+  // ESP-IDF partition tables typically start at offset 0, but may have MD5 (16 bytes) or padding
+  for (let tableStart = 0; tableStart < Math.min(256, partitionData.length - 32); tableStart += 16) {
+    let offset = tableStart;
+    const candidates = [];
+    
+    // Scan for partition entries starting at this offset
+    while (offset + 32 <= partitionData.length && candidates.length < maxEntries) {
+      // Check for ESP-IDF partition table magic bytes (0xAA50, stored as little-endian = 0x50AA)
+      const magic = partitionData.readUInt16LE(offset);
+      if (magic !== 0x50AA) {
+        // Not a valid partition entry, try next position
+        offset += 32;
+        continue;
+      }
+      
+      // ESP-IDF format: magic(2) + type(1) + subtype(1) + offset(4) + size(4) + flags(4) + name(16)
+      const type = partitionData.readUInt8(offset + 2);
+      const subtype = partitionData.readUInt8(offset + 3);
+      const entryOffset = partitionData.readUInt32LE(offset + 4);
+      const entrySize = partitionData.readUInt32LE(offset + 8);
+      const flags = partitionData.readUInt32LE(offset + 12);
+      const nameBytes = partitionData.slice(offset + 16, offset + 32);
+      
+      // Check for end marker (all zeros or all 0xFF)
+      if (entryOffset === 0 && entrySize === 0 && type === 0 && subtype === 0) {
+        // End of partition table
+        break;
+      }
+      
+      // Extract name - look for null terminator or 0xFF padding
+      let nameEnd = 16;
+      for (let i = 0; i < 16; i++) {
+        if (nameBytes[i] === 0) {
+          nameEnd = i;
+          break;
+        }
+        // If we hit 0xFF padding, that's also the end (but 0xFF at position 0 might be valid padding)
+        if (nameBytes[i] === 0xFF && i > 0) {
+          nameEnd = i;
+          break;
+        }
+      }
+      
+      const nameRaw = nameBytes.slice(0, nameEnd);
+      
+      // Validate name is printable ASCII
+      let isValidName = nameRaw.length > 0 && nameRaw.length <= 16;
+      for (let i = 0; i < nameRaw.length; i++) {
+        const byte = nameRaw[i];
+        // Allow printable ASCII (0x20-0x7E) - partition names are usually lowercase alphanumeric + underscore
+        if (byte < 0x20 || byte > 0x7E) {
+          isValidName = false;
+          break;
+        }
+      }
+      
+      // Validate partition entry values
+      // Entry offset should be aligned to 0x1000 (4KB) for ESP32-S3
+      const isOffsetAligned = (entryOffset & 0xFFF) === 0;
+      const isValidEntry = entryOffset !== 0xFFFFFFFF && 
+                           entryOffset < 0x10000000 && 
+                           entrySize !== 0xFFFFFFFF && 
+                           entrySize < 0x10000000 &&
+                           entrySize > 0 &&
+                           entrySize < 0x8000000 && // Max 128MB
+                           (type === 0x00 || type === 0x01) && // app or data
+                           isValidName &&
+                           isOffsetAligned; // ESP32-S3 requires 4KB alignment
+      
+      if (isValidEntry) {
+        const name = nameRaw.toString('utf8').trim();
+        if (name.length > 0) {
+          candidates.push({ 
+            name, 
+            type, 
+            subtype, 
+            offset: entryOffset, 
+            size: entrySize,
+            tableOffset: offset
+          });
+          
+          // Debug output
+          if (event) {
+            event.sender.send('flash-progress', `  Found partition: ${name} (type:0x${type.toString(16)}, subtype:0x${subtype.toString(16)}) at 0x${entryOffset.toString(16)}, size: 0x${entrySize.toString(16)}\n`);
+          }
+          
+          // Check if this is SPIFFS partition
+          // Subtype 0x82 = SPIFFS, or name contains "spiffs"
+          const nameLower = name.toLowerCase();
+          if (subtype === 0x82 || nameLower === 'spiffs' || nameLower.includes('spiffs')) {
+            if (event) {
+              event.sender.send('flash-progress', `✓ Identified SPIFFS partition: ${name} at 0x${entryOffset.toString(16)}\n`);
+            }
+            return `0x${entryOffset.toString(16)}`;
+          }
+        }
+      }
+      
+      offset += 32;
+    }
+    
+    // If we found valid partitions at this offset, this is likely the right table
+    if (candidates.length > 0) {
+      foundPartitions.push(...candidates);
+      // If we found a good set of partitions, we can stop searching other offsets
+      // (the first valid offset is usually correct)
+      if (candidates.length >= 3) {
+        break;
+      }
+    }
+  }
+  
+  // If we found partitions but no SPIFFS, log them for debugging
+  if (foundPartitions.length > 0 && event) {
+    event.sender.send('flash-progress', `Found ${foundPartitions.length} partitions but no SPIFFS:\n`);
+    foundPartitions.forEach(p => {
+      event.sender.send('flash-progress', `  - ${p.name} (type:0x${p.type.toString(16)}, subtype:0x${p.subtype.toString(16)}) at 0x${p.offset.toString(16)}\n`);
+    });
+  }
+  
+  // If we found partitions but no SPIFFS, that's okay - return null to use default
   return null;
 }
 
@@ -786,7 +917,8 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       try {
         // Read partition table to find SPIFFS address
         const partitionData = require('fs').readFileSync(files.partitions);
-        const spiffsAddr = findSPIFFSInPartitionTable(partitionData);
+        event.sender.send('flash-progress', `Parsing partition table (${partitionData.length} bytes)...\n`);
+        const spiffsAddr = findSPIFFSInPartitionTable(partitionData, event);
         if (spiffsAddr) {
           spiffsAddress = spiffsAddr;
           event.sender.send('flash-progress', `✓ Read SPIFFS address from partition table: ${spiffsAddress}\n`);
@@ -955,13 +1087,21 @@ ipcMain.handle('flash-firmware', async (event, options) => {
         // This ensures PlatformIO reads the correct SPIFFS address from the partition table
         if (spiffsFile && require('fs').existsSync(spiffsFile)) {
           try {
-            event.sender.send('flash-progress', `\n=== Uploading SPIFFS using PlatformIO ===\n`);
+            event.sender.send('flash-progress', `\n=== Uploading SPIFFS ===\n`);
+            event.sender.send('flash-progress', `SPIFFS file: ${spiffsFile}\n`);
+            event.sender.send('flash-progress', `Board type: ${boardType}\n`);
             await uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, spiffsFile);
-            event.sender.send('flash-progress', `\n✅ SPIFFS uploaded successfully using PlatformIO\n`);
+            event.sender.send('flash-progress', `\n✅ SPIFFS uploaded successfully\n`);
           } catch (spiffsError) {
             event.sender.send('flash-progress', `\n⚠️ WARNING: SPIFFS upload failed: ${spiffsError.message}\n`);
+            event.sender.send('flash-progress', `   Error details: ${spiffsError.stack || spiffsError.toString()}\n`);
             event.sender.send('flash-progress', `   Firmware was flashed successfully, but SPIFFS may not be available.\n`);
+            event.sender.send('flash-progress', `   You may need to manually upload SPIFFS using PlatformIO.\n`);
             // Don't fail the entire flash - firmware is already uploaded
+          }
+        } else {
+          if (spiffsFile) {
+            event.sender.send('flash-progress', `\n⚠️ SPIFFS file not found: ${spiffsFile}\n`);
           }
         }
         
@@ -1272,69 +1412,259 @@ async function uploadSPIFFS(event, projectPath, envName, port, pioCmd, env, useS
   }
 }
 
-// Upload SPIFFS from pre-built spiffs.bin using PlatformIO's esptool wrapper
-// PlatformIO will read the SPIFFS address from the partition table automatically
-async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, spiffsBinPath) {
-  const pioCmd = findPlatformIO();
-  if (!pioCmd) {
-    throw new Error('PlatformIO not found. Cannot upload SPIFFS using PlatformIO method.');
+// Extract files from SPIFFS binary using Node.js (self-contained, no Python)
+function extractSPIFFSFiles(spiffsBinPath, extractDir) {
+  const fs = require('fs');
+  const spiffsData = fs.readFileSync(spiffsBinPath);
+  
+  // Ensure extract directory exists
+  if (!fs.existsSync(extractDir)) {
+    fs.mkdirSync(extractDir, { recursive: true });
   }
   
-  // Map board type to PlatformIO environment name
-  const envMap = {
-    'esp32-c3-supermini': 'esp32-c3-supermini',
-    'nuclearcounter': 'nuclearcounter',
-    'esp32-c3': 'esp32-c3',
-    'esp32-c6': 'esp32-c6',
-    'esp32dev': 'esp32dev',
-    'esp32-s3': 'esp32-s3',
-    'esp32-s3-touch': 'esp32-s3-touch',
-    'jc2432w328c': 'jc2432w328c'
-  };
+  const extractedFiles = [];
   
-  const envName = envMap[boardType];
-  if (!envName) {
-    throw new Error(`Unknown board type: ${boardType}`);
-  }
+  // Extract by content signatures (same method as Python script)
+  // Look for HTML, CSS, JS files by their content markers
   
-  // Get chip type from board config
-  const config = BOARD_CONFIGS[boardType];
-  const chip = config.chip;
-  
-  // Read SPIFFS address from partition table using Node.js (no Python required)
-  const partitionsPath = path.join(firmwarePath, 'partitions.bin');
-  let spiffsAddress = null;
-  
-  if (require('fs').existsSync(partitionsPath)) {
-    try {
-      const partitionData = require('fs').readFileSync(partitionsPath);
-      spiffsAddress = findSPIFFSInPartitionTable(partitionData);
-      if (spiffsAddress) {
-        event.sender.send('flash-progress', `✓ Read SPIFFS address from partition table: ${spiffsAddress}\n`);
+  // Find index.html
+  const htmlMarkers = [Buffer.from('<!DOCTYPE html'), Buffer.from('<html'), Buffer.from('<HTML')];
+  for (const marker of htmlMarkers) {
+    const idx = spiffsData.indexOf(marker);
+    if (idx !== -1) {
+      // Find the end (look for </html> or end of non-zero data)
+      let endIdx = spiffsData.indexOf(Buffer.from('</html>'), idx);
+      if (endIdx === -1) {
+        // Find end of non-zero block
+        endIdx = idx;
+        let consecutiveEmpty = 0;
+        while (endIdx < spiffsData.length) {
+          const byte = spiffsData[endIdx];
+          if (byte === 0 || byte === 0xFF) {
+            consecutiveEmpty++;
+            if (consecutiveEmpty > 256) break;
+          } else {
+            consecutiveEmpty = 0;
+          }
+          endIdx++;
+        }
+        endIdx -= consecutiveEmpty;
+      } else {
+        endIdx += 7; // Include </html>
       }
-    } catch (error) {
-      event.sender.send('flash-progress', `⚠ Could not read partition table: ${error.message}\n`);
+      
+      const content = spiffsData.slice(idx, endIdx);
+      if (content.length > 50) {
+        fs.writeFileSync(path.join(extractDir, 'index.html'), content);
+        extractedFiles.push('index.html');
+        break;
+      }
     }
   }
   
-  // Fallback to default if partition table parsing failed
-  if (!spiffsAddress) {
-    spiffsAddress = config.flashAddresses.spiffs;
-    event.sender.send('flash-progress', `⚠ Using default SPIFFS address: ${spiffsAddress}\n`);
+  // Find style.css
+  const cssMarkers = [Buffer.from('body {'), Buffer.from('body{'), Buffer.from('/*'), Buffer.from('@media')];
+  for (const marker of cssMarkers) {
+    const idx = spiffsData.indexOf(marker);
+    if (idx !== -1 && idx > 100) {
+      let endIdx = idx;
+      let consecutiveEmpty = 0;
+      while (endIdx < spiffsData.length) {
+        const byte = spiffsData[endIdx];
+        if (byte === 0 || byte === 0xFF) {
+          consecutiveEmpty++;
+          if (consecutiveEmpty > 256) break;
+        } else {
+          consecutiveEmpty = 0;
+        }
+        endIdx++;
+      }
+      endIdx -= consecutiveEmpty;
+      
+      const content = spiffsData.slice(idx, endIdx);
+      if (content.length > 10) {
+        fs.writeFileSync(path.join(extractDir, 'style.css'), content);
+        extractedFiles.push('style.css');
+        break;
+      }
+    }
   }
   
-  // Use PlatformIO's esptool wrapper to upload SPIFFS
-  // This ensures we use the same esptool that PlatformIO uses, with correct parameters
+  // Find app.js
+  const jsMarkers = [Buffer.from('console.'), Buffer.from('function '), Buffer.from('const '), Buffer.from('let ')];
+  for (const marker of jsMarkers) {
+    const idx = spiffsData.indexOf(marker);
+    if (idx !== -1 && idx > 100) {
+      let endIdx = idx;
+      let consecutiveEmpty = 0;
+      while (endIdx < spiffsData.length) {
+        const byte = spiffsData[endIdx];
+        if (byte === 0 || byte === 0xFF) {
+          consecutiveEmpty++;
+          if (consecutiveEmpty > 256) break;
+        } else {
+          consecutiveEmpty = 0;
+        }
+        endIdx++;
+      }
+      endIdx -= consecutiveEmpty;
+      
+      const content = spiffsData.slice(idx, endIdx);
+      if (content.length > 10) {
+        fs.writeFileSync(path.join(extractDir, 'app.js'), content);
+        extractedFiles.push('app.js');
+        break;
+      }
+    }
+  }
+  
+  return extractedFiles;
+}
+
+// Read SPIFFS address from device using esptool (after partition table is flashed)
+async function readSPIFFSAddressFromDevice(event, chip, port, partitionsAddress = '0x8000') {
+  const esptoolCmd = findEsptool();
+  if (!esptoolCmd) {
+    return null;
+  }
+  
+  // Try reading different sizes - ESP-IDF partition tables can vary
+  // Default is usually 0xC00 (3072 bytes) but actual entries are smaller
+  // Try reading the full 3072 bytes first, then try smaller sizes
+  const sizesToTry = [3072, 1024, 640, 512];
+  
+  for (const partitionTableSize of sizesToTry) {
+    const result = await new Promise((resolve) => {
+      const tempPartitionFile = require('path').join(require('os').tmpdir(), `partitions-read-${Date.now()}.bin`);
+      const args = [
+        '--chip', chip,
+        '--port', port,
+        '--baud', '921600',
+        'read_flash',
+        partitionsAddress,
+        `0x${partitionTableSize.toString(16)}`,
+        tempPartitionFile
+      ];
+      
+      event.sender.send('flash-progress', `Reading partition table from device at ${partitionsAddress} (${partitionTableSize} bytes)...\n`);
+      
+      const esptool = spawn(esptoolCmd, args);
+      let output = '';
+      
+      esptool.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      esptool.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      esptool.on('close', (code) => {
+        if (code === 0 && require('fs').existsSync(tempPartitionFile)) {
+          try {
+            const partitionData = require('fs').readFileSync(tempPartitionFile);
+            event.sender.send('flash-progress', `Read ${partitionData.length} bytes from device\n`);
+            
+            // Try parsing with different starting offsets
+            // ESP-IDF partition tables may have MD5 checksum (16 bytes) at start
+            for (let offset = 0; offset < Math.min(128, partitionData.length - 32); offset += 16) {
+              const spiffsAddress = findSPIFFSInPartitionTable(partitionData.slice(offset), event);
+              if (spiffsAddress) {
+                // Clean up temp file
+                try {
+                  require('fs').unlinkSync(tempPartitionFile);
+                } catch (e) {}
+                event.sender.send('flash-progress', `✓ Found SPIFFS at ${spiffsAddress} from device (offset ${offset})\n`);
+                resolve(spiffsAddress);
+                return;
+              }
+            }
+            
+            // Clean up temp file
+            try {
+              require('fs').unlinkSync(tempPartitionFile);
+            } catch (e) {}
+            event.sender.send('flash-progress', `⚠ Could not find SPIFFS in device partition table (tried ${partitionTableSize} bytes)\n`);
+            resolve(null);
+          } catch (err) {
+            event.sender.send('flash-progress', `⚠ Error parsing device partition table: ${err.message}\n`);
+            resolve(null);
+          }
+        } else {
+          if (code !== 0) {
+            event.sender.send('flash-progress', `⚠ Could not read partition table from device (code ${code}, tried ${partitionTableSize} bytes)\n`);
+          }
+          resolve(null);
+        }
+      });
+      
+      esptool.on('error', (err) => {
+        event.sender.send('flash-progress', `⚠ Error reading from device: ${err.message}\n`);
+        resolve(null);
+      });
+    });
+    
+    // If we found the address, return it
+    if (result) {
+      return result;
+    }
+  }
+  
+  return null;
+}
+
+// Upload SPIFFS from pre-built spiffs.bin using esptool directly (self-contained)
+async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, spiffsBinPath) {
   const esptoolCmd = findEsptool();
   if (!esptoolCmd) {
     throw new Error('esptool not found. Cannot upload SPIFFS.');
   }
   
-  event.sender.send('flash-progress', `Uploading SPIFFS to ${spiffsAddress} using PlatformIO's esptool...\n`);
+  // Get chip type from board config
+  const config = BOARD_CONFIGS[boardType];
+  if (!config) {
+    throw new Error(`Unknown board type: ${boardType}`);
+  }
+  const chip = config.chip;
   
-  // Use esptool directly with the address we found
-  // PlatformIO's esptool wrapper would require a full project structure
-  // So we'll use esptool directly but with the address from the partition table
+  // Try to read SPIFFS address from partition table on device
+  // (partition table should already be flashed at this point)
+  event.sender.send('flash-progress', 'Reading SPIFFS address from device partition table...\n');
+  let spiffsAddress = await readSPIFFSAddressFromDevice(event, chip, port);
+  
+  // If reading from device failed, try parsing partitions.bin file
+  if (!spiffsAddress) {
+    const partitionsPath = path.join(firmwarePath, 'partitions.bin');
+    if (require('fs').existsSync(partitionsPath)) {
+      event.sender.send('flash-progress', 'Parsing partition table from firmware package...\n');
+      try {
+        const partitionData = require('fs').readFileSync(partitionsPath);
+        spiffsAddress = findSPIFFSInPartitionTable(partitionData, event);
+        if (spiffsAddress) {
+          event.sender.send('flash-progress', `✓ Found SPIFFS address: ${spiffsAddress}\n`);
+        }
+      } catch (error) {
+        event.sender.send('flash-progress', `⚠ Could not parse partition table: ${error.message}\n`);
+      }
+    }
+  } else {
+    event.sender.send('flash-progress', `✓ Read SPIFFS address from device: ${spiffsAddress}\n`);
+  }
+  
+  // Fallback to default if partition table parsing failed
+  if (!spiffsAddress) {
+    // Use default from config (which is now correct for ESP32-S3)
+    spiffsAddress = config.flashAddresses.spiffs;
+    event.sender.send('flash-progress', `⚠ Using default SPIFFS address: ${spiffsAddress}\n`);
+    if (boardType === 'esp32-s3' || boardType === 'esp32-s3-touch') {
+      event.sender.send('flash-progress', `   NOTE: ESP32-S3 default is 0x190000 (matches PlatformIO default partition table).\n`);
+      event.sender.send('flash-progress', `   Common ESP32-S3 SPIFFS addresses: 0x190000 (default), 0x290000 (legacy), 0x3D0000 (custom)\n`);
+    }
+    event.sender.send('flash-progress', `   If SPIFFS doesn't work, try using 'Local Folder' method.\n`);
+  }
+  
+  // Use esptool directly to upload SPIFFS
+  event.sender.send('flash-progress', `Uploading SPIFFS to ${spiffsAddress} using esptool...\n`);
+  
   const args = [
     '--chip', chip,
     '--port', port,
@@ -1364,8 +1694,14 @@ async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, sp
     
     esptool.on('close', (code) => {
       if (code === 0) {
-        event.sender.send('flash-progress', '✓ SPIFFS uploaded successfully\n');
-        resolve();
+        // Check output for confirmation that SPIFFS was written
+        if (output.includes('Wrote') && output.includes(spiffsAddress)) {
+          event.sender.send('flash-progress', '✓ SPIFFS uploaded successfully\n');
+          resolve();
+        } else {
+          event.sender.send('flash-progress', '⚠ SPIFFS upload completed, but verification unclear\n');
+          resolve(); // Still resolve - esptool returned 0
+        }
       } else {
         reject(new Error(`SPIFFS upload failed with code ${code}\n${output}`));
       }

@@ -149,6 +149,17 @@
               </p>
               <div class="console-output serial-monitor-output" id="serial-monitor-output"></div>
             </div>
+
+            <!-- Full Chip Erase -->
+            <div class="form-group">
+              <label>Dangerous Operations</label>
+              <button class="btn-danger" id="erase-all-btn" onclick="eraseAllFlash()" style="width: 100%;">
+                ⚠️ Erase All (Full Chip Erase)
+              </button>
+              <p class="help-text" style="color: #ff6b6b; margin-top: 5px;">
+                ⚠️ WARNING: This will erase EVERYTHING including NVS, WiFi calibration, and factory data. Use only for complete reset.
+              </p>
+            </div>
           </div>
         </div>
       </div>

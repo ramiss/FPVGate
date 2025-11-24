@@ -450,14 +450,10 @@ async function startFlashing() {
   }
 }
 
-// Erase flash
+// Erase flash (selective - only app and SPIFFS, preserves NVS)
 async function eraseFlash() {
   if (!selectedBoard || !selectedPort) {
     showStatus('Please select board type and port', 'error');
-    return;
-  }
-  
-  if (!confirm('This will erase all data on the device. Continue?')) {
     return;
   }
 
@@ -483,12 +479,74 @@ async function eraseFlash() {
     appendToConsole('=== Erasing flash ===\n');
     const result = await window.flasher.eraseFlash({
       port: selectedPort,
-      boardType: selectedBoard
+      boardType: selectedBoard,
+      fullErase: false
     });
     
     if (result.success) {
       showStatus('✅ Flash erased successfully', 'success');
       appendToConsole('\n=== Erase complete! ===\n');
+    }
+  } catch (error) {
+    showStatus('❌ Erase failed: ' + error.message, 'error');
+    appendToConsole('\n=== ERROR ===\n' + error.message + '\n');
+  } finally {
+    setButtonsEnabled(true);
+  }
+}
+
+// Erase all (full chip erase - everything including NVS)
+async function eraseAllFlash() {
+  if (!selectedBoard || !selectedPort) {
+    showStatus('Please select board type and port', 'error');
+    return;
+  }
+  
+  // Warning dialog
+  if (!confirm('⚠️ WARNING: Full Chip Erase\n\n' +
+               'This will PERMANENTLY DELETE:\n' +
+               '• All firmware\n' +
+               '• All SPIFFS files\n' +
+               '• WiFi calibration data\n' +
+               '• MAC address settings\n' +
+               '• All NVS data\n' +
+               '• Factory calibration\n\n' +
+               'This is IRREVERSIBLE and will require re-flashing everything.\n\n' +
+               'Continue with full chip erase?')) {
+    return;
+  }
+
+  // Ensure serial monitor is stopped before erasing
+  try {
+    await window.flasher.stopSerialMonitor();
+  } catch (e) {
+    // Ignore monitor stop errors
+  }
+  
+  setButtonsEnabled(false);
+  const progressSection = document.getElementById('progress-section');
+  progressSection.classList.add('active');
+  clearConsole();
+  showStatus('Performing full chip erase...', 'info');
+  
+  // Scroll to progress section so user can see the debug output
+  setTimeout(() => {
+    progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+  
+  try {
+    appendToConsole('=== Full Chip Erase ===\n');
+    appendToConsole('⚠️ This will erase ALL data on the device\n\n');
+    const result = await window.flasher.eraseFlash({
+      port: selectedPort,
+      boardType: selectedBoard,
+      fullErase: true
+    });
+    
+    if (result.success) {
+      showStatus('✅ Full chip erase complete', 'success');
+      appendToConsole('\n=== Full Chip Erase Complete! ===\n');
+      appendToConsole('⚠️ All data has been wiped. You can now flash fresh firmware.\n');
     }
   } catch (error) {
     showStatus('❌ Erase failed: ' + error.message, 'error');
@@ -608,6 +666,10 @@ function showStatus(message, type) {
 function setButtonsEnabled(enabled) {
   document.getElementById('flash-btn').disabled = !enabled;
   document.getElementById('erase-btn').disabled = !enabled;
+  const eraseAllBtn = document.getElementById('erase-all-btn');
+  if (eraseAllBtn) {
+    eraseAllBtn.disabled = !enabled;
+  }
   document.getElementById('board-select').disabled = !enabled;
   document.getElementById('port-select').disabled = !enabled;
 }
