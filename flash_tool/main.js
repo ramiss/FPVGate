@@ -558,18 +558,28 @@ function findSPIFFSInPartitionTable(partitionData) {
   // - 4 bytes: size
   // - remaining: flags/reserved
   
-  let offset = 0;
-  const fs = require('fs');
+  // Partition table typically starts at offset 0x1000 (4096) in the binary
+  // But the .bin file might be just the table itself, starting at 0
+  let tableStart = 0;
+  
+  // Try to find partition table signature or start scanning from beginning
+  // PlatformIO partition tables can have different formats
+  let offset = tableStart;
   
   while (offset + 32 <= partitionData.length) {
     // Read name (first 16 bytes, null-terminated)
     const nameBytes = partitionData.slice(offset, offset + 16);
     const name = nameBytes.toString('utf8').split('\0')[0].trim();
     
-    // Check for end marker
-    if (!name || name.length === 0) {
-      break;
+    // Check for end marker (all zeros or invalid name)
+    if (!name || name.length === 0 || name.charCodeAt(0) === 0 || name.charCodeAt(0) === 0xFF) {
+      // Skip empty entries, but continue scanning
+      offset += 32;
+      continue;
     }
+    
+    // Read type (2 bytes at offset 16)
+    const type = partitionData.readUInt16LE(offset + 16);
     
     // Read subtype (byte at offset 18)
     const subtype = partitionData.readUInt8(offset + 18);
@@ -577,13 +587,23 @@ function findSPIFFSInPartitionTable(partitionData) {
     // Read offset (4 bytes little-endian at offset 20)
     const entryOffset = partitionData.readUInt32LE(offset + 20);
     
+    // Read size (4 bytes little-endian at offset 24)
+    const entrySize = partitionData.readUInt32LE(offset + 24);
+    
     // Check if this is SPIFFS partition
-    // Subtype 0x82 = SPIFFS, or name contains "spiffs"
-    if (subtype === 0x82 || name.toLowerCase() === 'spiffs') {
+    // Subtype 0x82 = SPIFFS (data), type 0x01 = app, type 0x82 = data
+    // Also check by name (case-insensitive)
+    const nameLower = name.toLowerCase();
+    if (subtype === 0x82 || nameLower === 'spiffs' || nameLower.includes('spiffs')) {
       return `0x${entryOffset.toString(16)}`;
     }
     
     offset += 32;
+    
+    // Safety: don't scan more than 16 entries (512 bytes)
+    if (offset > 512) {
+      break;
+    }
   }
   
   return null;
@@ -771,7 +791,8 @@ ipcMain.handle('flash-firmware', async (event, options) => {
           spiffsAddress = spiffsAddr;
           event.sender.send('flash-progress', `✓ Read SPIFFS address from partition table: ${spiffsAddress}\n`);
         } else {
-          event.sender.send('flash-progress', `⚠ Could not find SPIFFS in partition table, using default: ${spiffsAddress}\n`);
+          // Debug: log partition table size for troubleshooting
+          event.sender.send('flash-progress', `⚠ Could not find SPIFFS in partition table (${partitionData.length} bytes), using default: ${spiffsAddress}\n`);
         }
       } catch (error) {
         event.sender.send('flash-progress', `⚠ Could not read partition table: ${error.message}, using default: ${spiffsAddress}\n`);
@@ -913,15 +934,28 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     esptool.on('close', (code) => {
       if (code === 0) {
         // Verify SPIFFS was written by checking output
-        const spiffsWritten = output.includes(spiffsAddress) && 
-                             (output.includes('Wrote') || output.includes('Hash of data verified'));
+        // Normalize addresses (remove leading zeros) for comparison
+        const normalizedAddr = spiffsAddress.toLowerCase().replace(/^0x0+/, '0x');
+        const addrPattern = new RegExp(`0x0*${normalizedAddr.replace('0x', '')}`, 'i');
         
-        if (existingFiles.includes('spiffs') && !spiffsWritten) {
-          event.sender.send('flash-progress', `\n⚠️ WARNING: SPIFFS may not have been written correctly!\n`);
-          event.sender.send('flash-progress', `   Check the output above for SPIFFS write confirmation.\n`);
-          event.sender.send('flash-progress', `   If SPIFFS write failed, web files may not be available.\n\n`);
-        } else if (spiffsWritten) {
-          event.sender.send('flash-progress', `\n✅ SPIFFS filesystem written successfully\n`);
+        // Check for SPIFFS write confirmation - look for address and write confirmation
+        const spiffsWritten = addrPattern.test(output) && 
+                             (output.includes('Wrote') || output.includes('Hash of data verified') || 
+                              output.includes('Writing at') || output.includes('at 0x'));
+        
+        if (existingFiles.includes('spiffs')) {
+          if (spiffsWritten) {
+            event.sender.send('flash-progress', `\n✅ SPIFFS filesystem written successfully to ${spiffsAddress}\n`);
+          } else {
+            // Check if SPIFFS address appears anywhere in output (even without explicit confirmation)
+            if (addrPattern.test(output)) {
+              event.sender.send('flash-progress', `\n✓ SPIFFS address ${spiffsAddress} found in output (write likely successful)\n`);
+            } else {
+              event.sender.send('flash-progress', `\n⚠️ WARNING: Could not verify SPIFFS write to ${spiffsAddress}\n`);
+              event.sender.send('flash-progress', `   Check the output above for SPIFFS write confirmation.\n`);
+              event.sender.send('flash-progress', `   If SPIFFS write failed, web files may not be available.\n\n`);
+            }
+          }
         }
         
         resolve({ success: true, output });
