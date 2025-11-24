@@ -76,10 +76,44 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     }
     
     // Initialize SPIFFS for serving static files
-    if (!SPIFFS.begin(true)) {
+    // Check if already mounted (config_loader may have mounted it)
+    // Try to mount, but don't format if already mounted
+    bool spiffsMounted = false;
+    if (SPIFFS.begin(false)) {
+        // Already mounted, or mounted successfully without formatting
+        spiffsMounted = true;
+    } else {
+        // Not mounted, try mounting with format (first time setup)
+        spiffsMounted = SPIFFS.begin(true);
+    }
+    
+    if (!spiffsMounted) {
         Serial.println("Warning: SPIFFS Mount Failed (index.html won't be available, but API will work)");
     } else {
         Serial.println("SPIFFS mounted successfully");
+        
+        // Debug: List all files in SPIFFS
+        Serial.println("=== SPIFFS Contents ===");
+        File root = SPIFFS.open("/");
+        if (!root) {
+            Serial.println("ERROR: Failed to open SPIFFS root directory");
+        } else if (!root.isDirectory()) {
+            Serial.println("ERROR: SPIFFS root is not a directory");
+        } else {
+            File file = root.openNextFile();
+            int fileCount = 0;
+            while (file) {
+                Serial.printf("  File: %s, Size: %d bytes\n", file.name(), file.size());
+                fileCount++;
+                file = root.openNextFile();
+            }
+            if (fileCount == 0) {
+                Serial.println("  WARNING: SPIFFS is empty! No files found.");
+            } else {
+                Serial.printf("Total files: %d\n", fileCount);
+            }
+        }
+        Serial.println("======================");
     }
     
     // Setup web server routes
@@ -320,16 +354,32 @@ void StandaloneMode::handleRoot() {
     _server.sendHeader("Pragma", "no-cache");
     _server.sendHeader("Expires", "0");
     
-    File file = SPIFFS.open("/index.html", "r");
-    if (file && file.size() > 0) {
-        Serial.println("Serving index.html from SPIFFS");
-        Serial.printf("File size: %d bytes\n", file.size());
-        _server.streamFile(file, "text/html");
-        file.close();
-    } else {
-        Serial.println("index.html not found or empty in SPIFFS");
-        _server.send(404, "text/plain", "index.html not found");
+    // Check if SPIFFS is mounted
+    if (!SPIFFS.exists("/index.html")) {
+        Serial.println("ERROR: /index.html does not exist in SPIFFS");
+        Serial.println("SPIFFS filesystem may be empty or corrupted");
+        _server.send(404, "text/plain", "index.html not found in SPIFFS");
+        return;
     }
+    
+    File file = SPIFFS.open("/index.html", "r");
+    if (!file) {
+        Serial.println("ERROR: Failed to open /index.html (file exists but cannot be opened)");
+        _server.send(500, "text/plain", "Failed to read index.html");
+        return;
+    }
+    
+    if (file.size() == 0) {
+        Serial.println("ERROR: /index.html exists but is empty (0 bytes)");
+        file.close();
+        _server.send(500, "text/plain", "index.html is empty");
+        return;
+    }
+    
+    Serial.println("Serving index.html from SPIFFS");
+    Serial.printf("File size: %d bytes\n", file.size());
+    _server.streamFile(file, "text/html");
+    file.close();
 }
 
 void StandaloneMode::handleGetStatus() {

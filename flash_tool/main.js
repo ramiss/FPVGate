@@ -702,9 +702,17 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       '--port', port,
       '--baud', baudRate.toString(),
       '--before', 'default_reset',
-      '--after', 'hard_reset',
-      'write_flash'
+      '--after', 'hard_reset'
     ];
+    
+    // ESP32-S3 specific: Add flash mode and size parameters for better compatibility
+    if (config.chip === 'esp32s3') {
+      args.push('--flash_mode', 'dio');
+      args.push('--flash_size', '8MB');
+      event.sender.send('flash-progress', 'Using ESP32-S3 specific flash parameters\n');
+    }
+    
+    args.push('write_flash');
     
     // Add flash addresses and files
     const files = {
@@ -715,28 +723,63 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     };
     
     // Check which files exist
+    // IMPORTANT: Build file list in specific order to ensure SPIFFS is written last
+    // This prevents any potential overwrite issues
+    const fileOrder = ['bootloader', 'partitions', 'firmware', 'spiffs'];
     const existingFiles = [];
-    Object.keys(files).forEach(key => {
+    const fileArgs = [];  // Separate array to control order
+    
+    // First pass: collect all files except SPIFFS
+    fileOrder.forEach(key => {
+      if (key === 'spiffs') return;  // Skip SPIFFS for now
       if (require('fs').existsSync(files[key])) {
         existingFiles.push(key);
-        args.push(config.flashAddresses[key], files[key]);
+        fileArgs.push(config.flashAddresses[key], files[key]);
         
-        // Check SPIFFS file size and warn if suspiciously small
-        if (key === 'spiffs') {
-          const stats = require('fs').statSync(files[key]);
-          const sizeKB = stats.size / 1024;
-          event.sender.send('flash-progress', `Found ${key}.bin (${sizeKB.toFixed(1)} KB)\n`);
-          if (stats.size < 1024) {
-            event.sender.send('flash-progress', `⚠️ WARNING: ${key}.bin is very small (${stats.size} bytes). It may be empty or incomplete.\n`);
-          }
-        }
-      } else {
-        if (key === 'spiffs') {
-          event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin not found in firmware package. SPIFFS filesystem will not be uploaded.\n`);
-          event.sender.send('flash-progress', `   This means web files (index.html, etc.) will not be available.\n`);
-        }
       }
     });
+    
+    // Second pass: Add SPIFFS LAST (to prevent any overwrite issues)
+    if (require('fs').existsSync(files.spiffs)) {
+      existingFiles.push('spiffs');
+      
+      // Check SPIFFS file size and warn if suspiciously small
+      const stats = require('fs').statSync(files.spiffs);
+      const sizeKB = stats.size / 1024;
+      event.sender.send('flash-progress', `Found spiffs.bin (${sizeKB.toFixed(1)} KB)\n`);
+      
+      // Verify SPIFFS file is valid
+      if (stats.size < 1024) {
+        event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin is very small (${stats.size} bytes). It may be empty or incomplete.\n`);
+      } else if (stats.size > 10 * 1024 * 1024) {
+        event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin is unusually large (${sizeKB.toFixed(1)} KB). This may indicate corruption.\n`);
+      } else {
+        // Try to read first few bytes to verify it's not all zeros or corrupted
+        const fs = require('fs');
+        const buffer = Buffer.alloc(256);
+        const fd = fs.openSync(files.spiffs, 'r');
+        const bytesRead = fs.readSync(fd, buffer, 0, 256, 0);
+        fs.closeSync(fd);
+        
+        // Check if file is all zeros (common corruption pattern)
+        const allZeros = buffer.slice(0, bytesRead).every(byte => byte === 0);
+        if (allZeros && bytesRead > 0) {
+          event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin appears to be empty (all zeros). File may be corrupted.\n`);
+        } else {
+          event.sender.send('flash-progress', `✓ spiffs.bin appears valid (${sizeKB.toFixed(1)} KB)\n`);
+        }
+      }
+      
+      // Add SPIFFS LAST to the command (ensures it's written after firmware)
+      fileArgs.push(config.flashAddresses.spiffs, files.spiffs);
+      event.sender.send('flash-progress', `✓ SPIFFS will be written LAST (after firmware) to prevent overwrite issues\n`);
+    } else {
+      event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin not found in firmware package. SPIFFS filesystem will not be uploaded.\n`);
+      event.sender.send('flash-progress', `   This means web files (index.html, etc.) will not be available.\n`);
+    }
+    
+    // Add all file arguments to the command
+    args.push(...fileArgs);
     
     // If no firmware.bin found, that's an error
     if (!existingFiles.includes('firmware')) {
@@ -758,13 +801,36 @@ ipcMain.handle('flash-firmware', async (event, options) => {
         const customSPIFFSPath = await generateCustomSPIFFS(customConfig);
         event.sender.send('flash-progress', `✓ Custom SPIFFS generated: ${customSPIFFSPath}\n`);
         
-        // Add custom SPIFFS to flash command (overwrites default spiffs)
-        args.push(config.flashAddresses.spiffs, customSPIFFSPath);
+        // Remove default SPIFFS if it was added, then add custom one
+        // Find and remove the default SPIFFS entry from fileArgs
+        const spiffsAddrIndex = fileArgs.indexOf(config.flashAddresses.spiffs);
+        if (spiffsAddrIndex !== -1) {
+          fileArgs.splice(spiffsAddrIndex, 2); // Remove address and file path
+          event.sender.send('flash-progress', `Removed default SPIFFS, will use custom SPIFFS instead\n`);
+        }
+        
+        // Add custom SPIFFS LAST to flash command (overwrites default spiffs)
+        fileArgs.push(config.flashAddresses.spiffs, customSPIFFSPath);
+        event.sender.send('flash-progress', `✓ Custom SPIFFS will be written LAST (after firmware)\n`);
       } catch (error) {
         event.sender.send('flash-progress', `⚠ Custom SPIFFS generation failed: ${error.message}\n`);
         event.sender.send('flash-progress', 'Continuing with standard firmware (no custom pins)\n');
       }
     }
+    
+    // Log the exact command being run for debugging
+    event.sender.send('flash-progress', `\n=== Flashing files ===\n`);
+    event.sender.send('flash-progress', `Command: ${esptoolCmd} ${args.join(' ')}\n`);
+    event.sender.send('flash-progress', `Files to flash:\n`);
+    for (let i = 6; i < args.length; i += 2) {
+      if (i + 1 < args.length) {
+        const addr = args[i];
+        const file = args[i + 1];
+        const fileName = path.basename(file);
+        event.sender.send('flash-progress', `  ${addr}: ${fileName}\n`);
+      }
+    }
+    event.sender.send('flash-progress', `\n`);
     
     // Spawn esptool
     const esptool = spawn(esptoolCmd, args);
@@ -788,6 +854,18 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     
     esptool.on('close', (code) => {
       if (code === 0) {
+        // Verify SPIFFS was written by checking output
+        const spiffsWritten = output.includes(config.flashAddresses.spiffs) && 
+                             (output.includes('Wrote') || output.includes('Hash of data verified'));
+        
+        if (existingFiles.includes('spiffs') && !spiffsWritten) {
+          event.sender.send('flash-progress', `\n⚠️ WARNING: SPIFFS may not have been written correctly!\n`);
+          event.sender.send('flash-progress', `   Check the output above for SPIFFS write confirmation.\n`);
+          event.sender.send('flash-progress', `   If SPIFFS write failed, web files may not be available.\n\n`);
+        } else if (spiffsWritten) {
+          event.sender.send('flash-progress', `\n✅ SPIFFS filesystem written successfully\n`);
+        }
+        
         resolve({ success: true, output });
       } else {
         reject(new Error(`Flashing failed with code ${code}\n${output}`));
