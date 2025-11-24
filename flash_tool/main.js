@@ -743,17 +743,13 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       '--port', port,
       '--baud', baudRate.toString(),
       '--before', 'default_reset',
-      '--after', 'hard_reset'
+      '--after', 'hard_reset',
+      'write_flash'
     ];
     
-    // ESP32-S3 specific: Add flash mode and size parameters for better compatibility
-    if (config.chip === 'esp32s3') {
-      args.push('--flash_mode', 'dio');
-      args.push('--flash_size', '8MB');
-      event.sender.send('flash-progress', 'Using ESP32-S3 specific flash parameters\n');
-    }
-    
-    args.push('write_flash');
+    // Note: --flash_mode and --flash_size are not needed for write_flash
+    // esptool auto-detects these from the chip and partition table
+    // Adding them causes errors in some esptool versions
     
     // Add flash addresses and files
     const files = {
