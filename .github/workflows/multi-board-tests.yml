@@ -17,7 +17,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -61,7 +86,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -106,7 +156,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -150,7 +225,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -194,7 +294,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -238,7 +363,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -282,7 +432,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
@@ -326,7 +501,32 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v4
+      - name: Clean up any stale repository state
+        if: runner.os == 'Linux'
+        run: |
+          # Remove any existing repository to prevent state conflicts
+          if [ -d "${{ github.workspace }}" ] && [ -d "${{ github.workspace }}/.git" ]; then
+            echo "Cleaning up stale repository state..."
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.* 2>/dev/null || true
+          fi
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history (not shallow clone)
+          fetch-tags: true  # Fetch all tags to prevent "bad object" errors
+          ref: ${{ github.ref }}  # Explicitly set the ref
+      
+      - name: Verify repository state
+        run: |
+          echo "Verifying repository state..."
+          # Quick check - only verify if we can access the current ref
+          if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "⚠️ Repository state issue detected, attempting to repair..."
+            git fetch --all --tags --force || true
+            git gc --prune=now || true
+          fi
+          echo "✅ Repository state verified"
       
       # For self-hosted runners, PlatformIO packages persist in ~/.platformio
       - name: Check PlatformIO cache
