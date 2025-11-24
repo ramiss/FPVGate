@@ -51,13 +51,49 @@ jobs:
       run: npm run setup-platformio
       shell: bash
     
+    - name: Extract and set version from release tag
+      working-directory: flash_tool
+      shell: bash
+      run: |
+        # Generate unique build number (timestamp-based for uniqueness)
+        # This ensures each build has a unique CFBundleVersion for Mac
+        BUILD_NUMBER=$(date +%s)
+        echo "Build number: $BUILD_NUMBER"
+        
+        if [ "${{ github.event_name }}" == "release" ] && [ -n "${{ github.event.release.tag_name }}" ]; then
+          # Extract version from release tag (remove 'v' prefix if present)
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          echo "Setting version to: $VERSION (from release tag)"
+        else
+          # For manual runs or non-release triggers, use package.json version + build number
+          BASE_VERSION=$(node -p "require('./package.json').version")
+          VERSION="${BASE_VERSION}-dev.${BUILD_NUMBER}"
+          echo "Setting version to: $VERSION (dev build)"
+        fi
+        
+        # Update package.json version
+        npm version "$VERSION" --no-git-tag-version
+        
+        # Also set it as environment variables for electron-builder
+        echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+        echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+        echo "✅ Version set to: $VERSION"
+        echo "✅ Build number set to: $BUILD_NUMBER"
+    
     - name: Build Electron app (macOS)
       if: matrix.os == 'macos-latest'
       working-directory: flash_tool
-      run: npm run build:mac
+      run: |
+        # Build with explicit version and build number to ensure uniqueness
+        npx electron-builder --mac \
+          --config.mac.bundleVersion=${{ env.BUILD_NUMBER }} \
+          --publish never
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CSC_IDENTITY_AUTO_DISCOVERY: false
+        APP_VERSION: ${{ env.APP_VERSION }}
+        BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
     
     - name: Remove quarantine attributes (macOS)
       if: matrix.os == 'macos-latest'
@@ -76,6 +112,7 @@ jobs:
       run: npm run build:win
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        APP_VERSION: ${{ env.APP_VERSION }}
     
     - name: List build outputs
       working-directory: flash_tool

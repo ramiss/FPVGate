@@ -88,7 +88,7 @@ bool LcdUI::begin() {
         return false;
     }
     
-    gfx->fillScreen(BLACK);
+    gfx->fillScreen(0x0000);  // Black in RGB565 format
     Serial.println("LCD: Arduino_GFX initialized");
     
 #else

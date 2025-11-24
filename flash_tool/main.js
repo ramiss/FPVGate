@@ -985,7 +985,8 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     
     pio.on('close', (code) => {
       if (code === 0) {
-        // If custom config is provided, upload SPIFFS with config.json included
+        // Always upload SPIFFS after successful firmware upload
+        // This ensures web files (index.html, style.css, app.js) are included
         if (customConfig) {
           event.sender.send('flash-progress', '\n=== Uploading SPIFFS with custom config ===\n');
           uploadSPIFFSWithConfig(event, projectPath, envName, port, customConfig, pioCmd, env, useShell, workingDir)
@@ -998,7 +999,17 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
               resolve({ success: true, output, warning: 'SPIFFS upload failed' });
             });
         } else {
-          resolve({ success: true, output });
+          // Upload standard SPIFFS (includes all files from data/ directory)
+          event.sender.send('flash-progress', '\n=== Uploading SPIFFS filesystem ===\n');
+          uploadSPIFFS(event, projectPath, envName, port, pioCmd, env, useShell, workingDir)
+            .then(() => {
+              resolve({ success: true, output });
+            })
+            .catch((error) => {
+              event.sender.send('flash-progress', `⚠ SPIFFS upload failed: ${error.message}\n`);
+              event.sender.send('flash-progress', 'Firmware uploaded successfully, but SPIFFS files not uploaded.\n');
+              resolve({ success: true, output, warning: 'SPIFFS upload failed' });
+            });
         }
       } else {
         reject(new Error(`PlatformIO build/upload failed with code ${code}\n${output}`));
@@ -1009,6 +1020,57 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       reject(new Error(`Failed to start PlatformIO: ${err.message}`));
     });
   });
+}
+
+// Upload SPIFFS using PlatformIO uploadfs (standard upload, no custom config)
+// This ensures all files from data/ directory are included (index.html, style.css, app.js, etc.)
+async function uploadSPIFFS(event, projectPath, envName, port, pioCmd, env, useShell, workingDir) {
+  try {
+    // Set upload port for PlatformIO
+    const uploadEnv = { ...env };
+    uploadEnv.PLATFORMIO_UPLOAD_PORT = port;
+    
+    // Run PlatformIO uploadfs to upload SPIFFS (includes all files from data/ directory)
+    event.sender.send('flash-progress', 'Uploading SPIFFS filesystem (includes all web files)...\n');
+    return new Promise((resolve, reject) => {
+      const uploadfsArgs = ['run', '-e', envName, '-t', 'uploadfs', '--verbose'];
+      const pio = spawn(pioCmd, uploadfsArgs, {
+        cwd: workingDir,
+        env: uploadEnv,
+        shell: useShell,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      
+      let output = '';
+      
+      pio.stdout.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      
+      pio.stderr.on('data', (data) => {
+        const text = data.toString();
+        output += text;
+        event.sender.send('flash-progress', text);
+      });
+      
+      pio.on('close', (code) => {
+        if (code === 0) {
+          event.sender.send('flash-progress', '✓ SPIFFS uploaded successfully (all web files included)\n');
+          resolve();
+        } else {
+          reject(new Error(`SPIFFS upload failed with code ${code}\n${output}`));
+        }
+      });
+      
+      pio.on('error', (err) => {
+        reject(new Error(`Failed to start SPIFFS upload: ${err.message}`));
+      });
+    });
+  } catch (error) {
+    throw new Error(`Failed to prepare SPIFFS upload: ${error.message}`);
+  }
 }
 
 // Upload SPIFFS with custom config using PlatformIO uploadfs
