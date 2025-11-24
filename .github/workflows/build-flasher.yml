@@ -109,6 +109,7 @@ jobs:
     - name: Build Electron app (macOS)
       if: matrix.os == 'macos-latest'
       working-directory: flash_tool
+      shell: bash
       run: |
         # Build with explicit version and build number to ensure uniqueness
         npx electron-builder --mac \
@@ -135,6 +136,7 @@ jobs:
     - name: Build Electron app (Windows)
       if: matrix.os == 'windows-latest'
       working-directory: flash_tool
+      shell: bash
       run: |
         # Build with explicit version to ensure correct artifact naming
         npx electron-builder --win \
