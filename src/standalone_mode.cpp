@@ -337,7 +337,7 @@ void StandaloneMode::setupWiFiAP() {
         IPAddress(255, 255, 255, 0)
     );
 
-    //WiFi.softAPConfig(powerSaveMode(none));
+    sleep(200); // Sleep for 200ms to ensure the AP is ready
 
     // Start AP with configured settings
     bool ap_started = WiFi.softAP(_apSSID.c_str(), WIFI_AP_PASSWORD, 1, 0, 4);
