@@ -548,6 +548,47 @@ function findEsptool() {
   throw new Error(`esptool not found. Binary should be at: ${devPath}\n\nRun: ./download-esptool.sh`);
 }
 
+// Parse partition table to find SPIFFS address
+function findSPIFFSInPartitionTable(partitionData) {
+  // Partition table entry is 32 bytes:
+  // - 16 bytes: name (null-terminated)
+  // - 2 bytes: type
+  // - 1 byte: subtype
+  // - 4 bytes: offset (little-endian)
+  // - 4 bytes: size
+  // - remaining: flags/reserved
+  
+  let offset = 0;
+  const fs = require('fs');
+  
+  while (offset + 32 <= partitionData.length) {
+    // Read name (first 16 bytes, null-terminated)
+    const nameBytes = partitionData.slice(offset, offset + 16);
+    const name = nameBytes.toString('utf8').split('\0')[0].trim();
+    
+    // Check for end marker
+    if (!name || name.length === 0) {
+      break;
+    }
+    
+    // Read subtype (byte at offset 18)
+    const subtype = partitionData.readUInt8(offset + 18);
+    
+    // Read offset (4 bytes little-endian at offset 20)
+    const entryOffset = partitionData.readUInt32LE(offset + 20);
+    
+    // Check if this is SPIFFS partition
+    // Subtype 0x82 = SPIFFS, or name contains "spiffs"
+    if (subtype === 0x82 || name.toLowerCase() === 'spiffs') {
+      return `0x${entryOffset.toString(16)}`;
+    }
+    
+    offset += 32;
+  }
+  
+  return null;
+}
+
 // Generate SPIFFS partition with custom config
 async function generateCustomSPIFFS(customConfig) {
   const tempDir = app.getPath('temp');
@@ -722,6 +763,25 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       spiffs: path.join(firmwarePath, 'spiffs.bin')
     };
     
+    // Try to read SPIFFS address from partitions.bin (more accurate than hardcoded)
+    // This ensures we use the correct address from the actual partition table
+    let spiffsAddress = config.flashAddresses.spiffs;
+    if (require('fs').existsSync(files.partitions)) {
+      try {
+        // Read partition table to find SPIFFS address
+        const partitionData = require('fs').readFileSync(files.partitions);
+        const spiffsAddr = findSPIFFSInPartitionTable(partitionData);
+        if (spiffsAddr) {
+          spiffsAddress = spiffsAddr;
+          event.sender.send('flash-progress', `✓ Read SPIFFS address from partition table: ${spiffsAddress}\n`);
+        } else {
+          event.sender.send('flash-progress', `⚠ Could not find SPIFFS in partition table, using default: ${spiffsAddress}\n`);
+        }
+      } catch (error) {
+        event.sender.send('flash-progress', `⚠ Could not read partition table: ${error.message}, using default: ${spiffsAddress}\n`);
+      }
+    }
+    
     // Check which files exist
     // IMPORTANT: Build file list in specific order to ensure SPIFFS is written last
     // This prevents any potential overwrite issues
@@ -771,7 +831,8 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       }
       
       // Add SPIFFS LAST to the command (ensures it's written after firmware)
-      fileArgs.push(config.flashAddresses.spiffs, files.spiffs);
+      // Use the address we read from partition table (or default)
+      fileArgs.push(spiffsAddress, files.spiffs);
       event.sender.send('flash-progress', `✓ SPIFFS will be written LAST (after firmware) to prevent overwrite issues\n`);
     } else {
       event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin not found in firmware package. SPIFFS filesystem will not be uploaded.\n`);
@@ -802,15 +863,16 @@ ipcMain.handle('flash-firmware', async (event, options) => {
         event.sender.send('flash-progress', `✓ Custom SPIFFS generated: ${customSPIFFSPath}\n`);
         
         // Remove default SPIFFS if it was added, then add custom one
-        // Find and remove the default SPIFFS entry from fileArgs
-        const spiffsAddrIndex = fileArgs.indexOf(config.flashAddresses.spiffs);
+        // Find and remove the SPIFFS entry from fileArgs (use the address we determined)
+        const spiffsAddrIndex = fileArgs.indexOf(spiffsAddress);
         if (spiffsAddrIndex !== -1) {
           fileArgs.splice(spiffsAddrIndex, 2); // Remove address and file path
           event.sender.send('flash-progress', `Removed default SPIFFS, will use custom SPIFFS instead\n`);
         }
         
         // Add custom SPIFFS LAST to flash command (overwrites default spiffs)
-        fileArgs.push(config.flashAddresses.spiffs, customSPIFFSPath);
+        // Use the address we read from partition table (or default)
+        fileArgs.push(spiffsAddress, customSPIFFSPath);
         event.sender.send('flash-progress', `✓ Custom SPIFFS will be written LAST (after firmware)\n`);
       } catch (error) {
         event.sender.send('flash-progress', `⚠ Custom SPIFFS generation failed: ${error.message}\n`);
@@ -855,7 +917,7 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     esptool.on('close', (code) => {
       if (code === 0) {
         // Verify SPIFFS was written by checking output
-        const spiffsWritten = output.includes(config.flashAddresses.spiffs) && 
+        const spiffsWritten = output.includes(spiffsAddress) && 
                              (output.includes('Wrote') || output.includes('Hash of data verified'));
         
         if (existingFiles.includes('spiffs') && !spiffsWritten) {

@@ -71,6 +71,7 @@ private:
     void handleSetFrequency();
     void handleSetThreshold();
     void handleGetChannels();
+    void handleGetSPIFFSInfo();  // Debug: List SPIFFS files
     void handleStyleCSS();
     void handleAppJS();
     void handleNotFound();

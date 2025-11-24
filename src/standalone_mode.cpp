@@ -92,6 +92,12 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     } else {
         Serial.println("SPIFFS mounted successfully");
         
+        // Get SPIFFS partition info
+        size_t totalBytes = SPIFFS.totalBytes();
+        size_t usedBytes = SPIFFS.usedBytes();
+        Serial.printf("SPIFFS Partition: %d bytes total, %d bytes used, %d bytes free\n", 
+                     totalBytes, usedBytes, totalBytes - usedBytes);
+        
         // Debug: List all files in SPIFFS
         Serial.println("=== SPIFFS Contents ===");
         File root = SPIFFS.open("/");
@@ -109,6 +115,7 @@ void StandaloneMode::begin(TimingCore* timingCore) {
             }
             if (fileCount == 0) {
                 Serial.println("  WARNING: SPIFFS is empty! No files found.");
+                Serial.println("  This means SPIFFS was not uploaded correctly or partition is empty.");
             } else {
                 Serial.printf("Total files: %d\n", fileCount);
             }
@@ -126,6 +133,7 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     _server.on("/api/set_frequency", HTTP_POST, [this]() { handleSetFrequency(); });
     _server.on("/api/set_threshold", HTTP_POST, [this]() { handleSetThreshold(); });
     _server.on("/api/get_channels", HTTP_GET, [this]() { handleGetChannels(); });
+    _server.on("/api/spiffs_info", HTTP_GET, [this]() { handleGetSPIFFSInfo(); });  // Debug endpoint
     _server.on("/style.css", HTTP_GET, [this]() { handleStyleCSS(); });
     _server.on("/app.js", HTTP_GET, [this]() { handleAppJS(); });
     _server.onNotFound([this]() { handleNotFound(); });
@@ -617,6 +625,45 @@ void StandaloneMode::handleGetChannels() {
     
     json += "}}";
     
+    _server.send(200, "application/json", json);
+}
+
+void StandaloneMode::handleGetSPIFFSInfo() {
+    // Debug endpoint to list SPIFFS files and partition info
+    String json = "{";
+    json += "\"mounted\":";
+    json += SPIFFS.begin(false) ? "true" : "false";
+    json += ",";
+    
+    if (SPIFFS.begin(false)) {
+        size_t totalBytes = SPIFFS.totalBytes();
+        size_t usedBytes = SPIFFS.usedBytes();
+        json += "\"total_bytes\":" + String(totalBytes) + ",";
+        json += "\"used_bytes\":" + String(usedBytes) + ",";
+        json += "\"free_bytes\":" + String(totalBytes - usedBytes) + ",";
+        
+        // List files
+        json += "\"files\":[";
+        File root = SPIFFS.open("/");
+        if (root && root.isDirectory()) {
+            File file = root.openNextFile();
+            bool first = true;
+            while (file) {
+                if (!first) json += ",";
+                json += "{";
+                json += "\"name\":\"" + String(file.name()) + "\",";
+                json += "\"size\":" + String(file.size());
+                json += "}";
+                first = false;
+                file = root.openNextFile();
+            }
+        }
+        json += "]";
+    } else {
+        json += "\"error\":\"SPIFFS not mounted\"";
+    }
+    
+    json += "}";
     _server.send(200, "application/json", json);
 }
 
