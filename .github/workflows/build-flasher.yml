@@ -112,6 +112,7 @@ jobs:
         # Build with explicit version and build number to ensure uniqueness
         npx electron-builder --mac \
           --config.mac.bundleVersion=${{ env.BUILD_NUMBER }} \
+          --config.extraMetadata.version=${{ env.APP_VERSION }} \
           --publish never
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -133,7 +134,11 @@ jobs:
     - name: Build Electron app (Windows)
       if: matrix.os == 'windows-latest'
       working-directory: flash_tool
-      run: npm run build:win
+      run: |
+        # Build with explicit version to ensure correct artifact naming
+        npx electron-builder --win \
+          --config.extraMetadata.version=${{ env.APP_VERSION }} \
+          --publish never
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         APP_VERSION: ${{ env.APP_VERSION }}
@@ -149,7 +154,7 @@ jobs:
       if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
-        name: StarForge-Flash-Tool-macOS
+        name: StarForge-Flash-Tool-macOS-${{ env.APP_VERSION }}
         path: |
           flash_tool/dist/*.dmg
           flash_tool/dist/*.zip
@@ -158,7 +163,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
-        name: StarForge-Flash-Tool-Windows
+        name: StarForge-Flash-Tool-Windows-${{ env.APP_VERSION }}
         path: |
           flash_tool/dist/*.exe
           flash_tool/dist/*.msi
