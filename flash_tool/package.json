@@ -63,11 +63,11 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": ["x64", "ia32"]
+          "arch": ["x64"]
         }
       ],
       "artifactName": "StarForge_Flash_Tool_${version}.${ext}"
