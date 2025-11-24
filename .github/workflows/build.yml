@@ -87,8 +87,21 @@ jobs:
       run: pio run -e ${{ matrix.environment }}
     
     - name: Build filesystem for ${{ matrix.environment }}
-      run: pio run -e ${{ matrix.environment }} --target buildfs
-      continue-on-error: true  # Some environments might not need filesystem
+      run: |
+        # Check if data directory exists before building SPIFFS
+        if [ ! -d "data" ]; then
+          echo "⚠️ WARNING: data/ directory not found. SPIFFS will be empty."
+          echo "   SPIFFS contains web files (index.html, etc.) and should be built from data/ directory."
+        else
+          echo "Found data/ directory, building SPIFFS filesystem..."
+          pio run -e ${{ matrix.environment }} --target buildfs
+          if [ $? -eq 0 ]; then
+            echo "✅ SPIFFS build successful"
+          else
+            echo "❌ SPIFFS build failed - continuing without SPIFFS"
+          fi
+        fi
+      continue-on-error: true  # Continue even if SPIFFS build fails
     
     - name: Prepare artifacts
       run: |
@@ -109,7 +122,16 @@ jobs:
         
         # Copy filesystem binary
         if [ -f .pio/build/${{ matrix.environment }}/spiffs.bin ]; then
+          SPIFFS_SIZE=$(stat -f%z .pio/build/${{ matrix.environment }}/spiffs.bin 2>/dev/null || stat -c%s .pio/build/${{ matrix.environment }}/spiffs.bin 2>/dev/null || echo "0")
+          SPIFFS_SIZE_KB=$((SPIFFS_SIZE / 1024))
+          echo "SPIFFS size: ${SPIFFS_SIZE_KB} KB"
+          if [ "$SPIFFS_SIZE" -lt 1024 ]; then
+            echo "⚠️ WARNING: SPIFFS is very small (${SPIFFS_SIZE} bytes). It may be empty."
+          fi
           cp .pio/build/${{ matrix.environment }}/spiffs.bin artifacts/${{ matrix.environment }}/
+        else
+          echo "⚠️ WARNING: spiffs.bin not found for ${{ matrix.environment }}"
+          echo "   SPIFFS filesystem was not built. Web files will not be available."
         fi
         
         # Create flash instructions

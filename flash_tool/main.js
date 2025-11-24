@@ -720,6 +720,21 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       if (require('fs').existsSync(files[key])) {
         existingFiles.push(key);
         args.push(config.flashAddresses[key], files[key]);
+        
+        // Check SPIFFS file size and warn if suspiciously small
+        if (key === 'spiffs') {
+          const stats = require('fs').statSync(files[key]);
+          const sizeKB = stats.size / 1024;
+          event.sender.send('flash-progress', `Found ${key}.bin (${sizeKB.toFixed(1)} KB)\n`);
+          if (stats.size < 1024) {
+            event.sender.send('flash-progress', `⚠️ WARNING: ${key}.bin is very small (${stats.size} bytes). It may be empty or incomplete.\n`);
+          }
+        }
+      } else {
+        if (key === 'spiffs') {
+          event.sender.send('flash-progress', `⚠️ WARNING: spiffs.bin not found in firmware package. SPIFFS filesystem will not be uploaded.\n`);
+          event.sender.send('flash-progress', `   This means web files (index.html, etc.) will not be available.\n`);
+        }
       }
     });
     
@@ -727,6 +742,13 @@ ipcMain.handle('flash-firmware', async (event, options) => {
     if (!existingFiles.includes('firmware')) {
       reject(new Error('No firmware files found, expected firmware.bin. If this is source code, make sure platformio.ini exists in the folder.'));
       return;
+    }
+    
+    // Warn if SPIFFS is missing
+    if (!existingFiles.includes('spiffs')) {
+      event.sender.send('flash-progress', `\n⚠️ NOTE: No SPIFFS filesystem will be uploaded.\n`);
+      event.sender.send('flash-progress', `   The device will work, but web interface files may be missing.\n`);
+      event.sender.send('flash-progress', `   To include SPIFFS, flash from source code or ensure the release includes spiffs.bin.\n\n`);
     }
     
     // If custom config is provided, generate and add custom SPIFFS
