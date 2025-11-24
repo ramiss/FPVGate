@@ -339,6 +339,8 @@ void StandaloneMode::setupWiFiAP() {
 
     sleep(200); // Sleep for 200ms to ensure the AP is ready
 
+    Serial.printf("Starting AP with SSID: %s\n", _apSSID.c_str());
+
     // Start AP with configured settings
     bool ap_started = WiFi.softAP(_apSSID.c_str(), WIFI_AP_PASSWORD, 1, 0, 4);
     
