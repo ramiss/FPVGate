@@ -47,6 +47,7 @@ jobs:
         ref: ${{ github.ref }}  # Explicitly set the ref
     
     - name: Verify repository state
+      shell: bash
       run: |
         echo "Verifying repository state..."
         # Quick check - only verify if we can access the current ref
