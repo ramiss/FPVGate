@@ -6,6 +6,8 @@
 #include "node_mode.h"
 #include <WiFi.h>
 #include <SPIFFS.h>
+#include <nvs_flash.h>
+#include <nvs_flash.h>
 
 // Compile-time board detection verification
 #if defined(BOARD_ESP32_S3_TOUCH)
@@ -113,6 +115,19 @@ void setup() {
   while (Serial.available()) {
     Serial.read();
   }
+  
+  // Initialize NVS (Non-Volatile Storage) early
+  // This is needed for WiFi calibration and other system settings
+  // If NVS was erased (e.g., by full chip erase), re-initialize it
+  esp_err_t nvs_ret = nvs_flash_init();
+  if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    // NVS partition was erased or needs to be re-initialized
+    // This can happen if user did a full chip erase
+    nvs_flash_erase();
+    nvs_ret = nvs_flash_init();
+  }
+  // Note: We don't print warnings here because mode hasn't been determined yet
+  // NVS errors are non-fatal - device will work with default calibration
   
   // CRITICAL: Determine mode FIRST (before any Serial output)
   // This ensures no debug messages appear in RotorHazard node mode
@@ -294,8 +309,6 @@ void serialEvent() {
 void initializeMode() {
   if (current_mode == MODE_STANDALONE) {
     // Only show debug output in standalone mode
-    Serial.println("TimingCore: Ready");
-    Serial.println();
     Serial.println("=== WIFI MODE ACTIVE ===");
     
     // Initialize standalone mode

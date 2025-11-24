@@ -1514,9 +1514,9 @@ async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfi
   });
 }
 
-// Erase flash
+// Erase flash - only erase app and SPIFFS partitions, preserve NVS and factory data
 ipcMain.handle('erase-flash', async (event, options) => {
-  const { port, boardType } = options;
+  const { port, boardType, fullErase = false } = options;
   const config = BOARD_CONFIGS[boardType];
   
   return new Promise((resolve, reject) => {
@@ -1528,31 +1528,104 @@ ipcMain.handle('erase-flash', async (event, options) => {
       return;
     }
     
-    const args = [
-      '--chip', config.chip,
-      '--port', port,
-      'erase_flash'
-    ];
-    
-    const esptool = spawn(esptoolCmd, args);
-    let output = '';
-    
-    esptool.stdout.on('data', (data) => {
-      output += data.toString();
-      event.sender.send('erase-progress', data.toString());
-    });
-    
-    esptool.stderr.on('data', (data) => {
-      output += data.toString();
-    });
-    
-    esptool.on('close', (code) => {
-      if (code === 0) {
-        resolve({ success: true, output });
-      } else {
-        reject(new Error(`Erase failed with code ${code}\n${output}`));
-      }
-    });
+    if (fullErase) {
+      // Full chip erase (erases everything including NVS, factory data, etc.)
+      // Use with caution - will lose WiFi calibration, MAC address, etc.
+      event.sender.send('erase-progress', '⚠️ Performing FULL chip erase (all data will be lost)...\n');
+      const args = [
+        '--chip', config.chip,
+        '--port', port,
+        'erase_flash'
+      ];
+      
+      const esptool = spawn(esptoolCmd, args);
+      let output = '';
+      
+      esptool.stdout.on('data', (data) => {
+        output += data.toString();
+        event.sender.send('erase-progress', data.toString());
+      });
+      
+      esptool.stderr.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      esptool.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, output });
+        } else {
+          reject(new Error(`Erase failed with code ${code}\n${output}`));
+        }
+      });
+    } else {
+      // Selective erase - only erase app and SPIFFS partitions
+      // Preserves NVS (WiFi calibration, MAC address) and factory data
+      event.sender.send('erase-progress', 'Erasing app and SPIFFS partitions (preserving NVS and factory data)...\n');
+      
+      // Erase app partition (typically starts at 0x10000, size varies)
+      // Erase SPIFFS partition (address from config, typically 0x290000)
+      const appStart = config.flashAddresses.firmware;
+      const spiffsStart = config.flashAddresses.spiffs;
+      
+      // Default partition sizes (these are typical, actual may vary)
+      // App partition: typically 1.5MB (0x180000)
+      // SPIFFS partition: typically 1.5MB (0x180000)
+      const appSize = '0x180000';  // 1.5MB
+      const spiffsSize = '0x180000';  // 1.5MB
+      
+      event.sender.send('erase-progress', `Erasing app partition: ${appStart} (${appSize})\n`);
+      event.sender.send('erase-progress', `Erasing SPIFFS partition: ${spiffsStart} (${spiffsSize})\n`);
+      
+      // Erase app partition
+      const eraseApp = spawn(esptoolCmd, [
+        '--chip', config.chip,
+        '--port', port,
+        'erase_region', appStart, appSize
+      ]);
+      
+      let appOutput = '';
+      eraseApp.stdout.on('data', (data) => {
+        appOutput += data.toString();
+        event.sender.send('erase-progress', data.toString());
+      });
+      eraseApp.stderr.on('data', (data) => {
+        appOutput += data.toString();
+      });
+      
+      eraseApp.on('close', (appCode) => {
+        if (appCode !== 0) {
+          reject(new Error(`Failed to erase app partition: ${appOutput}`));
+          return;
+        }
+        
+        // Erase SPIFFS partition
+        event.sender.send('erase-progress', `✓ App partition erased\n`);
+        const eraseSPIFFS = spawn(esptoolCmd, [
+          '--chip', config.chip,
+          '--port', port,
+          'erase_region', spiffsStart, spiffsSize
+        ]);
+        
+        let spiffsOutput = '';
+        eraseSPIFFS.stdout.on('data', (data) => {
+          spiffsOutput += data.toString();
+          event.sender.send('erase-progress', data.toString());
+        });
+        eraseSPIFFS.stderr.on('data', (data) => {
+          spiffsOutput += data.toString();
+        });
+        
+        eraseSPIFFS.on('close', (spiffsCode) => {
+          if (spiffsCode === 0) {
+            event.sender.send('erase-progress', `✓ SPIFFS partition erased\n`);
+            event.sender.send('erase-progress', `✓ Erase complete (NVS and factory data preserved)\n`);
+            resolve({ success: true, output: appOutput + spiffsOutput });
+          } else {
+            reject(new Error(`Failed to erase SPIFFS partition: ${spiffsOutput}`));
+          }
+        });
+      });
+    }
   });
 });
 

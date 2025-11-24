@@ -327,6 +327,7 @@ void StandaloneMode::setupWiFiAP() {
         _apSSID = String(WIFI_AP_SSID_PREFIX) + "-" + macAddr.substring(8);
     }
     
+    
     // For AP mode we want maximum stability, not power saving
     WiFi.setSleep(false);
 
