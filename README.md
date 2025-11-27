@@ -1,6 +1,9 @@
 ![PhobosLT](assets/wq.png)![Logo](assets/logo.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Join us on Discord!](https://img.shields.io/discord/1180943146696319126)](https://discord.gg/D3MgfvsnAw)
+
+> **Note:** This is a fork of the original [PhobosLT](https://github.com/phobos-/PhobosLT) project with build fixes and ESP32-S3 support. This fork includes updated library dependencies and fixes for compilation errors on ESP32 and ESP32-S3 targets.
+
 # Support PhobosLT
 **Affordable FPV single node Race Timing solution**
 
@@ -53,6 +56,7 @@ To build a Phobos LapTimer you will need:
     - LilyGo T-ENERGY - recommended.
     - LilyGo T-CELL - more expensive than the one above but has a charging circuit.
     - ESP32-DevKit - bare bones but cheap.
+    - **ESP32-S3-DevKitC-1 - Verified working in this fork.**
 - An RX5808 VRx module with [SPI mod](https://sheaivey.github.io/rx5808-pro-diversity/docs/rx5808-spi-mod.html).
 - A voltage supply of any sort - a battery, a powerbank, etc. It will depend on the ESP32 module used.
 - (Optional) An LED of any color (+ a matching resistor to manage current).
@@ -105,7 +109,7 @@ The last step before you can build the firmware is to clone this repository to y
 
 #### Building
 
-To build the firmware, click the `PlatformIO` icon in the toolbar on the left, which will show the list of tasks. Now, select `Project Tasks`, expand `PhobosLT` -> `General` and select `Build`. You should see the result in the terminal after a few seconds (`Success`).
+To build the firmware, click the `PlatformIO` icon in the toolbar on the left, which will show the list of tasks. Now, select `Project Tasks`, expand the appropriate target for your board (`PhobosLT` for ESP32, `ESP32S3` for ESP32-S3, `ESP32C3` for ESP32-C3) -> `General` and select `Build`. You should see the result in the terminal after a few seconds (`Success`).
 
 #### Flashing
 
@@ -113,11 +117,11 @@ Before attemtping to flash ensure there is a connection between the ESP32 and th
 
 ##### Step 1
 
-To flash the firmware, click the `PlatformIO` icon in the toolbar on the left, which will show the list of tasks. Now, select `Project Tasks`, expand `PhobosLT` -> `General` and select `Upload`. You should see the result in the terminal (`Success`). Next, go to step 2.
+To flash the firmware, click the `PlatformIO` icon in the toolbar on the left, which will show the list of tasks. Now, select `Project Tasks`, expand your target (e.g., `PhobosLT` or `ESP32S3`) -> `General` and select `Upload`. You should see the result in the terminal (`Success`). Next, go to step 2.
 
 ##### Step 2
 
-Select `Project Tasks`, expand `PhobosLT` -> `Platform` and select `Upload Filesystem Image`. Wait for the result in the terminal saying `Success`. That's it! Your timer is ready to use.
+Select `Project Tasks`, expand your target (e.g., `PhobosLT` or `ESP32S3`) -> `Platform` and select `Upload Filesystem Image`. Wait for the result in the terminal saying `Success`. That's it! Your timer is ready to use.
 
 If something went wrong - please check the Terminal, too. It will contain at least a hint of what the issue is. Please ask the community for further help on discord!
 
@@ -205,3 +209,16 @@ Once you run a few laps the screen will populate with lap times:
 # Community
 
 Join our [Discord](https://discord.gg/D3MgfvsnAw) channel for support and questions or just to hang out! Everyone is welcome!
+
+---
+
+## Disclaimer
+
+**This fork contains modifications made with the assistance of [Warp AI](https://warp.dev).** While the changes have been tested on ESP32-S3 hardware and successfully compile for all targets, users should be aware that:
+
+- Build configuration changes were made to resolve library compatibility issues
+- ESP32-S3 support has been verified and tested
+- Other board variants (ESP32, ESP32-C3) compile successfully but have not been extensively tested
+- Use at your own risk and please report any issues you encounter
+
+For the original, stable version, please visit: https://github.com/phobos-/PhobosLT
