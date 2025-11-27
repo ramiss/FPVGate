@@ -12,6 +12,15 @@
     #define MODE_SWITCH_PIN     1     // GPIO1 - Mode selection switch
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
+#elif defined(BOARD_NUCLEARCOUNTER)
+    // NuclearCounter (ESP32-C3 based board)
+    #define RSSI_INPUT_PIN      3     // GPIO3 (ADC1_CH3) - RSSI input from RX5808
+    #define RX5808_DATA_PIN     6     // GPIO6 - DATA (SPI MOSI) to RX5808
+    #define RX5808_CLK_PIN      4     // GPIO4 - CLK (SPI SCK) to RX5808
+    #define RX5808_SEL_PIN      7     // GPIO7 - LE (Latch Enable / SPI CS) to RX5808
+    #define MODE_SWITCH_PIN     20    // GPIO20 - Mode selection switch
+    #define USE_DMA_ADC         1     // Enabled for best RSSI performance
+    #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
 #elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
     // ESP32-C3 SuperMini (Hertz-hunter compatible)
     #define RSSI_INPUT_PIN      3     // GPIO3 (ADC1_CH3) - RSSI input from RX5808
