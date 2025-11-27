@@ -72,7 +72,7 @@ private:
     void handleSetThreshold();
     void handleGetChannels();
     void handleGetSPIFFSInfo();  // Debug: List SPIFFS files
-    void handleGetConfig();  // Get config.json contents
+    void handleGetConfig();  // Get pin config from NVS
     void handleStyleCSS();
     void handleAppJS();
     void handleNotFound();

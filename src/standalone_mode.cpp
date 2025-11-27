@@ -135,7 +135,7 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     _server.on("/api/set_threshold", HTTP_POST, [this]() { handleSetThreshold(); });
     _server.on("/api/get_channels", HTTP_GET, [this]() { handleGetChannels(); });
     _server.on("/api/spiffs_info", HTTP_GET, [this]() { handleGetSPIFFSInfo(); });  // Debug endpoint
-    _server.on("/api/config", HTTP_GET, [this]() { handleGetConfig(); });  // Get config.json contents
+    _server.on("/api/config", HTTP_GET, [this]() { handleGetConfig(); });  // Get pin config from NVS
     _server.on("/style.css", HTTP_GET, [this]() { handleStyleCSS(); });
     _server.on("/app.js", HTTP_GET, [this]() { handleAppJS(); });
     _server.onNotFound([this]() { handleNotFound(); });

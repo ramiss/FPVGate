@@ -129,43 +129,17 @@ void setup() {
   // Note: We don't print warnings here because mode hasn't been determined yet
   // NVS errors are non-fatal - device will work with default calibration
   
-  // CRITICAL: Determine mode FIRST (before any Serial output)
-  // This ensures no debug messages appear in RotorHazard node mode
-  #if ENABLE_LCD_UI
-    // Touch board: Mode is controlled via touchscreen button, not physical pin
-    // ALWAYS start in standalone mode on boot (LCD/WiFi mode)
-    current_mode = MODE_STANDALONE;
-    #if ENABLE_LCD_UI
-      requested_mode = MODE_STANDALONE;  // Ensure both are in sync
-    #endif
-  #else
-    // Non-touch boards: Initialize mode selection pin with internal pull-up
-    pinMode(g_mode_switch_pin, INPUT_PULLUP);
-    
-    // Determine initial mode BEFORE any serial output
-    bool initial_switch_state = digitalRead(g_mode_switch_pin);
-
-    #if defined(BOARD_NUCLEARCOUNTER)
-      // NuclearCounter: always start in STANDALONE/WiFi mode for now.
-      // (Pin 1 hardware behavior is board-specific; we can re-enable pin-based
-      //  mode switching later if needed.)
-      current_mode = MODE_STANDALONE;
-    #else
-      // Default behavior: LOW (GND) = STANDALONE, HIGH/floating = ROTORHAZARD
-      current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
-    #endif
-  #endif
-  
-  // Load custom pin configuration from SPIFFS (if available)
-  // This must happen AFTER mode is determined so we can suppress Serial output in node mode
+  // CRITICAL: Load custom pin configuration from NVS BEFORE mode detection
+  // This ensures custom mode switch pins work correctly for mode determination
+  // We suppress Serial output during loading since mode hasn't been determined yet
   CustomPinConfig customConfig;
-  if (ConfigLoader::loadCustomConfig(&customConfig)) {
-    // Override pins with custom values from config.json
+  if (ConfigLoader::loadCustomConfig(&customConfig, false)) {  // false = suppress Serial output
+    // Override pins with custom values from NVS
     g_rssi_input_pin = customConfig.rssi_input_pin;
     g_rx5808_data_pin = customConfig.rx5808_data_pin;
     g_rx5808_clk_pin = customConfig.rx5808_clk_pin;
     g_rx5808_sel_pin = customConfig.rx5808_sel_pin;
-    g_mode_switch_pin = customConfig.mode_switch_pin;
+    g_mode_switch_pin = customConfig.mode_switch_pin;  // Load BEFORE mode detection
     
     #if ENABLE_POWER_BUTTON
     if (customConfig.power_button_pin > 0) {
@@ -202,14 +176,42 @@ void setup() {
       g_lcd_backlight = customConfig.lcd_backlight;
     }
     #endif
+  }
+  
+  // CRITICAL: Determine mode AFTER custom pins are loaded
+  // This ensures custom mode switch pins work correctly
+  // This also ensures no debug messages appear in RotorHazard node mode
+  #if ENABLE_LCD_UI
+    // Touch board: Mode is controlled via touchscreen button, not physical pin
+    // ALWAYS start in standalone mode on boot (LCD/WiFi mode)
+    current_mode = MODE_STANDALONE;
+    #if ENABLE_LCD_UI
+      requested_mode = MODE_STANDALONE;  // Ensure both are in sync
+    #endif
+  #else
+    // Non-touch boards: Initialize mode selection pin with internal pull-up
+    // Note: g_mode_switch_pin may have been overridden by custom pins above
+    pinMode(g_mode_switch_pin, INPUT_PULLUP);
     
-    if (current_mode == MODE_STANDALONE) {
-      Serial.println("Using custom pin configuration from NVS");
-    }
-  } else {
-    if (current_mode == MODE_STANDALONE) {
-      Serial.println("Using default pin configuration from config.h");
-    }
+    // Determine initial mode BEFORE any serial output
+    bool initial_switch_state = digitalRead(g_mode_switch_pin);
+
+    #if defined(BOARD_NUCLEARCOUNTER)
+      // NuclearCounter: always start in STANDALONE/WiFi mode for now.
+      // (Pin 1 hardware behavior is board-specific; we can re-enable pin-based
+      //  mode switching later if needed.)
+      current_mode = MODE_STANDALONE;
+    #else
+      // Default behavior: LOW (GND) = STANDALONE, HIGH/floating = ROTORHAZARD
+      current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
+    #endif
+  #endif
+  
+  // Now that mode is determined, we can safely print status messages in standalone mode
+  if (current_mode == MODE_STANDALONE && ConfigLoader::hasCustomConfig()) {
+    Serial.println("Using custom pin configuration from NVS");
+  } else if (current_mode == MODE_STANDALONE) {
+    Serial.println("Using default pin configuration from config.h");
   }
   
   // Debug: Print board configuration (only in standalone mode)
