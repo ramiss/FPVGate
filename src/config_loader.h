@@ -29,19 +29,19 @@ struct CustomPinConfig {
 
 class ConfigLoader {
 public:
-    // Load configuration from SPIFFS /config.json
+    // Load configuration from NVS (Non-Volatile Storage)
     // Returns true if custom config loaded successfully and enabled
     // Returns false if no config, parsing error, or disabled (use config.h defaults)
     static bool loadCustomConfig(CustomPinConfig* config, bool allowSerialOutput = true);
     
-    // Save configuration to SPIFFS /config.json (for future: web UI config editor)
+    // Save configuration to NVS (for future: web UI config editor)
     static bool saveCustomConfig(const CustomPinConfig* config);
     
     // Check if custom config exists and is enabled
     static bool hasCustomConfig();
     
 private:
-    static const char* CONFIG_FILE_PATH;
+    static const char* NVS_NAMESPACE;  // NVS namespace for pin config
 };
 
 #endif // CONFIG_LOADER_H

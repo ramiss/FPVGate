@@ -1070,7 +1070,7 @@ void TimingCore::setupADC_DMA() {
   }
   
   // Configure ADC pattern (which channels to sample)
-  // Dynamically determine ADC channel from g_rssi_input_pin (can be from config.h or config.json)
+  // Dynamically determine ADC channel from g_rssi_input_pin (can be from config.h or NVS custom pins)
   adc_channel_t adc_channel;
   adc_unit_t adc_unit;
   

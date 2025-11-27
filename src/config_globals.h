@@ -6,7 +6,7 @@
 
 // Global pin configuration variables
 // These are defined in main.cpp and initialized from config.h defaults
-// They can be overridden at runtime by config.json on SPIFFS
+// They can be overridden at runtime by custom pin config in NVS
 extern uint8_t g_rssi_input_pin;
 extern uint8_t g_rx5808_data_pin;
 extern uint8_t g_rx5808_clk_pin;

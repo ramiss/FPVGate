@@ -30,7 +30,7 @@ const char *firmwareBuildDateString = "FIRMWARE_BUILDDATE: " __DATE__;
 const char *firmwareBuildTimeString = "FIRMWARE_BUILDTIME: " __TIME__;
 const char *firmwareProcTypeString = "FIRMWARE_PROCTYPE: ESP32";
 
-// Global pin configuration (can be overridden by config.json on SPIFFS)
+// Global pin configuration (can be overridden by custom pin config in NVS)
 // These are initialized from config.h defaults, then potentially overridden at boot
 uint8_t g_rssi_input_pin = RSSI_INPUT_PIN;
 uint8_t g_rx5808_data_pin = RX5808_DATA_PIN;
@@ -204,7 +204,7 @@ void setup() {
     #endif
     
     if (current_mode == MODE_STANDALONE) {
-      Serial.println("Using custom pin configuration from /config.json");
+      Serial.println("Using custom pin configuration from NVS");
     }
   } else {
     if (current_mode == MODE_STANDALONE) {

@@ -5,6 +5,7 @@
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
 #include <Preferences.h>
+#include <ArduinoJson.h>
 #include <string.h>
 #include "config.h"
 
@@ -134,6 +135,7 @@ void StandaloneMode::begin(TimingCore* timingCore) {
     _server.on("/api/set_threshold", HTTP_POST, [this]() { handleSetThreshold(); });
     _server.on("/api/get_channels", HTTP_GET, [this]() { handleGetChannels(); });
     _server.on("/api/spiffs_info", HTTP_GET, [this]() { handleGetSPIFFSInfo(); });  // Debug endpoint
+    _server.on("/api/config", HTTP_GET, [this]() { handleGetConfig(); });  // Get config.json contents
     _server.on("/style.css", HTTP_GET, [this]() { handleStyleCSS(); });
     _server.on("/app.js", HTTP_GET, [this]() { handleAppJS(); });
     _server.onNotFound([this]() { handleNotFound(); });
@@ -550,16 +552,57 @@ void StandaloneMode::handleNotFound() {
     _server.send(404, "text/plain", "File not found");
 }
 
+// Helper function to find band/channel from frequency (same lookup as timing_core)
+// This ensures band/channel are updated when frequency is set, so they persist correctly
+static void findBandChannelFromFrequency(uint16_t freq, uint8_t& band, uint8_t& channel) {
+    // Frequency table matching timing_core.cpp
+    static const uint16_t freqTable[6][8] = {
+        // Band A (Boscam A)
+        {5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725},
+        // Band B (Boscam B)
+        {5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866},
+        // Band E (Boscam E / DJI)
+        {5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945},
+        // Band F (Fatshark / NexWave)
+        {5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880},
+        // Band R (Raceband)
+        {5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917},
+        // Band L (Low Race)
+        {5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621}
+    };
+    
+    uint16_t min_diff = 65535;
+    band = 0;
+    channel = 0;
+    
+    // Find closest match in frequency table
+    for (uint8_t b = 0; b < 6; b++) {
+        for (uint8_t c = 0; c < 8; c++) {
+            uint16_t diff = abs((int)freqTable[b][c] - (int)freq);
+            if (diff < min_diff) {
+                min_diff = diff;
+                band = b;
+                channel = c;
+            }
+        }
+    }
+}
+
 void StandaloneMode::handleSetFrequency() {
     if (_server.hasArg("frequency")) {
         int freq = _server.arg("frequency").toInt();
         if (freq >= 5645 && freq <= 5945) {
             if (_timingCore) {
-                _timingCore->setFrequency(freq);
-                saveSettings();  // Save settings to flash
+                // Find band/channel for this frequency and set via setRX5808Settings
+                // This ensures band/channel are updated so they persist correctly
+                uint8_t band, channel;
+                findBandChannelFromFrequency(freq, band, channel);
+                _timingCore->setRX5808Settings(band, channel);
+                saveSettings();  // Save settings to flash (now includes correct band/channel)
+                Serial.printf("Frequency set to: %d MHz (Band=%d, Channel=%d, saved)\n", 
+                             freq, band, channel);
             }
             _server.send(200, "application/json", "{\"status\":\"frequency_set\",\"frequency\":" + String(freq) + "}");
-            Serial.printf("Frequency set to: %d MHz (saved)\n", freq);
         } else {
             _server.send(400, "application/json", "{\"error\":\"invalid_frequency\"}");
         }
@@ -668,6 +711,81 @@ void StandaloneMode::handleGetSPIFFSInfo() {
     
     json += "}";
     _server.send(200, "application/json", json);
+}
+
+void StandaloneMode::handleGetConfig() {
+    Preferences prefs;
+    
+    // Open NVS namespace for pin config
+    if (!prefs.begin("sfos_pins", true)) {
+        Serial.println("API: Failed to open NVS for reading pin config");
+        _server.send(404, "application/json", "{\"error\":\"Pin config not found in NVS\",\"exists\":false}");
+        return;
+    }
+    
+    // Check if custom pins are enabled
+    uint8_t enabled = prefs.getUChar("pin_enabled", 0);
+    if (enabled == 0) {
+        prefs.end();
+        Serial.println("API: Custom pin config not enabled in NVS");
+        _server.send(404, "application/json", "{\"error\":\"Custom pin config not enabled\",\"exists\":false}");
+        return;
+    }
+    
+    // Build JSON response with pin configuration
+    DynamicJsonDocument configDoc(1024);
+    JsonObject customPins = configDoc.createNestedObject("custom_pins");
+    customPins["enabled"] = true;
+    
+    // Core pins
+    customPins["rssi_input"] = prefs.getUChar("pin_rssi_input", 0);
+    customPins["rx5808_data"] = prefs.getUChar("pin_rx5808_data", 0);
+    customPins["rx5808_clk"] = prefs.getUChar("pin_rx5808_clk", 0);
+    customPins["rx5808_sel"] = prefs.getUChar("pin_rx5808_sel", 0);
+    customPins["mode_switch"] = prefs.getUChar("pin_mode_switch", 0);
+    
+    // Optional pins (only include if present)
+    uint8_t power_button = prefs.getUChar("pin_power_button", 0);
+    if (power_button > 0 || prefs.isKey("pin_power_button")) {
+        customPins["power_button"] = power_button;
+    }
+    uint8_t battery_adc = prefs.getUChar("pin_battery_adc", 0);
+    if (battery_adc > 0 || prefs.isKey("pin_battery_adc")) {
+        customPins["battery_adc"] = battery_adc;
+    }
+    uint8_t audio_dac = prefs.getUChar("pin_audio_dac", 0);
+    if (audio_dac > 0 || prefs.isKey("pin_audio_dac")) {
+        customPins["audio_dac"] = audio_dac;
+    }
+    uint8_t usb_detect = prefs.getUChar("pin_usb_detect", 0);
+    if (usb_detect > 0 || prefs.isKey("pin_usb_detect")) {
+        customPins["usb_detect"] = usb_detect;
+    }
+    
+    // LCD/Touch pins
+    if (prefs.isKey("pin_lcd_i2c_sda")) {
+        customPins["lcd_i2c_sda"] = prefs.getChar("pin_lcd_i2c_sda", -1);
+    }
+    if (prefs.isKey("pin_lcd_i2c_scl")) {
+        customPins["lcd_i2c_scl"] = prefs.getChar("pin_lcd_i2c_scl", -1);
+    }
+    if (prefs.isKey("pin_lcd_backlight")) {
+        customPins["lcd_backlight"] = prefs.getChar("pin_lcd_backlight", -1);
+    }
+    
+    prefs.end();
+    
+    // Create response JSON
+    DynamicJsonDocument responseDoc(1536);  // 1.5KB for response
+    responseDoc["exists"] = true;
+    responseDoc["source"] = "NVS";
+    responseDoc["content"] = configDoc;  // Embed the config object
+    
+    String response;
+    serializeJson(responseDoc, response);
+    
+    Serial.println("API: Serving pin config from NVS");
+    _server.send(200, "application/json", response);
 }
 
 // Web server task - runs at WEB_PRIORITY (2) - below timing (3)
@@ -943,14 +1061,16 @@ void StandaloneMode::loadSettings() {
     
     // Open preferences in read-only mode
     if (!prefs.begin("sfos", true)) {
-        Serial.println("Failed to open preferences for reading");
+        Serial.println("Failed to open preferences for reading (NVS may not be initialized)");
+        Serial.println("This is normal on first boot - settings will be saved after first change");
         return;
     }
     
     // Check if settings exist (using a magic number to verify initialization)
     uint32_t magic = prefs.getUInt("magic", 0);
     if (magic != 0x53464F53) {  // "SFOS" in hex
-        Serial.println("No saved settings found, using defaults");
+        Serial.println("No saved settings found (magic number mismatch or first boot), using defaults");
+        Serial.printf("Expected magic: 0x%08X, Found: 0x%08X\n", 0x53464F53, magic);
         prefs.end();
         return;
     }
@@ -980,9 +1100,22 @@ void StandaloneMode::saveSettings() {
     
     Preferences prefs;
     
-    // Open preferences in read-write mode
-    if (!prefs.begin("sfos", false)) {
-        Serial.println("Failed to open preferences for writing");
+    // Try to open preferences in read-write mode with retry logic
+    // Sometimes NVS needs a small delay if it was just accessed
+    bool opened = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+            delay(10);  // Small delay between retries
+        }
+        opened = prefs.begin("sfos", false);
+        if (opened) break;
+    }
+    
+    if (!opened) {
+        Serial.println("ERROR: Failed to open preferences for writing after 3 attempts");
+        Serial.println("This may indicate NVS partition issue or namespace conflict");
+        // Try to get more diagnostic info
+        Serial.printf("NVS namespace: sfos, mode: read-write\n");
         return;
     }
     
@@ -992,7 +1125,12 @@ void StandaloneMode::saveSettings() {
     uint8_t threshold = _timingCore->getThreshold();
     
     // Save magic number to indicate settings are valid
-    prefs.putUInt("magic", 0x53464F53);  // "SFOS" in hex
+    bool magicOk = prefs.putUInt("magic", 0x53464F53);  // "SFOS" in hex
+    if (!magicOk) {
+        Serial.println("ERROR: Failed to write magic number");
+        prefs.end();
+        return;
+    }
     
     // Save settings
     prefs.putUChar("band", band);
@@ -1001,5 +1139,6 @@ void StandaloneMode::saveSettings() {
     
     prefs.end();
     
-    Serial.println("Settings saved to flash");
+    Serial.printf("Settings saved to flash: Band=%d, Channel=%d, Threshold=%d\n", 
+                  band, channel, threshold);
 }

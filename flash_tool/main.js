@@ -20,6 +20,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -30,6 +31,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -40,6 +42,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -50,6 +53,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -60,6 +64,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x1000',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -70,6 +75,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
     }
@@ -80,6 +86,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x0',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
     }
@@ -90,6 +97,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x1000',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -100,6 +108,7 @@ const BOARD_CONFIGS = {
     flashAddresses: {
       bootloader: '0x1000',
       partitions: '0x8000',
+      nvs: '0x9000',
       firmware: '0x10000',
       spiffs: '0x290000'
     }
@@ -740,54 +749,79 @@ function findSPIFFSInPartitionTable(partitionData, event = null) {
   return null;
 }
 
-// Generate SPIFFS partition with custom config
-async function generateCustomSPIFFS(customConfig) {
+// Generate NVS partition with custom pin config
+async function generateCustomNVS(customConfig, event = null) {
   const tempDir = app.getPath('temp');
+  // Create temporary JSON file to pass config to NVS generation script
   const configJsonPath = path.join(tempDir, 'sfos_custom_config.json');
-  const spiffsImagePath = path.join(tempDir, 'custom_spiffs.bin');
+  const nvsImagePath = path.join(tempDir, 'custom_nvs.bin');
   
-  // Write config.json
+  // Write pin config as JSON (temporary file, used only by NVS generator)
   await fs.writeFile(configJsonPath, JSON.stringify(customConfig, null, 2));
   
-  // Run Python script to generate SPIFFS
-  const scriptPath = path.join(__dirname, 'resources', 'scripts', 'generate_spiffs.py');
+  // Run Python script to generate NVS
+  const scriptPath = path.join(__dirname, 'resources', 'scripts', 'generate_nvs.py');
   
   return new Promise((resolve, reject) => {
-    const python = spawn('python3', [scriptPath, configJsonPath, spiffsImagePath]);
+    // NVS partition size is 0x5000 (20KB) per partition table
+    const python = spawn('python3', [scriptPath, configJsonPath, nvsImagePath, '0x5000']);
     
     let output = '';
     
     python.stdout.on('data', (data) => {
-      output += data.toString();
-      console.log(data.toString());
+      const text = data.toString();
+      output += text;
+      console.log(text);
+      if (event) {
+        event.sender.send('flash-progress', text);
+      }
     });
     
     python.stderr.on('data', (data) => {
-      output += data.toString();
-      console.error(data.toString());
+      const text = data.toString();
+      output += text;
+      console.error(text);
+      if (event) {
+        event.sender.send('flash-progress', text);
+      }
     });
     
     python.on('close', (code) => {
       if (code === 0) {
-        resolve(spiffsImagePath);
+        resolve(nvsImagePath);
       } else {
-        reject(new Error(`SPIFFS generation failed: ${output}`));
+        reject(new Error(`NVS generation failed: ${output}`));
       }
     });
     
     python.on('error', (err) => {
       // Try 'python' instead of 'python3'
       if (err.code === 'ENOENT') {
-        const pythonAlt = spawn('python', [scriptPath, configJsonPath, spiffsImagePath]);
+        const pythonAlt = spawn('python', [scriptPath, configJsonPath, nvsImagePath, '0x5000']);
         
-        pythonAlt.stdout.on('data', (data) => console.log(data.toString()));
-        pythonAlt.stderr.on('data', (data) => console.error(data.toString()));
+        let altOutput = '';
+        pythonAlt.stdout.on('data', (data) => {
+          const text = data.toString();
+          altOutput += text;
+          console.log(text);
+          if (event) {
+            event.sender.send('flash-progress', text);
+          }
+        });
+        pythonAlt.stderr.on('data', (data) => {
+          const text = data.toString();
+          altOutput += text;
+          console.error(text);
+          if (event) {
+            event.sender.send('flash-progress', text);
+          }
+        });
         
         pythonAlt.on('close', (code) => {
           if (code === 0) {
-            resolve(spiffsImagePath);
+            resolve(nvsImagePath);
           } else {
-            reject(new Error('SPIFFS generation failed'));
+            reject(new Error(`NVS generation failed: ${altOutput}`));
           }
         });
         
@@ -1022,28 +1056,22 @@ ipcMain.handle('flash-firmware', async (event, options) => {
       event.sender.send('flash-progress', `   To include SPIFFS, flash from source code or ensure the release includes spiffs.bin.\n\n`);
     }
     
-    // If custom config is provided, generate and add custom SPIFFS
+    // If custom config is provided, generate and add custom NVS
     if (customConfig) {
       try {
-        event.sender.send('flash-progress', '\n=== Generating custom config SPIFFS ===\n');
-        const customSPIFFSPath = await generateCustomSPIFFS(customConfig);
-        event.sender.send('flash-progress', `✓ Custom SPIFFS generated: ${customSPIFFSPath}\n`);
+        event.sender.send('flash-progress', '\n=== Generating custom pin config NVS ===\n');
+        const customNVSPath = await generateCustomNVS(customConfig, event);
+        event.sender.send('flash-progress', `✓ Custom NVS generated: ${customNVSPath}\n`);
         
-        // Remove default SPIFFS if it was added, then add custom one
-        // Find and remove the SPIFFS entry from fileArgs (use the address we determined)
-        const spiffsAddrIndex = fileArgs.indexOf(spiffsAddress);
-        if (spiffsAddrIndex !== -1) {
-          fileArgs.splice(spiffsAddrIndex, 2); // Remove address and file path
-          event.sender.send('flash-progress', `Removed default SPIFFS, will use custom SPIFFS instead\n`);
-        }
-        
-        // Add custom SPIFFS LAST to flash command (overwrites default spiffs)
-        // Use the address we read from partition table (or default)
-        fileArgs.push(spiffsAddress, customSPIFFSPath);
-        event.sender.send('flash-progress', `✓ Custom SPIFFS will be written LAST (after firmware)\n`);
+        // Add NVS to flash command (before firmware to preserve it)
+        // NVS address is always 0x9000 per partition table
+        const nvsAddress = config.flashAddresses.nvs || '0x9000';
+        fileArgs.push(nvsAddress, customNVSPath);
+        event.sender.send('flash-progress', `✓ Custom NVS will be written at ${nvsAddress} (pin configuration)\n`);
       } catch (error) {
-        event.sender.send('flash-progress', `⚠ Custom SPIFFS generation failed: ${error.message}\n`);
+        event.sender.send('flash-progress', `⚠ Custom NVS generation failed: ${error.message}\n`);
         event.sender.send('flash-progress', 'Continuing with standard firmware (no custom pins)\n');
+        event.sender.send('flash-progress', `Note: Install ESP-IDF or set IDF_PATH for NVS generation\n`);
       }
     }
     
@@ -1325,17 +1353,23 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
     pio.on('close', (code) => {
       if (code === 0) {
         // Always upload SPIFFS after successful firmware upload
-        // This ensures web files (index.html, style.css, app.js) are included
+        // Upload SPIFFS (web files) and NVS (pin config) separately
         if (customConfig) {
-          event.sender.send('flash-progress', '\n=== Uploading SPIFFS with custom config ===\n');
-          uploadSPIFFSWithConfig(event, projectPath, envName, port, customConfig, pioCmd, env, useShell, workingDir)
+          // First upload SPIFFS (web files only: index.html, style.css, app.js from data/)
+          event.sender.send('flash-progress', '\n=== Uploading SPIFFS filesystem (web files) ===\n');
+          uploadSPIFFS(event, projectPath, envName, port, pioCmd, env, useShell, workingDir)
+            .then(() => {
+              // Then upload NVS with pin config
+              event.sender.send('flash-progress', '\n=== Uploading custom pin config to NVS ===\n');
+              return uploadCustomNVSToDevice(event, port, customConfig, boardType);
+            })
             .then(() => {
               resolve({ success: true, output });
             })
             .catch((error) => {
-              event.sender.send('flash-progress', `⚠ SPIFFS upload failed: ${error.message}\n`);
-              event.sender.send('flash-progress', 'Firmware uploaded successfully, but custom config not applied.\n');
-              resolve({ success: true, output, warning: 'SPIFFS upload failed' });
+              event.sender.send('flash-progress', `⚠ Upload failed: ${error.message}\n`);
+              event.sender.send('flash-progress', 'Firmware uploaded successfully, but custom config may not be applied.\n');
+              resolve({ success: true, output, warning: 'Config upload failed' });
             });
         } else {
           // Upload standard SPIFFS (includes all files from data/ directory)
@@ -1713,101 +1747,27 @@ async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, sp
   });
 }
 
-// Upload SPIFFS with custom config using PlatformIO uploadfs
-// This ensures config.json is included along with web files (index.html, style.css, app.js)
-async function uploadSPIFFSWithConfig(event, projectPath, envName, port, customConfig, pioCmd, env, useShell, workingDir) {
-  const dataDir = path.join(projectPath, 'data');
-  const configJsonPath = path.join(dataDir, 'config.json');
-  let configFileCreated = false;
+// Upload custom NVS to device using esptool
+async function uploadCustomNVSToDevice(event, port, customConfig, boardType) {
+  // Generate NVS image
+  event.sender.send('flash-progress', 'Generating custom NVS image...\n');
+  const nvsPath = await generateCustomNVS(customConfig, event);
   
-  try {
-    // Ensure data directory exists
-    await fs.mkdir(dataDir, { recursive: true });
-    
-    // Write config.json to data directory
-    event.sender.send('flash-progress', 'Writing config.json to data/ directory...\n');
-    await fs.writeFile(configJsonPath, JSON.stringify(customConfig, null, 2));
-    configFileCreated = true;
-    event.sender.send('flash-progress', '✓ config.json created\n');
-    
-    // Set upload port for PlatformIO
-    const uploadEnv = { ...env };
-    uploadEnv.PLATFORMIO_UPLOAD_PORT = port;
-    
-    // Run PlatformIO uploadfs to upload SPIFFS (includes data/ directory contents)
-    event.sender.send('flash-progress', 'Uploading SPIFFS filesystem (includes web files + config.json)...\n');
-    return new Promise((resolve, reject) => {
-      const uploadfsArgs = ['run', '-e', envName, '-t', 'uploadfs', '--verbose'];
-      const pio = spawn(pioCmd, uploadfsArgs, {
-        cwd: workingDir,
-        env: uploadEnv,
-        shell: useShell,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      
-      let output = '';
-      
-      pio.stdout.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        event.sender.send('flash-progress', text);
-      });
-      
-      pio.stderr.on('data', (data) => {
-        const text = data.toString();
-        output += text;
-        event.sender.send('flash-progress', text);
-      });
-      
-      pio.on('close', (code) => {
-        if (code === 0) {
-          event.sender.send('flash-progress', '✓ SPIFFS uploaded successfully (web files + config.json)\n');
-          resolve();
-        } else {
-          reject(new Error(`SPIFFS upload failed with code ${code}\n${output}`));
-        }
-      });
-      
-      pio.on('error', (err) => {
-        reject(new Error(`Failed to start SPIFFS upload: ${err.message}`));
-      });
-    });
-  } catch (error) {
-    throw new Error(`Failed to prepare SPIFFS upload: ${error.message}`);
-  } finally {
-    // Clean up: remove config.json from data/ directory if we created it
-    // This prevents it from being included in future builds unless explicitly set
-    if (configFileCreated) {
-      try {
-        await fs.unlink(configJsonPath);
-        event.sender.send('flash-progress', '✓ Cleaned up config.json from data/ directory\n');
-      } catch (err) {
-        // Ignore cleanup errors - file might not exist or be locked
-        event.sender.send('flash-progress', `⚠ Could not remove config.json (non-critical): ${err.message}\n`);
-      }
-    }
-  }
-}
-
-// Upload custom SPIFFS using esptool (fallback for GitHub releases)
-async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType) {
-  // Generate SPIFFS image
-  event.sender.send('flash-progress', 'Generating custom SPIFFS image...\n');
-  const spiffsPath = await generateCustomSPIFFS(customConfig);
-  
-  // Use esptool to upload SPIFFS to the correct address
+  // Use esptool to upload NVS to the correct address
   const config = BOARD_CONFIGS[boardType];
   
   if (!config) {
-    throw new Error('Could not determine board config for SPIFFS upload');
+    throw new Error('Could not determine board config for NVS upload');
   }
   
   let esptoolCmd;
   try {
     esptoolCmd = findEsptool();
   } catch (error) {
-    throw new Error('esptool not found for SPIFFS upload');
+    throw new Error('esptool not found for NVS upload');
   }
+  
+  const nvsAddress = config.flashAddresses.nvs || '0x9000';
   
   return new Promise((resolve, reject) => {
     const args = [
@@ -1817,11 +1777,14 @@ async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfi
       '--before', 'default_reset',
       '--after', 'hard_reset',
       'write_flash',
-      config.flashAddresses.spiffs,
-      spiffsPath
+      nvsAddress,
+      nvsPath
     ];
     
+    event.sender.send('flash-progress', `Uploading NVS to ${nvsAddress}...\n`);
+    
     const esptool = spawn(esptoolCmd, args);
+    
     let output = '';
     
     esptool.stdout.on('data', (data) => {
@@ -1831,23 +1794,32 @@ async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfi
     });
     
     esptool.stderr.on('data', (data) => {
-      output += data.toString();
-      event.sender.send('flash-progress', data.toString());
+      const text = data.toString();
+      output += text;
+      event.sender.send('flash-progress', text);
     });
     
     esptool.on('close', (code) => {
       if (code === 0) {
-        event.sender.send('flash-progress', '✓ Custom SPIFFS uploaded successfully\n');
+        event.sender.send('flash-progress', '✓ NVS uploaded successfully (custom pin config)\n');
         resolve();
       } else {
-        reject(new Error(`SPIFFS upload failed: ${output}`));
+        reject(new Error(`NVS upload failed with code ${code}\n${output}`));
       }
     });
     
     esptool.on('error', (err) => {
-      reject(new Error(`Failed to upload SPIFFS: ${err.message}`));
+      reject(new Error(`Failed to start NVS upload: ${err.message}`));
     });
   });
+}
+
+// Upload custom NVS using esptool (fallback - same as uploadCustomNVSToDevice)
+// Kept for backwards compatibility, but redirects to new function
+async function uploadCustomSPIFFS(event, projectPath, envName, port, customConfig, boardType) {
+  // This function name is misleading - it actually uploads NVS now, not SPIFFS
+  // SPIFFS should be uploaded separately for web files
+  return uploadCustomNVSToDevice(event, port, customConfig, boardType);
 }
 
 // Erase flash - only erase app and SPIFFS partitions, preserve NVS and factory data
