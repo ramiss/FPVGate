@@ -197,10 +197,9 @@ void setup() {
     bool initial_switch_state = digitalRead(g_mode_switch_pin);
 
     #if defined(BOARD_NUCLEARCOUNTER)
-      // NuclearCounter: always start in STANDALONE/WiFi mode for now.
-      // (Pin 1 hardware behavior is board-specific; we can re-enable pin-based
-      //  mode switching later if needed.)
-      current_mode = MODE_STANDALONE;
+      // NuclearCounter: Button brings pin HIGH when pressed (opposite of default behavior)
+      // HIGH (button pressed) = STANDALONE, LOW (button not pressed) = ROTORHAZARD
+      current_mode = (initial_switch_state == HIGH) ? MODE_STANDALONE : MODE_ROTORHAZARD;
     #else
       // Default behavior: LOW (GND) = STANDALONE, HIGH/floating = ROTORHAZARD
       current_mode = (initial_switch_state == LOW) ? MODE_STANDALONE : MODE_ROTORHAZARD;
