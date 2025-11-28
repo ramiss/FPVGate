@@ -10,7 +10,7 @@ A compact, self-contained lap timing solution for 5.8GHz FPV drones. FPVGate com
 [![GitHub stars](https://img.shields.io/github/stars/LouisHitchcock/FPVGate)](https://github.com/LouisHitchcock/FPVGate/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/LouisHitchcock/FPVGate)](https://github.com/LouisHitchcock/FPVGate/issues)
 
-📖 **[Quick Start Guide](QUICKSTART.md)** | 📥 **[Download Prebuilt Firmware](https://github.com/LouisHitchcock/FPVGate/releases)**
+**[Quick Start Guide](QUICKSTART.md)** | **[Download Prebuilt Firmware](https://github.com/LouisHitchcock/FPVGate/releases)**
 
 ---
 
@@ -23,39 +23,39 @@ FPVGate is a lap timer that measures the time it takes to complete a lap by dete
 - 2-3 inch whoops and micro quads
 - Solo training and improvement tracking
 
-## ✨ NEW in v1.1.0 - Natural Voice System
+## NEW in v1.1.0 - Natural Voice System
 
-🎤 **Natural Voice TTS** - ElevenLabs-powered pre-recorded audio (100% offline after generation)  
-🗣️ **Numbers 0-99** - "11.44" = "eleven point forty-four" (not robotic digit-by-digit)  
-⚡ **Instant Transitions** - <50ms gaps between audio clips, 1.3x faster playback  
-🎨 **4 Voice Options** - Sarah (energetic), Rachel (calm), Adam (male), Antoni (male)  
-📊 **Fastest 3 Consecutive** - RaceGOW format support in lap analysis  
-🏆 **Gold Highlighting** - Fastest lap stands out with gold background  
-🔢 **Redesigned Lap Table** - Lap Time | Gap | Total Time columns  
-⚙️ **Configurable Announcements** - Choose: Full / Lap+Time / Time Only  
-🎯 **Gate 1 Terminology** - Replaces "Hole Shot" for clarity
+**Natural Voice TTS** - ElevenLabs-powered pre-recorded audio (100% offline after generation)  
+**Numbers 0-99** - "11.44" = "eleven point forty-four" (not robotic digit-by-digit)  
+**Instant Transitions** - <50ms gaps between audio clips, 1.3x faster playback  
+**4 Voice Options** - Sarah (energetic), Rachel (calm), Adam (male), Antoni (male)  
+**Fastest 3 Consecutive** - RaceGOW format support in lap analysis  
+**Gold Highlighting** - Fastest lap stands out with gold background  
+**Redesigned Lap Table** - Lap Time | Gap | Total Time columns  
+**Configurable Announcements** - Choose: Full / Lap+Time / Time Only  
+**Gate 1 Terminology** - Replaces "Hole Shot" for clarity
 
 ## Confirmed Working Features
 
-✅ **Single Node RSSI Timing** - Accurate lap detection via 5.8GHz signal strength  
-✅ **ESP32-S3 Support** - Optimized for ESP32-S3-DevKitC-1  
-✅ **RGB LED Indicators** - Visual feedback for race events (supports external NeoPixels)  
-✅ **Web Interface** - Modern Material Design UI with **23 theme options**  
-✅ **Natural Voice Announcements** - Pre-recorded ElevenLabs TTS with natural number pronunciation  
-✅ **Phonetic Name Support** - Custom TTS pronunciation for pilot names  
-✅ **Real-time RSSI Graph** - Visual calibration with live feedback  
-✅ **Enhanced Lap Analysis** - Fastest Lap, Fastest 3 Consecutive, Best 3 Laps, Median  
-✅ **Race History** - Saves pilot info (name, callsign, channel) with each race  
-✅ **Persistent Settings** - Auto-save configuration, survives page refreshes  
-✅ **Manual Lap Entry** - Add laps manually during race  
-✅ **WiFi Access Point** - No apps required, works with any device  
-✅ **OTA Updates** - Update firmware wirelessly  
-✅ **Battery Monitoring** - Low voltage alarm with audio/visual alerts  
-✅ **Configurable Lap Count** - Set finite laps (1-50) or infinite mode  
-✅ **Pilot Color Selection** - Choose from 15 colors for personalization  
-✅ **Config Import/Export** - Backup and restore all settings as JSON  
-✅ **Minimum Lap Time** - Prevent false triggers from crashes (default: 5 seconds)  
-✅ **Theme-Aware Branding** - SVG logo adapts to light/dark themes
+- **Single Node RSSI Timing** - Accurate lap detection via 5.8GHz signal strength  
+- **ESP32-S3 Support** - Optimized for ESP32-S3-DevKitC-1  
+- **RGB LED Indicators** - Visual feedback for race events (supports external NeoPixels)  
+- **Web Interface** - Modern Material Design UI with **23 theme options**  
+- **Natural Voice Announcements** - Pre-recorded ElevenLabs TTS with natural number pronunciation  
+- **Phonetic Name Support** - Custom TTS pronunciation for pilot names  
+- **Real-time RSSI Graph** - Visual calibration with live feedback  
+- **Enhanced Lap Analysis** - Fastest Lap, Fastest 3 Consecutive, Best 3 Laps, Median  
+- **Race History** - Saves pilot info (name, callsign, channel) with each race  
+- **Persistent Settings** - Auto-save configuration, survives page refreshes  
+- **Manual Lap Entry** - Add laps manually during race  
+- **WiFi Access Point** - No apps required, works with any device  
+- **OTA Updates** - Update firmware wirelessly  
+- **Battery Monitoring** - Low voltage alarm with audio/visual alerts  
+- **Configurable Lap Count** - Set finite laps (1-50) or infinite mode  
+- **Pilot Color Selection** - Choose from 15 colors for personalization  
+- **Config Import/Export** - Backup and restore all settings as JSON  
+- **Minimum Lap Time** - Prevent false triggers from crashes (default: 5 seconds)  
+- **Theme-Aware Branding** - SVG logo adapts to light/dark themes
 
 ## How It Works
 
