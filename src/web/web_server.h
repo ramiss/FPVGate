@@ -2,6 +2,8 @@
 #define WEB_SERVER_H
 
 #include <Arduino.h>
+#include <FS.h>  // Include FS.h first to ensure proper namespace resolution
+using fs::FS;    // Bring FS into global namespace for WebServer.h compatibility
 #include <WebServer.h>
 #include <SPIFFS.h>
 #include <vector>
