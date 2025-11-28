@@ -4,8 +4,11 @@
 #include "settings/wifi_manager.h"
 #include "web/web_server.h"
 
-#if ENABLE_LCD_UI
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
 #include "hardware/battery_monitor.h"
+#endif
+
+#if ENABLE_LCD_UI
 #include "hardware/audio_output.h"
 #endif
 
@@ -23,13 +26,25 @@ StandaloneMode::StandaloneMode() : _timingCore(nullptr) {
     _wifiManager = new WiFiManager();
     _webServer = new WebServerManager();
 
+#if ENABLE_BATTERY_MONITOR
+    // Battery monitoring only works in standalone mode (not in RotorHazard node mode)
+    #if defined(BATTERY_ADC_PIN)
+        // Initialize battery monitoring (available on boards with or without LCD)
+        _batteryMonitor = new BatteryMonitor();
+    #else
+        // Battery monitoring enabled but pin not defined - will warn in begin()
+        _batteryMonitor = nullptr;
+    #endif
+#else
+    // Battery monitoring disabled at compile time
+    #if defined(BATTERY_ADC_PIN)
+        // Pin defined but monitoring disabled - this is fine, just ignore it
+    #endif
+#endif
+
 #if ENABLE_LCD_UI
     _lcdUI = nullptr;
     _lcdInstance = this;
-
-#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
-    _batteryMonitor = new BatteryMonitor();
-#endif
 
 #if ENABLE_AUDIO
     _audioOutput = new AudioOutput();
@@ -44,12 +59,18 @@ StandaloneMode::StandaloneMode() : _timingCore(nullptr) {
 void StandaloneMode::begin(TimingCore* timingCore) {
     _timingCore = timingCore;
 
-#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
-    // Initialize battery monitoring
-    _batteryMonitor->begin();
+#if ENABLE_BATTERY_MONITOR
+    // Battery monitoring only works in standalone mode (not in RotorHazard node mode)
+    #if defined(BATTERY_ADC_PIN)
+        // Initialize battery monitoring (available on boards with or without LCD)
+        _batteryMonitor->begin();
+    #else
+        // Battery monitoring enabled but pin not defined - silently fail with warning
+        Serial.println("Warning: ENABLE_BATTERY_MONITOR=1 but BATTERY_ADC_PIN not defined. Battery monitoring disabled.");
+    #endif
 #endif
 
-#if ENABLE_AUDIO
+#if ENABLE_LCD_UI && ENABLE_AUDIO
     // Initialize audio DAC
     _audioOutput->begin();
 #endif
@@ -178,6 +199,37 @@ void StandaloneMode::process() {
 #endif
     }
 
+#if ENABLE_BATTERY_MONITOR
+    // Battery monitoring polling (works for both LCD and web GUI)
+    // Note: Battery monitoring only runs in standalone mode, never in RotorHazard node mode
+    // Update battery status every 5 seconds and share with both display systems
+    if (_batteryMonitor != nullptr) {
+        static unsigned long last_battery_update = 0;
+        if (millis() - last_battery_update > 5000) {
+            float voltage = _batteryMonitor->readVoltage();
+            uint8_t percentage = _batteryMonitor->calculatePercentage(voltage);
+
+#if defined(USB_DETECT_PIN)
+            bool isCharging = _batteryMonitor->isUSBConnected();
+#else
+            bool isCharging = false;
+#endif
+
+            // Update web server cache (always - works for boards with or without LCD)
+            _webServer->updateBatteryStatus(voltage, percentage, isCharging);
+
+#if ENABLE_LCD_UI
+            // Update LCD display (if LCD UI is enabled)
+            if (_lcdUI) {
+                _lcdUI->updateBattery(voltage, percentage, isCharging);
+            }
+#endif
+
+            last_battery_update = millis();
+        }
+    }
+#endif
+
 #if ENABLE_LCD_UI
     // Update LCD RSSI (every loop iteration for real-time display)
     if (_lcdUI && _timingCore) {
@@ -197,23 +249,6 @@ void StandaloneMode::process() {
 
             last_settings_update = millis();
         }
-
-#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
-        // Update battery status every 5 seconds
-        static unsigned long last_battery_update = 0;
-        if (millis() - last_battery_update > 5000) {
-            float voltage = _batteryMonitor->readVoltage();
-            uint8_t percentage = _batteryMonitor->calculatePercentage(voltage);
-
-#if defined(USB_DETECT_PIN)
-            bool isCharging = _batteryMonitor->isUSBConnected();
-            _lcdUI->updateBattery(voltage, percentage, isCharging);
-#else
-            _lcdUI->updateBattery(voltage, percentage);
-#endif
-            last_battery_update = millis();
-        }
-#endif
     }
 #endif
 }

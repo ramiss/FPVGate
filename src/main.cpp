@@ -14,6 +14,8 @@
     #pragma message "BUILD: Waveshare ESP32-S3-Touch-LCD-2 detected"
 #elif defined(BOARD_JC2432W328C)
     #pragma message "BUILD: JC2432W328C detected"
+#elif defined(BOARD_T_ENERGY)
+    #pragma message "BUILD: LilyGo T-Energy (ESP32-S3) detected"
 #elif defined(BOARD_NUCLEARCOUNTER)
     #pragma message "BUILD: NuclearCounter (ESP32-C3) detected"
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)

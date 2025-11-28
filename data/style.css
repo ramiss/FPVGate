@@ -361,6 +361,14 @@ h1 {
     font-family: 'Courier New', monospace;
 }
 
+.stat-subtext {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b9dc3;
+    margin-top: 4px;
+    font-family: 'Courier New', monospace;
+}
+
 /* RSSI Section */
 .rssi-section {
     background: linear-gradient(145deg, #1a1f35 0%, #141824 100%);

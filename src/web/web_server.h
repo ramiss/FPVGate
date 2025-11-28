@@ -9,7 +9,7 @@ using fs::FS;    // Bring FS into global namespace for WebServer.h compatibility
 #include <vector>
 #include "timing_core.h"
 
-// Forward declaration
+// Forward declarations
 class SettingsManager;
 
 // Web server manager for standalone mode
@@ -29,6 +29,12 @@ public:
     // Start dedicated web server task
     void startTask();
 
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+    // Update battery status (called from StandaloneMode polling loop)
+    // This caches battery data so it can be served without reading on-demand
+    void updateBatteryStatus(float voltage, uint8_t percentage, bool isCharging = false);
+#endif
+
 private:
     WebServer _server;
     TimingCore* _timingCore;
@@ -38,6 +44,14 @@ private:
     bool* _raceActive;
     uint32_t* _raceStartTime;
     std::vector<LapData>* _laps;
+
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+    // Battery monitoring - cached values (updated via polling in StandaloneMode)
+    float _cachedBatteryVoltage;
+    uint8_t _cachedBatteryPercentage;
+    bool _cachedBatteryCharging;
+    bool _batteryDataValid;  // True when battery data has been read at least once
+#endif
 
     TaskHandle_t _webTaskHandle;
 

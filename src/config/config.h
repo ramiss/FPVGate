@@ -57,6 +57,31 @@
     // BATTERY_ADC_PIN is defined later in the LCD UI section (GPIO34, repurposed from light sensor)
     #define USE_DMA_ADC         0     // Disabled for battery monitoring compatibility
     #define UART_BAUD_RATE      921600  // Fast baud rate (works with most UART bridges)
+#elif defined(BOARD_T_ENERGY)
+    // LilyGo T-Energy (ESP32-S3 with built-in battery)
+    // Built-in 18650 battery slot with voltage sensing circuit
+    // Available GPIOs: 1-21, 35-48 (avoid 43-46 if using USB/JTAG)
+    #define RSSI_INPUT_PIN      4     // GPIO4 (ADC1_CH3) - RSSI input from RX5808
+    #define RX5808_DATA_PIN     5    // GPIO11 - DATA (SPI MOSI) to RX5808
+    #define RX5808_CLK_PIN      7    // GPIO12 - CLK (SPI SCK) to RX5808
+    #define RX5808_SEL_PIN      6    // GPIO10 - LE (Latch Enable / SPI CS) to RX5808
+    #define MODE_SWITCH_PIN     9     // GPIO9 - Mode selection switch (tie to 3.3v for WiFi mode)
+    #define USE_DMA_ADC         0     // Disabled for battery monitoring compatibility (DMA ADC conflicts with analogRead on ADC1)
+    #define UART_BAUD_RATE      921600  // USB CDC for serial communication
+
+    // Battery monitoring configuration (built-in 2:1 voltage divider)
+    // T-Energy board always has battery hardware - always enabled
+    #define BATTERY_ADC_PIN             3     // GPIO3 (ADC1_CH2) - Battery voltage input (schematic confirms IO03)
+    #define BATTERY_VOLTAGE_DIVIDER     2.0   // Built-in 2:1 divider circuit
+    #define BATTERY_ADC_CALIBRATION     1.0
+    #define BATTERY_ADC_OFFSET          2     // Calibration offset (matches PhobosLT VBAT_ADD)
+    #define BATTERY_MIN_VOLTAGE         3.0   // 18650 minimum (empty/cutoff)
+    #define BATTERY_MAX_VOLTAGE         4.2   // 18650 maximum (full charge)
+    #define BATTERY_SAMPLES             10
+    #define ENABLE_BATTERY_MONITOR      1     // Always enabled for T-Energy (hardware always present)
+    
+    // Power button configuration
+    #define ENABLE_POWER_BUTTON         0     // No power button on T-Energy board
 #elif defined(BOARD_ESP32_S3_DEVKITC)
     // ESP32-S3-DevKitC-1 (standard development board)
     // Standard pinout for ESP32-S3-DevKitC-1
@@ -222,6 +247,30 @@
         #define USB_DETECT_SAMPLES    10  // Samples for majority-vote filtering
     #endif
     // ========== End Board-Specific Configurations ==========
+#endif
+
+// Battery monitoring configuration defaults
+// Note: Battery monitoring only works in standalone mode, not in RotorHazard node mode
+// If battery monitoring is enabled, ensure BATTERY_ADC_PIN is defined in board-specific config
+// or via build flags (e.g., -DBATTERY_ADC_PIN=1)
+// Runtime warning will be printed in standalone mode if pin is not defined
+#if defined(ENABLE_BATTERY_MONITOR) && ENABLE_BATTERY_MONITOR
+    // Ensure other battery configuration values have defaults if not explicitly set
+    #ifndef BATTERY_VOLTAGE_DIVIDER
+        #define BATTERY_VOLTAGE_DIVIDER     2.0   // Default 2:1 divider (override via build flag if needed)
+    #endif
+    #ifndef BATTERY_ADC_CALIBRATION
+        #define BATTERY_ADC_CALIBRATION     1.0
+    #endif
+    #ifndef BATTERY_MIN_VOLTAGE
+        #define BATTERY_MIN_VOLTAGE         3.0   // 1S LiPo minimum (empty)
+    #endif
+    #ifndef BATTERY_MAX_VOLTAGE
+        #define BATTERY_MAX_VOLTAGE         4.2   // 1S LiPo maximum (full)
+    #endif
+    #ifndef BATTERY_SAMPLES
+        #define BATTERY_SAMPLES             10
+    #endif
 #endif
 
 // Data storage

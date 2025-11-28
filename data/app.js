@@ -250,6 +250,47 @@ class RaceTimer {
         } else {
             statusItems.forEach(item => item.classList.remove('crossing'));
         }
+        
+        // Update battery status if available
+        if (data.battery) {
+            const batteryCard = document.getElementById('batteryCard');
+            const batteryPercentage = document.getElementById('batteryPercentage');
+            const batteryVoltage = document.getElementById('batteryVoltage');
+            
+            if (batteryCard) {
+                batteryCard.style.display = '';
+                
+                if (batteryPercentage) {
+                    const percentage = data.battery.percentage || 0;
+                    batteryPercentage.textContent = percentage + '%';
+                    
+                    // Color code battery level
+                    if (percentage > 50) {
+                        batteryPercentage.style.color = '#4ade80'; // Green
+                    } else if (percentage > 20) {
+                        batteryPercentage.style.color = '#fbbf24'; // Yellow
+                    } else {
+                        batteryPercentage.style.color = '#ef4444'; // Red
+                    }
+                }
+                
+                if (batteryVoltage) {
+                    const voltage = data.battery.voltage || 0;
+                    let voltageText = voltage.toFixed(2) + 'V';
+                    
+                    if (data.battery.charging) {
+                        voltageText += ' ⚡';
+                    }
+                    batteryVoltage.textContent = voltageText;
+                }
+            }
+        } else {
+            // Hide battery card if not available
+            const batteryCard = document.getElementById('batteryCard');
+            if (batteryCard) {
+                batteryCard.style.display = 'none';
+            }
+        }
     }
     
     updateLaps(laps) {

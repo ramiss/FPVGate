@@ -45,7 +45,14 @@ static void findBandChannelFromFrequency(uint16_t freq, uint8_t& band, uint8_t& 
 
 WebServerManager::WebServerManager() : _server(80), _timingCore(nullptr),
     _settingsManager(nullptr), _raceActive(nullptr), _raceStartTime(nullptr),
-    _laps(nullptr), _webTaskHandle(nullptr) {
+    _laps(nullptr)
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+    , _cachedBatteryVoltage(0.0f)
+    , _cachedBatteryPercentage(0)
+    , _cachedBatteryCharging(false)
+    , _batteryDataValid(false)
+#endif
+    , _webTaskHandle(nullptr) {
     // Constructor
 }
 
@@ -216,6 +223,20 @@ void WebServerManager::handleGetStatus() {
     json += "\"exit_rssi\":" + String(exit_rssi) + ",";
     json += "\"threshold\":" + String(enter_rssi) + ",";  // Backward compatibility
     json += "\"crossing\":" + String(crossing ? "true" : "false");
+
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+    // Add battery status from cached values (updated via polling in StandaloneMode)
+    if (_batteryDataValid) {
+        json += ",\"battery\":{";
+        json += "\"voltage\":" + String(_cachedBatteryVoltage, 2) + ",";
+        json += "\"percentage\":" + String(_cachedBatteryPercentage);
+#if defined(USB_DETECT_PIN)
+        json += ",\"charging\":" + String(_cachedBatteryCharging ? "true" : "false");
+#endif
+        json += "}";
+    }
+#endif
+
     json += "}";
 
     Serial.printf("[API] JSON Response: %s\n", json.c_str());
@@ -540,3 +561,13 @@ void WebServerManager::handleAppJS() {
 void WebServerManager::handleNotFound() {
     _server.send(404, "text/plain", "File not found");
 }
+
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+void WebServerManager::updateBatteryStatus(float voltage, uint8_t percentage, bool isCharging) {
+    // Cache battery data for serving via web API (called from StandaloneMode polling loop)
+    _cachedBatteryVoltage = voltage;
+    _cachedBatteryPercentage = percentage;
+    _cachedBatteryCharging = isCharging;
+    _batteryDataValid = true;
+}
+#endif

@@ -11,9 +11,12 @@ class SettingsManager;
 class WiFiManager;
 class WebServerManager;
 
+#if ENABLE_BATTERY_MONITOR
+class BatteryMonitor;
+#endif
+
 #if ENABLE_LCD_UI
 #include "ui/lcd_ui.h"
-class BatteryMonitor;
 class AudioOutput;
 #endif
 
@@ -39,6 +42,12 @@ private:
     WiFiManager* _wifiManager;
     WebServerManager* _webServer;
 
+#if ENABLE_BATTERY_MONITOR
+    // Battery monitoring (only available in standalone mode, not RotorHazard node mode)
+    // May be nullptr if BATTERY_ADC_PIN is not defined
+    BatteryMonitor* _batteryMonitor;
+#endif
+
 #if ENABLE_LCD_UI
     // LCD UI
     LcdUI* _lcdUI;
@@ -49,10 +58,6 @@ private:
     static void lcdStopCallback();
     static void lcdClearCallback();
     static StandaloneMode* _lcdInstance;  // For static callbacks
-
-#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
-    BatteryMonitor* _batteryMonitor;
-#endif
 
 #if ENABLE_AUDIO
     AudioOutput* _audioOutput;
