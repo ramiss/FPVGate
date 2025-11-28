@@ -637,10 +637,11 @@ void StandaloneMode::handleSetThreshold() {
         // Backward compatibility: single threshold API
         int threshold = _server.arg("threshold").toInt();
         if (threshold >= 0 && threshold <= 255) {
+            // Set enter to threshold, exit to 20 below (or threshold if too low)
+            uint8_t enter = threshold;
+            uint8_t exit = (threshold > 20) ? (threshold - 20) : threshold;
+            
             if (_timingCore) {
-                // Set enter to threshold, exit to 20 below (or threshold if too low)
-                uint8_t enter = threshold;
-                uint8_t exit = (threshold > 20) ? (threshold - 20) : threshold;
                 _timingCore->setEnterRssi(enter);
                 _timingCore->setExitRssi(exit);
                 saveSettings();  // Save settings to flash
