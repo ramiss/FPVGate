@@ -44,7 +44,7 @@
                     <div class="config-item">
                         <label for="enterRssiSlider">Enter RSSI (Start Peak):</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="range" id="enterRssiSlider" min="20" max="255" value="120" oninput="updateEnterRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
+                            <input type="range" id="enterRssiSlider" min="120" max="255" value="120" oninput="updateEnterRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
                             <span id="enterRssiValue">120</span>
                         </div>
                     </div>
@@ -53,7 +53,7 @@
                     <div class="config-item">
                         <label for="exitRssiSlider">Exit RSSI (End Peak):</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="range" id="exitRssiSlider" min="20" max="255" value="100" oninput="updateExitRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
+                            <input type="range" id="exitRssiSlider" min="100" max="255" value="100" oninput="updateExitRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
                             <span id="exitRssiValue">100</span>
                         </div>
                     </div>
@@ -127,7 +127,7 @@
                 }
                 
                 // Load exit RSSI (prefer new API, calculate from threshold if needed)
-                const exitRssi = data.exit_rssi !== undefined ? data.exit_rssi : (enterRssi > 20 ? enterRssi - 20 : enterRssi);
+                const exitRssi = data.exit_rssi !== undefined ? data.exit_rssi : (enterRssi > 100 ? enterRssi - 20 : 100);
                 const exitSlider = document.getElementById('exitRssiSlider');
                 const exitValue = document.getElementById('exitRssiValue');
                 if (exitSlider && exitValue) {
@@ -137,7 +137,7 @@
                 
                 // Ensure enter > exit
                 if (parseInt(enterSlider.value) <= parseInt(exitSlider.value)) {
-                    exitSlider.value = Math.max(20, parseInt(enterSlider.value) - 20);
+                    exitSlider.value = Math.max(100, parseInt(enterSlider.value) - 20);
                     exitValue.textContent = exitSlider.value;
                 }
             } catch (error) {
@@ -161,7 +161,7 @@
             const exitSlider = document.getElementById('exitRssiSlider');
             const exitValue = document.getElementById('exitRssiValue');
             if (exitSlider && exitValue && parseInt(value) <= parseInt(exitSlider.value)) {
-                exitSlider.value = Math.max(20, parseInt(value) - 20);
+                exitSlider.value = Math.max(100, parseInt(value) - 20);
                 exitValue.textContent = exitSlider.value;
             }
         }

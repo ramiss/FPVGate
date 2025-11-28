@@ -475,14 +475,56 @@ class RaceTimer {
         return `${minutes}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
     }
     
+    formatTimeForSpeech(milliseconds) {
+        // Convert milliseconds to human-friendly spoken time (whole seconds only for speech)
+        // Sub-second precision is only shown in display/logs, not spoken
+        const ms = milliseconds;
+        const totalSeconds = Math.floor(ms / 1000);
+        
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60; // Whole seconds only
+        
+        const plural = (n, s) => (n === 1 ? s : s + 's');
+        
+        let timeSpeech = '';
+        
+        if (hours > 0) {
+            // For hours, include minutes and seconds (e.g., "1 hour 23 minutes 45 seconds")
+            timeSpeech += `${hours} ${plural(hours, 'hour')}`;
+            if (minutes > 0) {
+                timeSpeech += ` ${minutes} ${plural(minutes, 'minute')}`;
+            }
+            if (seconds > 0) {
+                timeSpeech += ` ${seconds} ${plural(seconds, 'second')}`;
+            }
+        } else if (minutes > 0) {
+            // For minutes, include whole seconds (e.g., "1 minute 23 seconds")
+            timeSpeech += `${minutes} ${plural(minutes, 'minute')}`;
+            if (seconds > 0) {
+                timeSpeech += ` ${seconds} ${plural(seconds, 'second')}`;
+            }
+        } else {
+            // Less than one minute: only whole seconds (e.g., "45 seconds")
+            // If less than 1 second, say "less than 1 second"
+            if (seconds === 0 && ms > 0) {
+                timeSpeech = 'less than 1 second';
+            } else {
+                timeSpeech = `${seconds} ${plural(seconds, 'second')}`;
+            }
+        }
+        
+        return timeSpeech;
+    }
+    
     announceLapTime(lapData) {
         if (!this.speechSynthesis) return;
         
         const lapNumber = this.laps.length;
-        const lapTime = this.formatTime(lapData.lap_time_ms);
+        const lapTimeSpeech = this.formatTimeForSpeech(lapData.lap_time_ms);
         
-        // Create speech text
-        let speechText = `Lap ${lapNumber}, ${lapTime}`;
+        // Create speech text with natural language time
+        let speechText = `Lap ${lapNumber}, ${lapTimeSpeech}`;
         
         // Add context about lap performance
         if (lapNumber > 1) {
