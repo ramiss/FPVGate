@@ -1,5 +1,6 @@
 #include "node_mode.h"
 #include "config.h"
+#include <string.h>
 
 // Adapted from the original rhnode.cpp and commands.cpp
 // This implements the RotorHazard node protocol over serial
@@ -181,16 +182,17 @@ void NodeMode::begin(TimingCore* timingCore) {
     static bool first_init = true;
     if (first_init) {
         _settings.vtxFreq = 5800;
-        _settings.enterAtLevel = CROSSING_THRESHOLD;  // Use config.h value, not hardcoded
-        _settings.exitAtLevel = 80;
+        _settings.enterAtLevel = ENTER_RSSI;  // Use config.h value, not hardcoded
+        _settings.exitAtLevel = EXIT_RSSI;    // Use config.h value, not hardcoded
         _nodeIndex = 0;
         _slotIndex = 0;
         first_init = false;
         
-        // Set default frequency and threshold ONLY on first initialization
+        // Set default frequency and thresholds ONLY on first initialization
         if (_timingCore) {
             _timingCore->setFrequency(_settings.vtxFreq);
-            _timingCore->setThreshold(_settings.enterAtLevel);
+            _timingCore->setEnterRssi(_settings.enterAtLevel);
+            _timingCore->setExitRssi(_settings.exitAtLevel);
         }
     }
     
@@ -278,16 +280,24 @@ void Message::handleWriteCommand(bool serialFlag) {
     switch (command) {
         case WRITE_FREQUENCY: {
             uint16_t freq = buffer.read16();
-            // Set frequency via timing core AND update settings
-            if (nodeMode && nodeMode->_timingCore) {
-                nodeMode->_settings.vtxFreq = freq;  // Update stored settings
-                nodeMode->_timingCore->setFrequency(freq);
-                nodeMode->_timingCore->setActivated(true);  // Activate node after frequency is set
-                // Reset peak tracking when frequency changes
-                TimingState state = nodeMode->_timingCore->getState();
-                state.peak_rssi = 0;
+            // Validate frequency range (matches RotorHazard behavior)
+            if (freq >= MIN_FREQ && freq <= MAX_FREQ) {
+                // Set frequency via timing core AND update settings
+                if (nodeMode && nodeMode->_timingCore) {
+                    // Only update if frequency actually changed (matches RotorHazard behavior)
+                    if (freq != nodeMode->_settings.vtxFreq) {
+                        nodeMode->_settings.vtxFreq = freq;  // Update stored settings
+                        nodeMode->_timingCore->setFrequency(freq);
+                        settingChangedFlags |= FREQ_CHANGED;
+                    }
+                    nodeMode->_timingCore->setActivated(true);  // Activate node after frequency is set
+                    // Reset peak tracking when frequency changes
+                    TimingState state = nodeMode->_timingCore->getState();
+                    state.peak_rssi = 0;
+                }
+                settingChangedFlags |= FREQ_SET;
             }
-            settingChangedFlags |= FREQ_SET | FREQ_CHANGED;
+            // If frequency out of range, ignore command (matches RotorHazard behavior)
             break;
         }
         
@@ -296,7 +306,7 @@ void Message::handleWriteCommand(bool serialFlag) {
             // Set enter threshold via timing core AND update settings
             if (nodeMode && nodeMode->_timingCore) {
                 nodeMode->_settings.enterAtLevel = level;  // Update stored settings
-                nodeMode->_timingCore->setThreshold(level);
+                nodeMode->_timingCore->setEnterRssi(level);
             }
             settingChangedFlags |= ENTERAT_CHANGED;
             break;
@@ -304,10 +314,10 @@ void Message::handleWriteCommand(bool serialFlag) {
         
         case WRITE_EXIT_AT_LEVEL: {
             uint8_t level = buffer.read8();
-            // Set exit threshold via timing core (same as enter for now) AND update settings
+            // Set exit threshold via timing core AND update settings
             if (nodeMode && nodeMode->_timingCore) {
                 nodeMode->_settings.exitAtLevel = level;  // Update stored settings
-                nodeMode->_timingCore->setThreshold(level);
+                nodeMode->_timingCore->setExitRssi(level);
             }
             settingChangedFlags |= EXITAT_CHANGED;
             break;
@@ -364,19 +374,22 @@ void Message::handleReadCommand(bool serialFlag) {
             uint8_t lap_peak = 0;
             
             if (nodeMode && nodeMode->_timingCore) {
-                current_rssi = nodeMode->_timingCore->getCurrentRSSI();
-                peak_rssi = nodeMode->_timingCore->getPeakRSSI();
+                TimingState state = nodeMode->_timingCore->getState();
+                current_rssi = state.current_rssi;
+                peak_rssi = state.peak_rssi;
                 lap_num = nodeMode->_lastPass.lap;
-                ms_since_lap = timeNow - nodeMode->_lastPass.timestamp;
+                // Clamp to uint16_t range (matches RotorHazard behavior)
+                uint32_t time_diff = timeNow - nodeMode->_lastPass.timestamp;
+                ms_since_lap = (time_diff > 65535) ? 65535 : (uint16_t)time_diff;
                 lap_peak = nodeMode->_lastPass.rssiPeak;
             }
             
             buffer.write8(lap_num);  // lap number
-            buffer.write16(ms_since_lap);  // ms since lap
+            buffer.write16(ms_since_lap);  // ms since lap (uint16_t, clamped)
             buffer.write8(current_rssi);  // current RSSI
             buffer.write8(peak_rssi); // node RSSI peak
-            buffer.write8(lap_peak); // lap RSSI peak
-            buffer.write16(1000); // loop time micros (placeholder)
+            buffer.write8(lap_peak); // lap RSSI peak (last pass peak)
+            buffer.write16(1000); // loop time micros (placeholder - not critical for compatibility)
             settingChangedFlags |= LAPSTATS_READ;
             break;
         }
@@ -457,22 +470,20 @@ void Message::handleReadCommand(bool serialFlag) {
         }
         
         case READ_ENTER_AT_LEVEL:
-            // Return actual threshold from timing core
+            // Return actual enter threshold from timing core
             if (nodeMode && nodeMode->_timingCore) {
-                TimingState state = nodeMode->_timingCore->getState();
-                buffer.write8(state.threshold);
+                buffer.write8(nodeMode->_timingCore->getEnterRssi());
             } else {
-                buffer.write8(96);  // Default threshold
+                buffer.write8(ENTER_RSSI);  // Default enter threshold
             }
             break;
             
         case READ_EXIT_AT_LEVEL:
-            // Return actual threshold from timing core (same as enter for now)
+            // Return actual exit threshold from timing core
             if (nodeMode && nodeMode->_timingCore) {
-                TimingState state = nodeMode->_timingCore->getState();
-                buffer.write8(state.threshold);
+                buffer.write8(nodeMode->_timingCore->getExitRssi());
             } else {
-                buffer.write8(80);  // Default threshold
+                buffer.write8(EXIT_RSSI);  // Default exit threshold
             }
             break;
             
@@ -511,41 +522,87 @@ void Message::handleReadCommand(bool serialFlag) {
             break;
             
         case READ_FW_VERSION:
-            // Write firmware version string (fixed 16-byte block, null-padded)
+            // Write firmware version string (16-byte block, extracted from "FIRMWARE_VERSION: x.x.x" format)
+            // RotorHazard expects format: "FIRMWARE_VERSION: 1.1.5" -> extract "1.1.5"
             {
-                const char* version = "ESP32_1.0.0";
-                for (int i = 0; i < 16; i++) {
-                    buffer.write8(i < strlen(version) ? version[i] : 0);
+                const char* version_str = firmwareVersionString;
+                const char* colon = strchr(version_str, ':');
+                if (colon && colon[1] == ' ') {
+                    // Extract version after "FIRMWARE_VERSION: "
+                    const char* version = colon + 2;
+                    int len = strlen(version);
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < len ? version[i] : 0);
+                    }
+                } else {
+                    // Fallback: use "ESP32_1.0.0" format
+                    const char* version = "ESP32_1.0.0";
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < strlen(version) ? version[i] : 0);
+                    }
                 }
             }
             break;
             
         case READ_FW_BUILDDATE:
-            // Write build date (fixed 16-byte block, null-padded)
+            // Write build date (16-byte block, extracted from "FIRMWARE_BUILDDATE: ..." format)
             {
-                const char* date = __DATE__;
-                for (int i = 0; i < 16; i++) {
-                    buffer.write8(i < strlen(date) ? date[i] : 0);
+                const char* date_str = firmwareBuildDateString;
+                const char* colon = strchr(date_str, ':');
+                if (colon && colon[1] == ' ') {
+                    const char* date = colon + 2;
+                    int len = strlen(date);
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < len ? date[i] : 0);
+                    }
+                } else {
+                    // Fallback: use __DATE__ directly
+                    const char* date = __DATE__;
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < strlen(date) ? date[i] : 0);
+                    }
                 }
             }
             break;
             
         case READ_FW_BUILDTIME:
-            // Write build time (fixed 16-byte block, null-padded)
+            // Write build time (16-byte block, extracted from "FIRMWARE_BUILDTIME: ..." format)
             {
-                const char* time = __TIME__;
-                for (int i = 0; i < 16; i++) {
-                    buffer.write8(i < strlen(time) ? time[i] : 0);
+                const char* time_str = firmwareBuildTimeString;
+                const char* colon = strchr(time_str, ':');
+                if (colon && colon[1] == ' ') {
+                    const char* time = colon + 2;
+                    int len = strlen(time);
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < len ? time[i] : 0);
+                    }
+                } else {
+                    // Fallback: use __TIME__ directly
+                    const char* time = __TIME__;
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < strlen(time) ? time[i] : 0);
+                    }
                 }
             }
             break;
             
         case READ_FW_PROCTYPE:
-            // Write processor type (fixed 16-byte block, null-padded)
+            // Write processor type (16-byte block, extracted from "FIRMWARE_PROCTYPE: ..." format)
             {
-                const char* proctype = "ESP32";
-                for (int i = 0; i < 16; i++) {
-                    buffer.write8(i < strlen(proctype) ? proctype[i] : 0);
+                const char* proctype_str = firmwareProcTypeString;
+                const char* colon = strchr(proctype_str, ':');
+                if (colon && colon[1] == ' ') {
+                    const char* proctype = colon + 2;
+                    int len = strlen(proctype);
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < len ? proctype[i] : 0);
+                    }
+                } else {
+                    // Fallback: use "ESP32" directly
+                    const char* proctype = "ESP32";
+                    for (int i = 0; i < 16; i++) {
+                        buffer.write8(i < strlen(proctype) ? proctype[i] : 0);
+                    }
                 }
             }
             break;

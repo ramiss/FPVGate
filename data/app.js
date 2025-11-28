@@ -105,19 +105,30 @@ class RaceTimer {
     }
     
     initializeUI() {
-        // Initialize threshold slider
-        const thresholdSlider = document.getElementById('thresholdSlider');
-        const thresholdValue = document.getElementById('thresholdValue');
+        // Initialize enter RSSI slider
+        const enterRssiSlider = document.getElementById('enterRssiSlider');
+        const enterRssiValue = document.getElementById('enterRssiValue');
         
-        if (thresholdSlider && thresholdValue) {
-            thresholdSlider.addEventListener('input', (e) => {
-                thresholdValue.textContent = e.target.value;
-                this.updateThresholdLine(e.target.value);
+        if (enterRssiSlider && enterRssiValue) {
+            enterRssiSlider.addEventListener('input', (e) => {
+                enterRssiValue.textContent = e.target.value;
+                this.updateThresholdLines();
             });
-            
-            // Initialize threshold line position
-            this.updateThresholdLine(thresholdSlider.value);
         }
+        
+        // Initialize exit RSSI slider
+        const exitRssiSlider = document.getElementById('exitRssiSlider');
+        const exitRssiValue = document.getElementById('exitRssiValue');
+        
+        if (exitRssiSlider && exitRssiValue) {
+            exitRssiSlider.addEventListener('input', (e) => {
+                exitRssiValue.textContent = e.target.value;
+                this.updateThresholdLines();
+            });
+        }
+        
+        // Initialize threshold line positions
+        this.updateThresholdLines();
     }
     
     connectWebSocket() {
@@ -330,10 +341,10 @@ class RaceTimer {
         if (stopBtn) stopBtn.disabled = !this.raceActive;
     }
     
-    updateThresholdLine(threshold) {
-        // Threshold line is now drawn on canvas in drawGraph()
-        // This function is kept for compatibility but doesn't need to do anything
-        // The canvas reads directly from the slider value
+    updateThresholdLines() {
+        // Threshold lines are drawn on canvas in drawGraph()
+        // This function triggers a redraw when thresholds change
+        // The canvas reads directly from the slider values
     }
     
     drawGraph() {
@@ -362,18 +373,40 @@ class RaceTimer {
             ctx.stroke();
         }
         
-        // Draw threshold line (from slider)
-        const thresholdSlider = document.getElementById('thresholdSlider');
-        const threshold = thresholdSlider ? parseInt(thresholdSlider.value) : 50;
-        const thresholdY = height - (threshold / 255) * height;
+        // Draw enter RSSI threshold line (orange/yellow)
+        const enterRssiSlider = document.getElementById('enterRssiSlider');
+        const enterRssi = enterRssiSlider ? parseInt(enterRssiSlider.value) : 120;
+        const enterRssiY = height - (enterRssi / 255) * height;
         ctx.strokeStyle = 'rgba(255, 170, 0, 0.8)';
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.moveTo(0, thresholdY);
-        ctx.lineTo(width, thresholdY);
+        ctx.moveTo(0, enterRssiY);
+        ctx.lineTo(width, enterRssiY);
         ctx.stroke();
         ctx.setLineDash([]);
+        
+        // Draw exit RSSI threshold line (red/orange)
+        const exitRssiSlider = document.getElementById('exitRssiSlider');
+        const exitRssi = exitRssiSlider ? parseInt(exitRssiSlider.value) : 100;
+        const exitRssiY = height - (exitRssi / 255) * height;
+        ctx.strokeStyle = 'rgba(255, 100, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(0, exitRssiY);
+        ctx.lineTo(width, exitRssiY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw labels for thresholds
+        ctx.fillStyle = 'rgba(255, 170, 0, 0.9)';
+        ctx.font = '10px "Courier New", monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Enter', 5, enterRssiY - 3);
+        
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.9)';
+        ctx.fillText('Exit', 5, exitRssiY - 3);
         
         // Draw RSSI line
         if (this.rssiHistory.length > 1) {
@@ -667,9 +700,24 @@ function updateFrequency() {
 }
 
 function updateThreshold() {
-    const threshold = document.getElementById('threshold').value;
-    raceTimer.sendCommand('set_threshold', { threshold: parseInt(threshold) });
-    raceTimer.updateThresholdLine(threshold);
+    // Legacy function - now uses dual threshold API
+    const enterRssi = document.getElementById('enterRssiSlider')?.value || 120;
+    const exitRssi = document.getElementById('exitRssiSlider')?.value || 100;
+    
+    fetch('/api/set_threshold', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `enter_rssi=${enterRssi}&exit_rssi=${exitRssi}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Thresholds updated:', data);
+    })
+    .catch(error => {
+        console.error('Error updating thresholds:', error);
+    });
 }
 
 // Initialize when page loads

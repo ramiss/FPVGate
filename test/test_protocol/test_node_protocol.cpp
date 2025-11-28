@@ -247,12 +247,16 @@ void test_threshold_value_ranges(void) {
     uint8_t min_threshold = 0;
     uint8_t max_threshold = 255;
     
-    TEST_ASSERT_TRUE(min_threshold <= 100); // Default: 100
-    TEST_ASSERT_TRUE(100 <= max_threshold);
+    // Test default values from config.h
+    TEST_ASSERT_TRUE(ENTER_RSSI >= min_threshold);
+    TEST_ASSERT_TRUE(ENTER_RSSI <= max_threshold);
+    TEST_ASSERT_TRUE(EXIT_RSSI >= min_threshold);
+    TEST_ASSERT_TRUE(EXIT_RSSI <= max_threshold);
+    TEST_ASSERT_TRUE(ENTER_RSSI > EXIT_RSSI);  // Enter should be higher than exit
     
     // Typical values
-    TEST_ASSERT_TRUE(80 <= max_threshold);  // Exit level
-    TEST_ASSERT_TRUE(96 <= max_threshold);  // Enter level
+    TEST_ASSERT_TRUE(EXIT_RSSI <= max_threshold);  // Exit level (default: 100)
+    TEST_ASSERT_TRUE(ENTER_RSSI <= max_threshold);  // Enter level (default: 120)
     
     TEST_MESSAGE("Threshold ranges are valid");
 }

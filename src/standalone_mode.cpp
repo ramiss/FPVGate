@@ -196,11 +196,11 @@ void StandaloneMode::begin(TimingCore* timingCore) {
         _lcdUI->updateBandChannel(band, channel);
         _lcdUI->updateFrequency(_timingCore->getCurrentFrequency());
         
-        // Get and display current threshold from timing core
-        uint8_t current_threshold = _timingCore->getThreshold();
-        Serial.printf("LCD: Displaying threshold: %d (from config: %d)\n", 
-                      current_threshold, CROSSING_THRESHOLD);
-        _lcdUI->updateThreshold(current_threshold);
+        // Get and display current thresholds from timing core
+        uint8_t enter_rssi = _timingCore->getEnterRssi();
+        uint8_t exit_rssi = _timingCore->getExitRssi();
+        Serial.printf("LCD: Displaying thresholds: Enter=%d, Exit=%d\n", enter_rssi, exit_rssi);
+        _lcdUI->updateThreshold(enter_rssi);  // Update with enter threshold for now
         
         // Create LCD UI task
         // ESP32 dual-core: Pin to Core 0 (with WiFi/web, low priority)
@@ -283,8 +283,8 @@ void StandaloneMode::process() {
                 _lcdUI->updateFrequency(_timingCore->getCurrentFrequency());
                 
                 // Update threshold display (should always match config)
-                uint8_t threshold = _timingCore->getThreshold();
-                _lcdUI->updateThreshold(threshold);
+                uint8_t enter_rssi = _timingCore->getEnterRssi();
+                _lcdUI->updateThreshold(enter_rssi);  // Update with enter threshold for now
                 
                 last_settings_update = millis();
             }
@@ -398,12 +398,13 @@ void StandaloneMode::handleRoot() {
 void StandaloneMode::handleGetStatus() {
     uint8_t current_rssi = _timingCore ? _timingCore->getCurrentRSSI() : 0;
     uint16_t frequency = _timingCore ? _timingCore->getState().frequency_mhz : 5800;
-    uint8_t threshold = _timingCore ? _timingCore->getState().threshold : 50;
+    uint8_t enter_rssi = _timingCore ? _timingCore->getEnterRssi() : 120;
+    uint8_t exit_rssi = _timingCore ? _timingCore->getExitRssi() : 100;
     bool crossing = _timingCore ? _timingCore->isCrossing() : false;
     
     // Debug output to see what values we're getting
-    Serial.printf("[API] RSSI: %d, Freq: %d, Threshold: %d, Crossing: %s\n", 
-                  current_rssi, frequency, threshold, crossing ? "true" : "false");
+    Serial.printf("[API] RSSI: %d, Freq: %d, Enter: %d, Exit: %d, Crossing: %s\n", 
+                  current_rssi, frequency, enter_rssi, exit_rssi, crossing ? "true" : "false");
     
     
     String json = "{";
@@ -412,7 +413,9 @@ void StandaloneMode::handleGetStatus() {
     json += "\"uptime\":" + String(millis()) + ",";
     json += "\"rssi\":" + String(current_rssi) + ",";
     json += "\"frequency\":" + String(frequency) + ",";
-    json += "\"threshold\":" + String(threshold) + ",";
+    json += "\"enter_rssi\":" + String(enter_rssi) + ",";
+    json += "\"exit_rssi\":" + String(exit_rssi) + ",";
+    json += "\"threshold\":" + String(enter_rssi) + ",";  // Backward compatibility
     json += "\"crossing\":" + String(crossing ? "true" : "false");
     json += "}";
     
@@ -612,15 +615,38 @@ void StandaloneMode::handleSetFrequency() {
 }
 
 void StandaloneMode::handleSetThreshold() {
-    if (_server.hasArg("threshold")) {
+    // Support both old single threshold and new dual threshold API
+    if (_server.hasArg("enter_rssi") && _server.hasArg("exit_rssi")) {
+        // New dual threshold API
+        int enter_rssi = _server.arg("enter_rssi").toInt();
+        int exit_rssi = _server.arg("exit_rssi").toInt();
+        if (enter_rssi >= 0 && enter_rssi <= 255 && exit_rssi >= 0 && exit_rssi <= 255 && enter_rssi > exit_rssi) {
+            if (_timingCore) {
+                _timingCore->setEnterRssi(enter_rssi);
+                _timingCore->setExitRssi(exit_rssi);
+                saveSettings();  // Save settings to flash
+            }
+            _server.send(200, "application/json", 
+                "{\"status\":\"threshold_set\",\"enter_rssi\":" + String(enter_rssi) + 
+                ",\"exit_rssi\":" + String(exit_rssi) + "}");
+            Serial.printf("Thresholds set: Enter=%d, Exit=%d (saved)\n", enter_rssi, exit_rssi);
+        } else {
+            _server.send(400, "application/json", "{\"error\":\"invalid_threshold\"}");
+        }
+    } else if (_server.hasArg("threshold")) {
+        // Backward compatibility: single threshold API
         int threshold = _server.arg("threshold").toInt();
         if (threshold >= 0 && threshold <= 255) {
             if (_timingCore) {
-                _timingCore->setThreshold(threshold);
+                // Set enter to threshold, exit to 20 below (or threshold if too low)
+                uint8_t enter = threshold;
+                uint8_t exit = (threshold > 20) ? (threshold - 20) : threshold;
+                _timingCore->setEnterRssi(enter);
+                _timingCore->setExitRssi(exit);
                 saveSettings();  // Save settings to flash
             }
             _server.send(200, "application/json", "{\"status\":\"threshold_set\",\"threshold\":" + String(threshold) + "}");
-            Serial.printf("Threshold set to: %d (saved)\n", threshold);
+            Serial.printf("Threshold set to: %d (migrated to Enter=%d, Exit=%d, saved)\n", threshold, enter, exit);
         } else {
             _server.send(400, "application/json", "{\"error\":\"invalid_threshold\"}");
         }
@@ -1078,19 +1104,35 @@ void StandaloneMode::loadSettings() {
     // Load settings
     uint8_t band = prefs.getUChar("band", 0);
     uint8_t channel = prefs.getUChar("channel", 0);
-    uint8_t threshold = prefs.getUChar("threshold", CROSSING_THRESHOLD);
+    
+    // Try to load dual thresholds (new format)
+    uint8_t enter_rssi = prefs.getUChar("enter_rssi", 0);
+    uint8_t exit_rssi = prefs.getUChar("exit_rssi", 0);
+    
+    // If dual thresholds not found, try legacy single threshold
+    if (enter_rssi == 0 && exit_rssi == 0) {
+        uint8_t threshold = prefs.getUChar("threshold", ENTER_RSSI);
+        // Migrate: enter = threshold, exit = threshold - 20 (or threshold if too low)
+        enter_rssi = threshold;
+        exit_rssi = (threshold > 20) ? (threshold - 20) : threshold;
+    }
+    
+    // If still zero, use defaults
+    if (enter_rssi == 0) enter_rssi = ENTER_RSSI;
+    if (exit_rssi == 0) exit_rssi = EXIT_RSSI;
     
     prefs.end();
     
     // Apply loaded settings to timing core
     if (_timingCore) {
         _timingCore->setRX5808Settings(band, channel);
-        _timingCore->setThreshold(threshold);
+        _timingCore->setEnterRssi(enter_rssi);
+        _timingCore->setExitRssi(exit_rssi);
         
         Serial.println("\n=== Loaded Settings from Flash ===");
         Serial.printf("Band: %d, Channel: %d\n", band, channel + 1);
         Serial.printf("Frequency: %d MHz\n", _timingCore->getCurrentFrequency());
-        Serial.printf("Threshold: %d\n", threshold);
+        Serial.printf("Enter RSSI: %d, Exit RSSI: %d\n", enter_rssi, exit_rssi);
         Serial.println("===================================\n");
     }
 }
@@ -1122,7 +1164,8 @@ void StandaloneMode::saveSettings() {
     // Get current settings from timing core
     uint8_t band, channel;
     _timingCore->getRX5808Settings(band, channel);
-    uint8_t threshold = _timingCore->getThreshold();
+    uint8_t enter_rssi = _timingCore->getEnterRssi();
+    uint8_t exit_rssi = _timingCore->getExitRssi();
     
     // Save magic number to indicate settings are valid
     bool magicOk = prefs.putUInt("magic", 0x53464F53);  // "SFOS" in hex
@@ -1135,10 +1178,13 @@ void StandaloneMode::saveSettings() {
     // Save settings
     prefs.putUChar("band", band);
     prefs.putUChar("channel", channel);
-    prefs.putUChar("threshold", threshold);
+    prefs.putUChar("enter_rssi", enter_rssi);
+    prefs.putUChar("exit_rssi", exit_rssi);
+    // Keep legacy threshold for backward compatibility
+    prefs.putUChar("threshold", enter_rssi);
     
     prefs.end();
     
-    Serial.printf("Settings saved to flash: Band=%d, Channel=%d, Threshold=%d\n", 
-                  band, channel, threshold);
+    Serial.printf("Settings saved to flash: Band=%d, Channel=%d, Enter RSSI=%d, Exit RSSI=%d\n", 
+                  band, channel, enter_rssi, exit_rssi);
 }

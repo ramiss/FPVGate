@@ -42,11 +42,25 @@
                 
                 <div class="config-row">
                     <div class="config-item">
-                        <label for="thresholdSlider">RSSI Threshold:</label>
+                        <label for="enterRssiSlider">Enter RSSI (Start Peak):</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="range" id="thresholdSlider" min="20" max="200" value="50" oninput="updateThresholdVisual(this.value)" onchange="updateThresholdServer(this.value)" style="flex: 1;">
-                            <span id="thresholdValue">50</span>
+                            <input type="range" id="enterRssiSlider" min="20" max="255" value="120" oninput="updateEnterRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
+                            <span id="enterRssiValue">120</span>
                         </div>
+                    </div>
+                </div>
+                <div class="config-row">
+                    <div class="config-item">
+                        <label for="exitRssiSlider">Exit RSSI (End Peak):</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="exitRssiSlider" min="20" max="255" value="100" oninput="updateExitRssiVisual(this.value)" onchange="updateThresholdsServer()" style="flex: 1;">
+                            <span id="exitRssiValue">100</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="config-row">
+                    <div class="config-item" style="opacity: 0.7; font-size: 0.9em;">
+                        <label>Note: Enter RSSI should be higher than Exit RSSI</label>
                     </div>
                 </div>
             </div>
@@ -97,26 +111,42 @@
 
     <script src="/app.js?v=5"></script>
     <script>
-        // Initialize threshold from server on page load
-        async function initializeThreshold() {
+        // Initialize thresholds from server on page load
+        async function initializeThresholds() {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
-                if (data.threshold !== undefined) {
-                    const slider = document.getElementById('thresholdSlider');
-                    const value = document.getElementById('thresholdValue');
-                    if (slider && value) {
-                        slider.value = data.threshold;
-                        value.textContent = data.threshold;
-                    }
+                
+                // Load enter RSSI (prefer new API, fallback to old threshold for compatibility)
+                const enterRssi = data.enter_rssi !== undefined ? data.enter_rssi : (data.threshold || 120);
+                const enterSlider = document.getElementById('enterRssiSlider');
+                const enterValue = document.getElementById('enterRssiValue');
+                if (enterSlider && enterValue) {
+                    enterSlider.value = enterRssi;
+                    enterValue.textContent = enterRssi;
+                }
+                
+                // Load exit RSSI (prefer new API, calculate from threshold if needed)
+                const exitRssi = data.exit_rssi !== undefined ? data.exit_rssi : (enterRssi > 20 ? enterRssi - 20 : enterRssi);
+                const exitSlider = document.getElementById('exitRssiSlider');
+                const exitValue = document.getElementById('exitRssiValue');
+                if (exitSlider && exitValue) {
+                    exitSlider.value = exitRssi;
+                    exitValue.textContent = exitRssi;
+                }
+                
+                // Ensure enter > exit
+                if (parseInt(enterSlider.value) <= parseInt(exitSlider.value)) {
+                    exitSlider.value = Math.max(20, parseInt(enterSlider.value) - 20);
+                    exitValue.textContent = exitSlider.value;
                 }
             } catch (error) {
-                console.error('Error loading threshold:', error);
+                console.error('Error loading thresholds:', error);
             }
         }
         
         // Call on page load
-        window.addEventListener('load', initializeThreshold);
+        window.addEventListener('load', initializeThresholds);
         
         function toggleConfig() {
             const content = document.getElementById('configContent');
@@ -125,25 +155,52 @@
             icon.classList.toggle('collapsed');
         }
         
-        function updateThresholdVisual(value) {
-            document.getElementById('thresholdValue').textContent = value;
+        function updateEnterRssiVisual(value) {
+            document.getElementById('enterRssiValue').textContent = value;
+            // Ensure exit is less than enter
+            const exitSlider = document.getElementById('exitRssiSlider');
+            const exitValue = document.getElementById('exitRssiValue');
+            if (exitSlider && exitValue && parseInt(value) <= parseInt(exitSlider.value)) {
+                exitSlider.value = Math.max(20, parseInt(value) - 20);
+                exitValue.textContent = exitSlider.value;
+            }
         }
         
-        function updateThresholdServer(value) {
-            // Update threshold on server
+        function updateExitRssiVisual(value) {
+            document.getElementById('exitRssiValue').textContent = value;
+            // Ensure enter is greater than exit
+            const enterSlider = document.getElementById('enterRssiSlider');
+            const enterValue = document.getElementById('enterRssiValue');
+            if (enterSlider && enterValue && parseInt(value) >= parseInt(enterSlider.value)) {
+                enterSlider.value = Math.min(255, parseInt(value) + 20);
+                enterValue.textContent = enterSlider.value;
+            }
+        }
+        
+        function updateThresholdsServer() {
+            // Update both thresholds on server
+            const enterRssi = document.getElementById('enterRssiSlider').value;
+            const exitRssi = document.getElementById('exitRssiSlider').value;
+            
+            // Validate enter > exit
+            if (parseInt(enterRssi) <= parseInt(exitRssi)) {
+                console.error('Enter RSSI must be greater than Exit RSSI');
+                return;
+            }
+            
             fetch('/api/set_threshold', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: `threshold=${value}`
+                body: `enter_rssi=${enterRssi}&exit_rssi=${exitRssi}`
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Threshold updated:', data);
+                console.log('Thresholds updated:', data);
             })
             .catch(error => {
-                console.error('Error updating threshold:', error);
+                console.error('Error updating thresholds:', error);
             });
         }
         

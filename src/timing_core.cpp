@@ -62,7 +62,8 @@ static void getBandChannelFromFrequency(uint16_t freq, uint8_t& band, uint8_t& c
 TimingCore::TimingCore() {
   // Initialize state
   memset(&state, 0, sizeof(state));
-  state.threshold = CROSSING_THRESHOLD;
+  state.enter_rssi = ENTER_RSSI;
+  state.exit_rssi = EXIT_RSSI;
   state.frequency_mhz = DEFAULT_FREQ;
   state.nadir_rssi = 255;  // Initialize to max value
   state.pass_rssi_nadir = 255;
@@ -71,19 +72,27 @@ TimingCore::TimingCore() {
   
   // Initialize buffers
   memset(lap_buffer, 0, sizeof(lap_buffer));
-  memset(rssi_samples, 0, sizeof(rssi_samples));
   memset(peak_buffer, 0, sizeof(peak_buffer));
   memset(nadir_buffer, 0, sizeof(nadir_buffer));
   
   lap_write_index = 0;
   lap_read_index = 0;
-  sample_index = 0;
-  samples_filled = false;
   debug_enabled = false; // Default to no debug output
   recent_freq_change = false;
   freq_change_time = 0;
   current_band = 0;  // Default to band A
   current_channel = 0;  // Default to channel 1
+  
+  // Initialize Kalman filter with configuration values
+  rssi_filter.setMeasurementNoise(RSSI_FILTER_Q * 0.01f);
+  rssi_filter.setProcessNoise(RSSI_FILTER_R * 0.0001f);
+  
+  // Initialize peak tracking
+  rssi_peak = 0;
+  rssi_peak_time_ms = 0;
+  lap_start_time_ms = 0;
+  race_start_time_ms = 0;
+  min_lap_ms = MIN_LAP_MS;
   
   // Initialize DMA
   adc_handle = nullptr;
@@ -145,11 +154,12 @@ void TimingCore::begin() {
   // Set default frequency
   setRX5808Frequency(state.frequency_mhz);
   
-  // Initialize RSSI filtering with some test readings
-  for (int i = 0; i < RSSI_SAMPLES; i++) {
-    rssi_samples[i] = use_dma ? readRawRSSI_DMA() : readRawRSSI();
+  // Initialize Kalman filter with some test readings to stabilize it
+  for (int i = 0; i < 10; i++) {
+    uint8_t raw_rssi = use_dma ? readRawRSSI_DMA() : readRawRSSI();
+    rssi_filter.filter(raw_rssi, 0);
     if (debug_enabled) {
-      Serial.printf("Initial RSSI sample %d: %d\n", i, rssi_samples[i]);
+      Serial.printf("Initial RSSI sample %d: %d (filtered: %.1f)\n", i, raw_rssi, rssi_filter.lastMeasurement());
     }
   }
   
@@ -221,22 +231,17 @@ void TimingCore::timingTask(void* parameter) {
       if (debug_counter % 1000 == 0 && core->debug_enabled) {
         uint16_t raw_adc = analogRead(g_rssi_input_pin);
         uint16_t clamped = (raw_adc > 2047) ? 2047 : raw_adc;
-        Serial.printf("[TimingTask] Mode: %s, ADC: %d, Clamped: %d, RSSI: %d, Threshold: %d, Crossing: %s, FreqStable: %s\n", 
+        Serial.printf("[TimingTask] Mode: %s, ADC: %d, Clamped: %d, RSSI: %d, Enter: %d, Exit: %d, Crossing: %s, FreqStable: %s\n", 
                       core->use_dma ? "DMA" : "POLLED",
-                      raw_adc, clamped, raw_rssi, core->state.threshold, 
-                      (raw_rssi >= core->state.threshold) ? "YES" : "NO",
+                      raw_adc, clamped, raw_rssi, core->state.enter_rssi, core->state.exit_rssi,
+                      (raw_rssi >= core->state.enter_rssi) ? "YES" : "NO",
                       core->recent_freq_change ? "NO" : "YES");
       }
       
       uint8_t filtered_rssi = core->filterRSSI(raw_rssi);
       core->state.current_rssi = filtered_rssi;
       
-      // Update peak tracking
-      if (filtered_rssi > core->state.peak_rssi) {
-        core->state.peak_rssi = filtered_rssi;
-      }
-      
-      // Update nadir tracking
+      // Update nadir tracking (always track, regardless of crossing state)
       if (filtered_rssi < core->state.nadir_rssi) {
         core->state.nadir_rssi = filtered_rssi;
       }
@@ -247,55 +252,76 @@ void TimingCore::timingTask(void* parameter) {
       // Process extremums for marshal mode history
       core->processExtremums(current_time, filtered_rssi);
       
-      // Detect crossing events
-      bool crossing_detected = core->detectCrossing(filtered_rssi);
+      // Check if minimum lap time has elapsed (prevents peak capture too soon)
+      bool can_capture_peak = true;
+      if (core->min_lap_ms > 0 && core->lap_start_time_ms > 0) {
+        uint32_t time_since_lap_start = current_time - core->lap_start_time_ms;
+        if (time_since_lap_start < core->min_lap_ms) {
+          can_capture_peak = false;
+        }
+      }
+      
+      // Capture peak only when RSSI >= enterRssi and min lap time has elapsed
+      if (can_capture_peak && filtered_rssi >= core->state.enter_rssi) {
+        // Check if RSSI is greater than the previous detected peak
+        if (filtered_rssi > core->rssi_peak) {
+          core->rssi_peak = filtered_rssi;
+          core->rssi_peak_time_ms = current_time;
+          core->state.peak_rssi = filtered_rssi;  // Update state for compatibility
+        }
+      }
+      
+      // Check if peak is captured (RSSI dropped below peak AND below exit threshold)
+      bool peak_captured = (filtered_rssi < core->rssi_peak) && (filtered_rssi < core->state.exit_rssi);
+      
+      // Update crossing state based on whether we're capturing a peak
+      bool was_crossing = core->state.crossing_active;
+      core->state.crossing_active = (can_capture_peak && filtered_rssi >= core->state.enter_rssi);
       
       // Handle crossing state changes
-      if (crossing_detected != core->state.crossing_active) {
-        core->state.crossing_active = crossing_detected;
-        
-        if (crossing_detected) {
+      if (was_crossing != core->state.crossing_active) {
+        if (core->state.crossing_active) {
           // Starting a crossing
           core->state.crossing_start = current_time;
           if (core->debug_enabled) {
             Serial.printf("Crossing started - RSSI: %d\n", filtered_rssi);
           }
         } else {
-          // Ending a crossing - check if enough time has passed since last lap
-          uint32_t time_since_last_lap = current_time - core->state.last_lap_time;
-          uint32_t crossing_duration = current_time - core->state.crossing_start;
-          
-          // Require both minimum crossing duration AND minimum time between laps
-          if (crossing_duration > 100 && time_since_last_lap >= MIN_LAP_TIME_MS) {
-            // Valid lap - record it
-            core->recordLap(current_time, core->state.peak_rssi);
-            // Reset pass nadir after crossing ends
-            core->state.pass_rssi_nadir = 255;
-            
-            if (core->debug_enabled) {
-              Serial.printf("Lap recorded - Duration: %dms, Time since last: %dms\n", 
-                           crossing_duration, time_since_last_lap);
-            }
-          } else {
-            // Lap rejected - too soon after last lap or too short
-            if (core->debug_enabled) {
-              if (time_since_last_lap < MIN_LAP_TIME_MS) {
-                Serial.printf("Lap rejected - Too soon (only %dms since last lap, need %dms)\n", 
-                             time_since_last_lap, MIN_LAP_TIME_MS);
-              } else {
-                Serial.printf("Lap rejected - Crossing too short (%dms)\n", crossing_duration);
-              }
-            }
-          }
-          
+          // Ending a crossing
           if (core->debug_enabled) {
-            Serial.printf("Crossing ended - Duration: %dms\n", crossing_duration);
+            Serial.printf("Crossing ended - RSSI: %d\n", filtered_rssi);
           }
         }
         
         // Notify callback if registered  
         if (core->crossing_callback) {
           core->crossing_callback(core->state.crossing_active, filtered_rssi);
+        }
+      }
+      
+      // Check if lap should be recorded (peak captured and enough time since last lap)
+      if (peak_captured && core->rssi_peak > 0) {
+        uint32_t time_since_last_lap = (core->state.last_lap_time > 0) ? 
+                                       (current_time - core->state.last_lap_time) : 
+                                       UINT32_MAX;
+        
+        // Require minimum time between laps
+        if (time_since_last_lap >= MIN_LAP_TIME_MS) {
+          // Valid lap - record it using peak timestamp
+          core->recordLap(core->rssi_peak_time_ms, core->rssi_peak);
+          // Reset pass nadir after lap recorded
+          core->state.pass_rssi_nadir = 255;
+          
+          if (core->debug_enabled) {
+            Serial.printf("Lap recorded - Peak RSSI: %d, Time since last: %dms\n", 
+                         core->rssi_peak, time_since_last_lap);
+          }
+        } else {
+          // Lap rejected - too soon after last lap
+          if (core->debug_enabled) {
+            Serial.printf("Lap rejected - Too soon (only %dms since last lap, need %dms)\n", 
+                         time_since_last_lap, MIN_LAP_TIME_MS);
+          }
         }
       }
       
@@ -366,36 +392,34 @@ uint8_t TimingCore::readRawRSSI() {
 }
 
 uint8_t TimingCore::filterRSSI(uint8_t raw_rssi) {
-  // Simple moving average filter
-  rssi_samples[sample_index] = raw_rssi;
-  sample_index = (sample_index + 1) % RSSI_SAMPLES;
-  
-  if (!samples_filled && sample_index == 0) {
-    samples_filled = true;
-  }
-  
-  // Calculate average
-  uint32_t sum = 0;
-  uint8_t count = samples_filled ? RSSI_SAMPLES : sample_index;
-  
-  for (uint8_t i = 0; i < count; i++) {
-    sum += rssi_samples[i];
-  }
-  
-  return (count > 0) ? (sum / count) : raw_rssi;
+  // Kalman filter for RSSI smoothing
+  float filtered = rssi_filter.filter(raw_rssi, 0);
+  return (uint8_t)round(filtered);
 }
 
 bool TimingCore::detectCrossing(uint8_t filtered_rssi) {
-  // Simple threshold-based crossing detection
-  return filtered_rssi >= state.threshold;
+  // Dual threshold-based crossing detection
+  // Crossing is active when RSSI >= enter threshold
+  return filtered_rssi >= state.enter_rssi;
 }
 
 void TimingCore::recordLap(uint32_t timestamp, uint8_t peak_rssi) {
   LapData& lap = lap_buffer[lap_write_index];
   
+  // Use peak timestamp for lap timing
   lap.timestamp_ms = timestamp;
-  lap.lap_time_ms = (state.last_lap_time > 0) ? 
-                   (timestamp - state.last_lap_time) : 0;
+  
+  // Calculate lap time: first lap uses race start time, others use previous lap start time
+  if (state.lap_count == 0) {
+    // First lap - use race start time
+    lap.lap_time_ms = (race_start_time_ms > 0) ? 
+                     (timestamp - race_start_time_ms) : 0;
+  } else {
+    // Subsequent laps - use previous lap start time
+    lap.lap_time_ms = (lap_start_time_ms > 0) ? 
+                     (timestamp - lap_start_time_ms) : 0;
+  }
+  
   lap.rssi_peak = peak_rssi;
   lap.pilot_id = 0; // Single pilot for now
   lap.valid = true;
@@ -403,11 +427,14 @@ void TimingCore::recordLap(uint32_t timestamp, uint8_t peak_rssi) {
   // Update state
   state.last_lap_time = timestamp;
   state.lap_count++;
+  lap_start_time_ms = timestamp;  // Update lap start time for next lap
   
   // Advance write index
   lap_write_index = (lap_write_index + 1) % MAX_LAPS_STORED;
   
-  // Reset peak tracking
+  // Reset peak tracking for next lap
+  rssi_peak = 0;
+  rssi_peak_time_ms = 0;
   state.peak_rssi = 0;
   
         // Debug output disabled to avoid interfering with serial protocol
@@ -800,10 +827,33 @@ void TimingCore::setFrequency(uint16_t freq_mhz) {
   }
 }
 
-void TimingCore::setThreshold(uint8_t threshold) {
+void TimingCore::setEnterRssi(uint8_t enter_rssi) {
   if (xSemaphoreTake(timing_mutex, portMAX_DELAY)) {
-    state.threshold = threshold;
-    // Threshold set
+    state.enter_rssi = enter_rssi;
+    xSemaphoreGive(timing_mutex);
+  }
+}
+
+void TimingCore::setExitRssi(uint8_t exit_rssi) {
+  if (xSemaphoreTake(timing_mutex, portMAX_DELAY)) {
+    state.exit_rssi = exit_rssi;
+    xSemaphoreGive(timing_mutex);
+  }
+}
+
+void TimingCore::setThreshold(uint8_t threshold) {
+  // DEPRECATED: For backward compatibility, set both thresholds
+  // Set enter threshold to provided value, exit to 20 below
+  if (xSemaphoreTake(timing_mutex, portMAX_DELAY)) {
+    state.enter_rssi = threshold;
+    state.exit_rssi = (threshold > 20) ? (threshold - 20) : threshold;
+    xSemaphoreGive(timing_mutex);
+  }
+}
+
+void TimingCore::setMinLapMs(uint32_t min_lap_ms) {
+  if (xSemaphoreTake(timing_mutex, portMAX_DELAY)) {
+    this->min_lap_ms = min_lap_ms;
     xSemaphoreGive(timing_mutex);
   }
 }
@@ -811,6 +861,10 @@ void TimingCore::setThreshold(uint8_t threshold) {
 void TimingCore::setActivated(bool active) {
   if (xSemaphoreTake(timing_mutex, portMAX_DELAY)) {
     state.activated = active;
+    if (active && race_start_time_ms == 0) {
+      // Set race start time when first activated
+      race_start_time_ms = millis();
+    }
     // Timing activated/deactivated
     xSemaphoreGive(timing_mutex);
   }
@@ -826,6 +880,12 @@ void TimingCore::reset() {
     state.crossing_active = false;
     state.last_rssi = 0;
     state.rssi_change = 0;
+    
+    // Reset peak tracking
+    rssi_peak = 0;
+    rssi_peak_time_ms = 0;
+    lap_start_time_ms = 0;
+    race_start_time_ms = 0;
     
     // Clear lap buffer
     memset(lap_buffer, 0, sizeof(lap_buffer));
@@ -1020,8 +1080,21 @@ void TimingCore::setRX5808Settings(uint8_t band, uint8_t channel) {
 }
 
 // Configuration getters
+uint8_t TimingCore::getEnterRssi() const {
+  return state.enter_rssi;
+}
+
+uint8_t TimingCore::getExitRssi() const {
+  return state.exit_rssi;
+}
+
 uint8_t TimingCore::getThreshold() const {
-  return state.threshold;
+  // DEPRECATED: Returns enter_rssi for backward compatibility
+  return state.enter_rssi;
+}
+
+uint32_t TimingCore::getMinLapMs() const {
+  return min_lap_ms;
 }
 
 uint16_t TimingCore::getCurrentFrequency() const {

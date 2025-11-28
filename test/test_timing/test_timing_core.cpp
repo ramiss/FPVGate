@@ -41,28 +41,54 @@ void test_timing_core_init(void) {
     TimingState state = timing->getState();
     TEST_ASSERT_EQUAL(0, state.lap_count);
     TEST_ASSERT_EQUAL(false, state.crossing_active);
-    TEST_ASSERT_EQUAL(CROSSING_THRESHOLD, state.threshold);
+    TEST_ASSERT_EQUAL(ENTER_RSSI, state.enter_rssi);
+    TEST_ASSERT_EQUAL(EXIT_RSSI, state.exit_rssi);
     
     TEST_MESSAGE("TimingCore initialized successfully");
 }
 
 /**
- * Test: Set and get threshold
+ * Test: Set and get threshold (backward compatibility)
  */
 void test_threshold_set_get(void) {
     timing->begin();
     
-    // Test valid threshold values
+    // Test backward compatibility with single threshold API
     timing->setThreshold(50);
-    TEST_ASSERT_EQUAL(50, timing->getThreshold());
+    TEST_ASSERT_EQUAL(50, timing->getThreshold());  // Returns enter_rssi
+    TEST_ASSERT_EQUAL(50, timing->getEnterRssi());
+    TEST_ASSERT_EQUAL(30, timing->getExitRssi());  // Should be 20 below (50-20=30)
     
     timing->setThreshold(150);
     TEST_ASSERT_EQUAL(150, timing->getThreshold());
+    TEST_ASSERT_EQUAL(150, timing->getEnterRssi());
+    TEST_ASSERT_EQUAL(130, timing->getExitRssi());  // Should be 20 below
     
-    timing->setThreshold(255);
-    TEST_ASSERT_EQUAL(255, timing->getThreshold());
+    TEST_MESSAGE("Threshold set/get (backward compatibility) working correctly");
+}
+
+/**
+ * Test: Set and get dual thresholds
+ */
+void test_dual_threshold_set_get(void) {
+    timing->begin();
     
-    TEST_MESSAGE("Threshold set/get working correctly");
+    // Test dual threshold API
+    timing->setEnterRssi(120);
+    timing->setExitRssi(100);
+    TEST_ASSERT_EQUAL(120, timing->getEnterRssi());
+    TEST_ASSERT_EQUAL(100, timing->getExitRssi());
+    TEST_ASSERT_EQUAL(120, timing->getThreshold());  // Backward compat returns enter_rssi
+    
+    timing->setEnterRssi(150);
+    timing->setExitRssi(130);
+    TEST_ASSERT_EQUAL(150, timing->getEnterRssi());
+    TEST_ASSERT_EQUAL(130, timing->getExitRssi());
+    
+    // Verify enter > exit (should be enforced by application logic)
+    TEST_ASSERT_TRUE(timing->getEnterRssi() > timing->getExitRssi());
+    
+    TEST_MESSAGE("Dual threshold set/get working correctly");
 }
 
 /**
@@ -270,6 +296,28 @@ void test_debug_mode(void) {
 }
 
 /**
+ * Test: Min lap time configuration
+ */
+void test_min_lap_ms(void) {
+    timing->begin();
+    
+    // Test default value
+    TEST_ASSERT_EQUAL(MIN_LAP_MS, timing->getMinLapMs());
+    
+    // Test setting min lap time
+    timing->setMinLapMs(5000);
+    TEST_ASSERT_EQUAL(5000, timing->getMinLapMs());
+    
+    timing->setMinLapMs(0);  // Disable
+    TEST_ASSERT_EQUAL(0, timing->getMinLapMs());
+    
+    timing->setMinLapMs(10000);
+    TEST_ASSERT_EQUAL(10000, timing->getMinLapMs());
+    
+    TEST_MESSAGE("Min lap time configuration working correctly");
+}
+
+/**
  * Test: Process function execution
  */
 void test_process_execution(void) {
@@ -358,7 +406,9 @@ void test_rapid_config_changes(void) {
     
     // Rapidly change configuration
     for (int i = 0; i < 50; i++) {
-        timing->setThreshold(50 + (i % 100));
+        // Test dual threshold API
+        timing->setEnterRssi(100 + (i % 100));
+        timing->setExitRssi(80 + (i % 80));
         timing->setFrequency(5740 + (i % 200));
         timing->setActivated(i % 2 == 0);
         delay(10);
@@ -382,6 +432,7 @@ void setup() {
     // Basic initialization tests
     RUN_TEST(test_timing_core_init);
     RUN_TEST(test_threshold_set_get);
+    RUN_TEST(test_dual_threshold_set_get);
     RUN_TEST(test_frequency_set_get);
     RUN_TEST(test_activation_state);
     
@@ -395,6 +446,7 @@ void setup() {
     RUN_TEST(test_state_reset);
     RUN_TEST(test_lap_buffer);
     RUN_TEST(test_debug_mode);
+    RUN_TEST(test_min_lap_ms);
     
     // RX5808 control tests
     RUN_TEST(test_frequency_bounds);

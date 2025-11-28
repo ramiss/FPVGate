@@ -93,9 +93,15 @@
 
 // Timing configuration
 #define TIMING_INTERVAL_MS  1     // Core timing loop interval
-#define RSSI_SAMPLES        10    // Number of RSSI samples to average (50ms smoothing window)
-#define CROSSING_THRESHOLD  100    // Default RSSI threshold for crossing detection
+#define RSSI_SAMPLES        10    // Number of RSSI samples to average (50ms smoothing window) - DEPRECATED: Using Kalman filter instead
+#define ENTER_RSSI          120   // Default RSSI threshold to start capturing peak (enter threshold)
+#define EXIT_RSSI           100   // Default RSSI threshold to detect lap completion (exit threshold)
+#define MIN_LAP_MS          0     // Minimum lap time in milliseconds (0 = disabled, prevents peak capture until elapsed)
 #define MIN_LAP_TIME_MS     3000  // Minimum time between laps (3 seconds) - prevents false laps from threshold bouncing
+
+// Kalman filter configuration for RSSI filtering
+#define RSSI_FILTER_Q       2000  // Measurement noise (scaled by 0.01 = 20.0)
+#define RSSI_FILTER_R       40    // Process noise (scaled by 0.0001 = 0.004)
 
 // FreeRTOS task priorities
 // Note: ESP32-D0WD (dual core) can run timing + web server concurrently

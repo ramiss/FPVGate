@@ -5,6 +5,7 @@
 #include <cstdint>
 #include "config.h"
 #include "esp_adc/adc_continuous.h"
+#include "kalman.h"
 
 // Structure to hold lap data
 struct LapData {
@@ -30,7 +31,8 @@ struct TimingState {
   uint8_t current_rssi;     // Current filtered RSSI value
   uint8_t peak_rssi;        // Peak RSSI since last reset
   uint8_t nadir_rssi;       // Lowest RSSI since last reset
-  uint8_t threshold;        // Current crossing threshold
+  uint8_t enter_rssi;       // Enter threshold (start capturing peak)
+  uint8_t exit_rssi;        // Exit threshold (detect lap completion)
   bool crossing_active;     // Whether we're currently in a crossing
   uint32_t crossing_start;  // When current crossing started
   uint32_t last_lap_time;   // Timestamp of last lap
@@ -56,10 +58,15 @@ private:
   bool use_dma;
   uint8_t* dma_result_buffer;
   
-  // RSSI filtering
-  uint16_t rssi_samples[RSSI_SAMPLES];
-  uint8_t sample_index;
-  bool samples_filled;
+  // RSSI filtering - Kalman filter
+  KalmanFilter rssi_filter;
+  
+  // Peak tracking
+  uint8_t rssi_peak;           // Current peak RSSI value
+  uint32_t rssi_peak_time_ms;  // Timestamp when peak occurred
+  uint32_t lap_start_time_ms;  // Timestamp when current lap started
+  uint32_t race_start_time_ms; // Timestamp when race started
+  uint32_t min_lap_ms;         // Minimum lap time configuration
   
   // Extremum tracking (circular buffers for marshal mode)
   Extremum peak_buffer[EXTREMUM_BUFFER_SIZE];
@@ -127,13 +134,19 @@ public:
   
   // Configuration
   void setFrequency(uint16_t freq_mhz);
-  void setThreshold(uint8_t threshold);
+  void setEnterRssi(uint8_t enter_rssi);
+  void setExitRssi(uint8_t exit_rssi);
+  void setThreshold(uint8_t threshold);  // DEPRECATED: Use setEnterRssi/setExitRssi instead
+  void setMinLapMs(uint32_t min_lap_ms);
   void setActivated(bool active);
   void setDebugMode(bool debug_enabled);
   void setRX5808Settings(uint8_t band, uint8_t channel);
   
   // Configuration getters
-  uint8_t getThreshold() const;
+  uint8_t getEnterRssi() const;
+  uint8_t getExitRssi() const;
+  uint8_t getThreshold() const;  // DEPRECATED: Returns enter_rssi for compatibility
+  uint32_t getMinLapMs() const;
   uint16_t getCurrentFrequency() const;
   void getRX5808Settings(uint8_t& band, uint8_t& channel) const;
   
