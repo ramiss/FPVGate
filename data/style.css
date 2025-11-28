@@ -471,6 +471,17 @@ table tr:nth-child(even) {
   background-color: var(--table-even-bg);
 }
 
+table tr.fastest-lap {
+  background-color: #f39c12 !important;  /* Gold/orange for fastest lap */
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 0 8px rgba(243, 156, 18, 0.5);
+}
+
+table tr.fastest-lap td {
+  border-color: #e67e22;
+}
+
 #timer {
   font-size: 24px;
   font-weight: bold;

@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="logo-white.svg" id="favicon" />
     <link rel="stylesheet" type="text/css" href="style.css" />
     <script src="jquery-3.7.1.min.js"></script>
-    <script src="articulate.min.js"></script>
+    <script src="audio-announcer.js"></script>
     <script src="smoothie.js"></script>
   </head>
 
@@ -61,6 +61,31 @@
               <option value="2lap">2 Consecutive Laps Time</option>
               <option value="3lap">3 Consecutive Laps Time</option>
             </select>
+          </div>
+
+          <div class="config-item">
+            <label for="lapFormatSelect">Lap Announcement Format:</label>
+            <select id="lapFormatSelect" onchange="saveLapFormat()">
+              <option value="full" selected>Pilot + Lap + Time</option>
+              <option value="laptime">Lap + Time</option>
+              <option value="timeonly">Time Only</option>
+            </select>
+          </div>
+          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+            Examples: "Louis Lap 5, 12.34" / "Lap 5, 12.34" / "12.34"
+          </div>
+
+          <div class="config-item">
+            <label for="voiceSelect">Voice:</label>
+            <select id="voiceSelect" onchange="saveVoiceSelection()">
+              <option value="default" selected>ElevenLabs (Sarah - Energetic)</option>
+              <option value="rachel">ElevenLabs (Rachel - Calm)</option>
+              <option value="adam">ElevenLabs (Adam - Deep Male)</option>
+              <option value="antoni">ElevenLabs (Antoni - Male)</option>
+            </select>
+          </div>
+          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+            Note: Voice change requires regenerating audio files
           </div>
 
           <div class="config-item">
@@ -252,8 +277,8 @@
           <tr>
             <th>Lap No</th>
             <th>Lap Time</th>
-            <th>2 Lap Time</th>
-            <th>3 Lap Time</th>
+            <th>Gap</th>
+            <th>Total Time</th>
           </tr>
         </table>
         
@@ -265,15 +290,21 @@
             <div class="stat-box">
               <div class="stat-label">Fastest Lap</div>
               <div class="stat-value" id="statFastest">--</div>
+              <div class="stat-sublabel" id="statFastestLapNo"></div>
             </div>
             <div class="stat-box">
-              <div class="stat-label">Median Lap</div>
-              <div class="stat-value" id="statMedian">--</div>
+              <div class="stat-label">Fastest 3 Consecutive</div>
+              <div class="stat-value" id="statFastest3Consec">--</div>
+              <div class="stat-sublabel" id="statFastest3ConsecLaps"></div>
             </div>
             <div class="stat-box">
               <div class="stat-label">Best 3 Laps</div>
               <div class="stat-value" id="statBest3">--</div>
               <div class="stat-sublabel" id="statBest3Laps"></div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Median Lap</div>
+              <div class="stat-value" id="statMedian">--</div>
             </div>
           </div>
           

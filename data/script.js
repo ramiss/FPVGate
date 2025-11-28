@@ -59,6 +59,11 @@ var minRssiValue = exitRssi - 10;
 
 var audioEnabled = false;
 var speakObjsQueue = [];
+var lapFormat = 'full'; // 'full', 'laptime', 'timeonly'
+var selectedVoice = 'default';
+
+// Initialize hybrid audio announcer
+const audioAnnouncer = new AudioAnnouncer();
 
 onload = function (e) {
   // Load dark mode preference
@@ -118,6 +123,16 @@ onload = function (e) {
         colorSelect.addEventListener('change', updateColorPreview);
         updateColorPreview();
       }
+      
+      // Load lap format and voice selection from localStorage
+      const savedLapFormat = localStorage.getItem('lapFormat') || 'full';
+      const savedVoice = localStorage.getItem('selectedVoice') || 'default';
+      lapFormat = savedLapFormat;
+      selectedVoice = savedVoice;
+      const lapFormatSelect = document.getElementById('lapFormatSelect');
+      const voiceSelect = document.getElementById('voiceSelect');
+      if (lapFormatSelect) lapFormatSelect.value = lapFormat;
+      if (voiceSelect) voiceSelect.value = selectedVoice;
     });
 };
 
@@ -359,6 +374,7 @@ if (batteryToggle) {
 function updateAnnouncerRate(obj, value) {
   announcerRate = parseFloat(value);
   $(obj).parent().find("span").text(announcerRate.toFixed(1));
+  audioAnnouncer.setRate(announcerRate);
   // Auto-save when changed
   autoSaveConfig();
 }
@@ -420,30 +436,44 @@ function addLap(lapStr) {
   // Use phonetic name for TTS if available, otherwise use regular pilot name
   const phoneticInput = document.getElementById('pphonetic');
   const pilotName = (phoneticInput && phoneticInput.value) ? phoneticInput.value : pilotNameInput.value;
-  var last2lapStr = "";
-  var last3lapStr = "";
+  
   const newLap = parseFloat(lapStr);
   lapNo += 1;
+  lapTimes.push(newLap);
+  
+  // Calculate total time so far
+  const totalTime = lapTimes.reduce((sum, time) => sum + time, 0).toFixed(2);
+  
+  // Calculate gap from previous lap (for regular laps only, not gate 1)
+  let gap = "";
+  if (lapNo > 1) {
+    gap = (newLap - lapTimes[lapTimes.length - 2]).toFixed(2);
+    if (gap > 0) gap = "+" + gap;
+  }
+  
   const table = document.getElementById("lapTable");
   const row = table.insertRow();
-  const cell1 = row.insertCell(0);
-  const cell2 = row.insertCell(1);
-  const cell3 = row.insertCell(2);
-  const cell4 = row.insertCell(3);
+  row.setAttribute('data-lap-index', lapTimes.length - 1);
+  
+  const cell1 = row.insertCell(0);  // Lap No
+  const cell2 = row.insertCell(1);  // Lap Time
+  const cell3 = row.insertCell(2);  // Gap
+  const cell4 = row.insertCell(3);  // Total Time
+  
   cell1.innerHTML = lapNo;
+  
   if (lapNo == 0) {
-    cell2.innerHTML = "Hole Shot: " + lapStr + "s";
+    cell2.innerHTML = "Gate 1: " + lapStr + "s";
+    cell3.innerHTML = "-";
   } else {
     cell2.innerHTML = lapStr + "s";
+    cell3.innerHTML = gap ? gap + "s" : "-";
   }
-  if (lapTimes.length >= 2 && lapNo != 0) {
-    last2lapStr = (newLap + lapTimes[lapTimes.length - 1]).toFixed(2);
-    cell3.innerHTML = last2lapStr + "s";
-  }
-  if (lapTimes.length >= 3 && lapNo != 0) {
-    last3lapStr = (newLap + lapTimes[lapTimes.length - 2] + lapTimes[lapTimes.length - 1]).toFixed(2);
-    cell4.innerHTML = last3lapStr + "s";
-  }
+  
+  cell4.innerHTML = totalTime + "s";
+  
+  // Highlight fastest lap
+  highlightFastestLap();
 
   switch (announcerSelect.options[announcerSelect.selectedIndex].value) {
     case "beep":
@@ -451,16 +481,28 @@ function addLap(lapStr) {
       break;
     case "1lap":
       if (lapNo == 0) {
-        queueSpeak(`<p>Hole Shot ${lapStr}<p>`);
+        queueSpeak(`<p>Gate 1 ${lapStr}<p>`);
       } else {
-        const lapNoStr = pilotName + " Lap " + lapNo + ", ";
-        const text = "<p>" + lapNoStr + lapStr + "</p>";
+        let text;
+        switch (lapFormat) {
+          case 'full':
+            text = `<p>${pilotName} Lap ${lapNo}, ${lapStr}</p>`;
+            break;
+          case 'laptime':
+            text = `<p>Lap ${lapNo}, ${lapStr}</p>`;
+            break;
+          case 'timeonly':
+            text = `<p>${lapStr}</p>`;
+            break;
+          default:
+            text = `<p>${pilotName} Lap ${lapNo}, ${lapStr}</p>`;
+        }
         queueSpeak(text);
       }
       break;
     case "2lap":
       if (lapNo == 0) {
-        queueSpeak(`<p>Hole Shot ${lapStr}<p>`);
+        queueSpeak(`<p>Gate 1 ${lapStr}<p>`);
       } else if (last2lapStr != "") {
         const text2 = "<p>" + pilotName + " 2 laps " + last2lapStr + "</p>";
         queueSpeak(text2);
@@ -468,7 +510,7 @@ function addLap(lapStr) {
       break;
     case "3lap":
       if (lapNo == 0) {
-        queueSpeak(`<p>Hole Shot ${lapStr}<p>`);
+        queueSpeak(`<p>Gate 1 ${lapStr}<p>`);
       } else if (last3lapStr != "") {
         const text3 = "<p>" + pilotName + " 3 laps " + last3lapStr + "</p>";
         queueSpeak(text3);
@@ -477,7 +519,6 @@ function addLap(lapStr) {
     default:
       break;
   }
-  lapTimes.push(newLap);
   
   // Update lap counter
   updateLapCounter();
@@ -537,7 +578,27 @@ function queueSpeak(obj) {
   if (!audioEnabled) {
     return;
   }
-  speakObjsQueue.push(obj);
+  audioAnnouncer.queueSpeak(obj);
+}
+
+function saveLapFormat() {
+  const lapFormatSelect = document.getElementById('lapFormatSelect');
+  if (lapFormatSelect) {
+    lapFormat = lapFormatSelect.value;
+    localStorage.setItem('lapFormat', lapFormat);
+    console.log('Lap format saved:', lapFormat);
+  }
+}
+
+function saveVoiceSelection() {
+  const voiceSelect = document.getElementById('voiceSelect');
+  if (voiceSelect) {
+    selectedVoice = voiceSelect.value;
+    localStorage.setItem('selectedVoice', selectedVoice);
+    console.log('Voice selection saved:', selectedVoice);
+    // Show reminder to regenerate audio files
+    alert('Voice changed to ' + voiceSelect.options[voiceSelect.selectedIndex].text + '\n\nTo use this voice, you need to regenerate audio files with the generate_voice_files.py script.');
+  }
 }
 
 function updateVoiceButtons() {
@@ -559,21 +620,13 @@ function updateVoiceButtons() {
 
 async function enableAudioLoop() {
   audioEnabled = true;
+  audioAnnouncer.enable();
   updateVoiceButtons();
-  while(audioEnabled) {
-    if (speakObjsQueue.length > 0) {
-      let isSpeakingFlag = $().articulate('isSpeaking');
-      if (!isSpeakingFlag) {
-        let obj = speakObjsQueue.shift();
-        doSpeak(obj);
-      }
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
 }
 
 function disableAudioLoop() {
   audioEnabled = false;
+  audioAnnouncer.disable();
   updateVoiceButtons();
 }
 
@@ -599,14 +652,15 @@ function generateAudio() {
   }
 
   const pilotName = pilotNameInput.value;
-  queueSpeak('<div>testing sound for pilot ' + pilotName + '</div>');
+  const phoneticName = document.getElementById('pphonetic')?.value || pilotName;
+  queueSpeak(`<div>Testing sound for pilot ${phoneticName}</div>`);
   for (let i = 1; i <= 3; i++) {
     queueSpeak('<div>' + i + '</div>')
   }
 }
 
 function doSpeak(obj) {
-  $(obj).articulate("rate", announcerRate).articulate('speak');
+  audioAnnouncer.queueSpeak(obj);
 }
 
 function updateLapCounter() {
@@ -617,25 +671,58 @@ function updateLapCounter() {
   }
 }
 
+function highlightFastestLap() {
+  if (lapTimes.length === 0) return;
+  
+  // Find fastest lap (excluding gate 1 at index 0)
+  let fastestTime = Infinity;
+  let fastestIndex = -1;
+  
+  for (let i = 1; i < lapTimes.length; i++) {  // Start from 1 to skip gate 1
+    if (lapTimes[i] < fastestTime) {
+      fastestTime = lapTimes[i];
+      fastestIndex = i;
+    }
+  }
+  
+  // Remove highlight from all rows
+  const table = document.getElementById("lapTable");
+  for (let i = 1; i < table.rows.length; i++) {
+    table.rows[i].classList.remove('fastest-lap');
+  }
+  
+  // Add highlight to fastest lap row
+  if (fastestIndex >= 0) {
+    for (let i = 1; i < table.rows.length; i++) {
+      const row = table.rows[i];
+      const lapIndex = parseInt(row.getAttribute('data-lap-index'));
+      if (lapIndex === fastestIndex) {
+        row.classList.add('fastest-lap');
+        break;
+      }
+    }
+  }
+}
+
 async function startRace() {
   updateLapCounter();
   startRaceButton.disabled = true;
   startRaceButton.classList.add('active');
-  // Calculate time taken to say starting phrase
-  const baseWordsPerMinute = 150;
-  let baseWordsPerSecond = baseWordsPerMinute / 60;
-  let wordsPerSecond = baseWordsPerSecond * announcerRate;
-  // 3 words in "Arm your quad"
-  let timeToSpeak1 = 3 / wordsPerSecond * 1000; 
+  
+  // Queue both announcements
   queueSpeak("<p>Arm your quad</p>");
-  await new Promise((r) => setTimeout(r, timeToSpeak1));
-  // 8 words in "Starting on the tone in less than five"
-  let timeToSpeak2 = 8 / wordsPerSecond * 1000; 
   queueSpeak("<p>Starting on the tone in less than five</p>");
-  // Random start time between 1 and 5 seconds
-  // Accounts for time taken to make previous announcement
-  let delayTime = (Math.random() * (5000 - 1000)) + timeToSpeak2;
+  
+  // Wait for announcements to finish playing
+  while (audioAnnouncer.isSpeaking() || audioAnnouncer.audioQueue.length > 0) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  
+  // Add random delay between 1-5 seconds after announcements complete
+  let delayTime = Math.random() * (5000 - 1000) + 1000;
   await new Promise((r) => setTimeout(r, delayTime));
+  
+  // Play start beep and begin race
   beep(1, 1, "square"); // needed for some reason to make sure we fire the first beep
   beep(500, 880, "square");
   startTimer();
@@ -645,6 +732,10 @@ async function startRace() {
 }
 
 function stopRace() {
+  // Clear any queued audio to prevent race start sounds
+  if (audioAnnouncer) {
+    audioAnnouncer.clearQueue();
+  }
   queueSpeak('<p>Race stopped</p>');
   clearInterval(timerInterval);
   timer.innerHTML = "00:00:00s";
@@ -692,6 +783,9 @@ function clearLaps() {
   document.getElementById('analysisContent').innerHTML = 
     '<p class="no-data">Complete at least 1 lap to see analysis</p>';
   document.getElementById('statFastest').textContent = '--';
+  document.getElementById('statFastestLapNo').textContent = '';
+  document.getElementById('statFastest3Consec').textContent = '--';
+  document.getElementById('statFastest3ConsecLaps').textContent = '';
   document.getElementById('statMedian').textContent = '--';
   document.getElementById('statBest3').textContent = '--';
   document.getElementById('statBest3Laps').textContent = '';
@@ -862,6 +956,9 @@ function updateAnalysisView() {
 function updateStatsBoxes() {
   if (lapTimes.length === 0) {
     document.getElementById('statFastest').textContent = '--';
+    document.getElementById('statFastestLapNo').textContent = '';
+    document.getElementById('statFastest3Consec').textContent = '--';
+    document.getElementById('statFastest3ConsecLaps').textContent = '';
     document.getElementById('statMedian').textContent = '--';
     document.getElementById('statBest3').textContent = '--';
     document.getElementById('statBest3Laps').textContent = '';
@@ -872,6 +969,31 @@ function updateStatsBoxes() {
   const fastest = Math.min(...lapTimes);
   const fastestIndex = lapTimes.indexOf(fastest);
   document.getElementById('statFastest').textContent = `${fastest.toFixed(2)}s`;
+  document.getElementById('statFastestLapNo').textContent = fastestIndex === 0 ? 'Gate 1' : `Lap ${fastestIndex}`;
+  
+  // Fastest 3 Consecutive Laps (for RaceGOW format)
+  if (lapTimes.length >= 3) {
+    let fastestConsecTime = Infinity;
+    let fastestConsecStart = -1;
+    
+    // Check all consecutive 3-lap windows
+    for (let i = 0; i <= lapTimes.length - 3; i++) {
+      const consecTime = lapTimes[i] + lapTimes[i + 1] + lapTimes[i + 2];
+      if (consecTime < fastestConsecTime) {
+        fastestConsecTime = consecTime;
+        fastestConsecStart = i;
+      }
+    }
+    
+    document.getElementById('statFastest3Consec').textContent = `${fastestConsecTime.toFixed(2)}s`;
+    const lapNums = [fastestConsecStart, fastestConsecStart + 1, fastestConsecStart + 2]
+      .map(idx => idx === 0 ? 'G1' : `L${idx}`)
+      .join('-');
+    document.getElementById('statFastest3ConsecLaps').textContent = lapNums;
+  } else {
+    document.getElementById('statFastest3Consec').textContent = '--';
+    document.getElementById('statFastest3ConsecLaps').textContent = 'Need 3 laps';
+  }
   
   // Median Lap
   const sorted = [...lapTimes].sort((a, b) => a - b);
@@ -887,9 +1009,9 @@ function updateStatsBoxes() {
     lapsWithIndex.sort((a, b) => a.time - b.time);
     const best3 = lapsWithIndex.slice(0, 3);
     const totalTime = best3.reduce((sum, l) => sum + l.time, 0);
-    const lapNumbers = best3.map(l => l.index + 1).sort((a, b) => a - b).join(', ');
+    const lapNumbers = best3.map(l => l.index === 0 ? 'G1' : `L${l.index}`).sort().join(', ');
     document.getElementById('statBest3').textContent = `${totalTime.toFixed(2)}s`;
-    document.getElementById('statBest3Laps').textContent = `Laps: ${lapNumbers}`;
+    document.getElementById('statBest3Laps').textContent = lapNumbers;
   } else {
     document.getElementById('statBest3').textContent = '--';
     document.getElementById('statBest3Laps').textContent = 'Need 3 laps';

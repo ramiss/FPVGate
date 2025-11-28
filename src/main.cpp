@@ -43,7 +43,7 @@ static void parallelTask(void *pvArgs) {
 
 static void initParallelTask() {
     disableCore0WDT();
-    xTaskCreatePinnedToCore(parallelTask, "parallelTask", 3000, NULL, 0, &xTimerTask, 0);
+    xTaskCreatePinnedToCore(parallelTask, "parallelTask", 8192, NULL, 0, &xTimerTask, 0);
 }
 
 void setup() {
