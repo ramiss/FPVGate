@@ -1,4 +1,5 @@
 #include "config_loader.h"
+#include "config_globals.h"
 #include <Preferences.h>
 
 const char* ConfigLoader::NVS_NAMESPACE = "sfos_pins";

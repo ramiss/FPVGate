@@ -1,5 +1,5 @@
 #include "timing_core.h"
-#include "config_globals.h"
+#include "config/config_globals.h"
 #include <SPI.h>
 #include "esp_adc/adc_continuous.h"
 #include "soc/soc_caps.h"

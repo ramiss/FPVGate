@@ -2,8 +2,8 @@
 
 #if ENABLE_LCD_UI
 
-#include "config_globals.h"
-#include "CST820.h"
+#include "../config/config_globals.h"
+#include "../hardware/CST820.h"
 #include <FS.h>
 #include <SPIFFS.h>
 

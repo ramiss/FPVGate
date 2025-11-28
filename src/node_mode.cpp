@@ -1,5 +1,5 @@
 #include "node_mode.h"
-#include "config.h"
+#include "config/config.h"
 #include <string.h>
 
 // Adapted from the original rhnode.cpp and commands.cpp

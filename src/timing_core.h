@@ -3,9 +3,9 @@
 
 #include <Arduino.h>
 #include <cstdint>
-#include "config.h"
+#include "config/config.h"
 #include "esp_adc/adc_continuous.h"
-#include "kalman.h"
+#include "filters/kalman.h"
 
 // Structure to hold lap data
 struct LapData {

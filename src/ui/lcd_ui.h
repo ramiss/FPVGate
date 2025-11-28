@@ -1,7 +1,7 @@
 #ifndef LCD_UI_H
 #define LCD_UI_H
 
-#include "config.h"
+#include "../config/config.h"
 
 #if ENABLE_LCD_UI
 
@@ -15,7 +15,7 @@
     #include <TFT_eSPI.h>
 #endif
 
-#include "timing_core.h"
+#include "../timing_core.h"
 
 // Forward declaration of CST820 class
 class CST820;

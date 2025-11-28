@@ -1,6 +1,6 @@
 #include <Arduino.h>
-#include "config.h"
-#include "config_loader.h"
+#include "config/config.h"
+#include "config/config_loader.h"
 #include "timing_core.h"
 #include "standalone_mode.h"
 #include "node_mode.h"

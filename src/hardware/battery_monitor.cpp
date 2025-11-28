@@ -1,0 +1,93 @@
+#include "battery_monitor.h"
+#include "config/config_globals.h"
+
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+
+BatteryMonitor::BatteryMonitor() {
+    // Constructor
+}
+
+void BatteryMonitor::begin() {
+    // Initialize ADC for battery monitoring
+    pinMode(g_battery_adc_pin, INPUT);
+
+    // Set attenuation specifically for this pin (ADC1)
+    analogSetPinAttenuation(g_battery_adc_pin, ADC_11db);  // 0-3.3V range
+
+    // Set ADC resolution (ESP32-S3 uses analogReadResolution instead of analogSetWidth)
+    #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
+        analogReadResolution(12);  // 12-bit resolution (0-4095) for ESP32-S3
+    #else
+        analogSetWidth(12);  // 12-bit resolution (0-4095) for ESP32
+    #endif
+
+#if defined(USB_DETECT_PIN)
+    // Initialize USB detection pin (D+ line monitoring)
+    pinMode(g_usb_detect_pin, INPUT);
+    Serial.printf("USB detection enabled on GPIO%d (connect D+ -> 100kΩ -> GPIO%d)\n",
+                  g_usb_detect_pin, g_usb_detect_pin);
+#endif
+}
+
+float BatteryMonitor::readVoltage() {
+    // Read ADC value (averaging for stability)
+    uint32_t adc_sum = 0;
+    uint8_t successful_reads = 0;
+
+    for (int i = 0; i < BATTERY_SAMPLES; i++) {
+        int adc_value = analogRead(g_battery_adc_pin);
+        if (adc_value >= 0) {  // Valid ADC reading
+            adc_sum += adc_value;
+            successful_reads++;
+        }
+        delay(1);
+    }
+
+    if (successful_reads == 0) {
+        return 0.0;  // Failed to read
+    }
+
+    uint16_t adc_value = adc_sum / successful_reads;
+
+    // Convert ADC reading to voltage
+    // With ADC_11db attenuation: 0-4095 maps to approximately 0-3.6V (not 3.3V!)
+    // ESP32 ADC is non-linear, but for basic monitoring, use empirical calibration
+    // More accurate than assuming 3.3V reference
+    float adc_voltage = (adc_value / 4095.0) * 3.6;  // ADC_11db gives ~3.6V range
+    float battery_voltage = adc_voltage * BATTERY_VOLTAGE_DIVIDER * BATTERY_ADC_CALIBRATION;
+
+    return battery_voltage;
+}
+
+uint8_t BatteryMonitor::calculatePercentage(float voltage) {
+    // Simple linear mapping (good enough for most LiPo cells)
+    // For better accuracy, use a LiPo discharge curve lookup table
+    if (voltage >= BATTERY_MAX_VOLTAGE) return 100;
+    if (voltage <= BATTERY_MIN_VOLTAGE) return 0;
+
+    float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+    return (uint8_t)percentage;
+}
+
+#if defined(USB_DETECT_PIN)
+bool BatteryMonitor::isUSBConnected() {
+    // USB detection via D+ line monitoring
+    // D+ is normally HIGH (~3.3V) when USB is connected, LOW when disconnected
+    // Sample multiple times to avoid false readings from USB data traffic
+    int highCount = 0;
+
+    // Take multiple samples to filter out data pulses
+    for (int i = 0; i < USB_DETECT_SAMPLES; i++) {
+        if (digitalRead(g_usb_detect_pin) == HIGH) {
+            highCount++;
+        }
+        delayMicroseconds(100);  // Small delay between samples to avoid catching same pulse
+    }
+
+    // Majority vote: If more than half the samples are HIGH, USB is connected
+    // This filters out transient data pulses while reliably detecting USB presence
+    return (highCount > (USB_DETECT_SAMPLES / 2));
+}
+#endif
+
+#endif // ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)

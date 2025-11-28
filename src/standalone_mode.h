@@ -2,15 +2,23 @@
 #define STANDALONE_MODE_H
 
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WebServer.h> // Standard ESP32 WebServer (synchronous)
-#include <SPIFFS.h>
 #include <vector>
-#include "timing_core.h" // To interact with timing data
-#include "config.h"
+#include "timing_core.h"
+#include "config/config.h"
+
+// Forward declarations
+class SettingsManager;
+class WiFiManager;
+class WebServerManager;
 
 #if ENABLE_LCD_UI
-#include "lcd_ui.h"
+#include "ui/lcd_ui.h"
+class BatteryMonitor;
+class AudioOutput;
+#endif
+
+#if defined(BOARD_NUCLEARCOUNTER)
+class BoardDisplays;
 #endif
 
 class StandaloneMode {
@@ -21,68 +29,38 @@ public:
     void saveSettings();  // Public so LCD UI can call it
 
 private:
-    WebServer _server;
     TimingCore* _timingCore;
     std::vector<LapData> _laps;
     bool _raceActive = false;
     uint32_t _raceStartTime = 0;
-    
-    // Web server task
-    TaskHandle_t _webTaskHandle;
-    static void webServerTask(void* parameter);
-    String _apSSID;
+
+    // Module managers (using composition)
+    SettingsManager* _settingsManager;
+    WiFiManager* _wifiManager;
+    WebServerManager* _webServer;
 
 #if ENABLE_LCD_UI
     // LCD UI
     LcdUI* _lcdUI;
     TaskHandle_t _lcdTaskHandle;
-    
+
     // LCD button callbacks (called from LCD task, must be thread-safe)
     static void lcdStartCallback();
     static void lcdStopCallback();
     static void lcdClearCallback();
     static StandaloneMode* _lcdInstance;  // For static callbacks
-    
-#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
-    // Battery voltage monitoring (requires custom PCB with voltage divider)
-    float readBatteryVoltage();
-    uint8_t calculateBatteryPercentage(float voltage);
-#endif
 
-#if defined(USB_DETECT_PIN)
-    // USB detection via D+ line monitoring (for charging indicator)
-    bool detectUSBConnection();
+#if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
+    BatteryMonitor* _batteryMonitor;
 #endif
 
 #if ENABLE_AUDIO
-    void playLapBeep();
-    void speakLapAnnouncement(uint16_t lapNumber, uint32_t lapTimeMs);
-    void initAudio();
+    AudioOutput* _audioOutput;
 #endif
 #endif
-
-
-    void handleRoot();
-    void handleGetStatus();
-    void handleGetLaps();
-    void handleStartRace();
-    void handleStopRace();
-    void handleClearLaps();
-    void handleSetFrequency();
-    void handleSetThreshold();
-    void handleGetChannels();
-    void handleGetSPIFFSInfo();  // Debug: List SPIFFS files
-    void handleGetConfig();  // Get pin config from NVS
-    void handleStyleCSS();
-    void handleAppJS();
-    void handleNotFound();
-    void setupWiFiAP();
-    
-    // Settings persistence (uses ESP32 Preferences library)
-    void loadSettings();
 
 #if defined(BOARD_NUCLEARCOUNTER)
-    void initNuclearDisplay();
+    BoardDisplays* _boardDisplays;
 #endif
 };
 
