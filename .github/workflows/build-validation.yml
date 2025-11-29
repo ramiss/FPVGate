@@ -51,6 +51,7 @@ jobs:
           -e test-esp32 \
           -e test-esp32-s2 \
           -e test-esp32-s3 \
+          -e test-esp32-s3-t-energy \
           -e test-esp32-s3-touch \
           -e test-jc2432w328c \
           --without-uploading --without-testing
@@ -63,7 +64,7 @@ jobs:
         echo "✅ **Build validation completed**" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "This validates that:" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Code compiles for all 7 board types" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Code compiles for all 8 board types" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ No syntax or configuration errors" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Pin definitions are valid" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY

@@ -11,6 +11,7 @@ This test suite validates the following ESP32 variants:
 - **ESP32** (dual-core Xtensa, Generic DevKit)
 - **ESP32-S2** (single-core Xtensa, USB-CDC)
 - **ESP32-S3** (dual-core Xtensa, PSRAM)
+- **ESP32-S3-T-Energy** (LilyGo T-Energy with built-in battery monitoring)
 - **ESP32-S3-Touch** (Waveshare LCD board)
 - **JC2432W328C** (ESP32 with LCD/Touch)
 
@@ -111,6 +112,7 @@ Replace `test-esp32-c3` with your board environment:
 - `test-esp32` - Generic ESP32 boards
 - `test-esp32-s2` - ESP32-S2 boards
 - `test-esp32-s3` - ESP32-S3 boards
+- `test-esp32-s3-t-energy` - LilyGo T-Energy boards (with battery monitoring)
 - `test-esp32-s3-touch` - Waveshare ESP32-S3-Touch-LCD-2
 - `test-jc2432w328c` - JC2432W328C boards
 
@@ -234,6 +236,14 @@ void loop() {}
 - Mode selection via touchscreen instead of physical pin
 - Battery monitoring requires ADC pin availability
 - Audio only available on ESP32 (has built-in DAC), not ESP32-S3
+
+### T-Energy Board (ESP32-S3-T-Energy)
+
+- Built-in 18650 battery slot with voltage sensing circuit
+- Battery monitoring always enabled (hardware feature)
+- No LCD or touch screen (web interface only)
+- Battery monitoring uses GPIO3 (ADC1_CH2) with 2:1 voltage divider
+- DMA ADC disabled for battery monitoring compatibility
 
 ## Troubleshooting
 

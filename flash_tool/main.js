@@ -91,6 +91,17 @@ const BOARD_CONFIGS = {
       spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
     }
   },
+  'esp32-s3-t-energy': {
+    name: 'LilyGo T-Energy (ESP32-S3 with Battery)',
+    chip: 'esp32s3',
+    flashAddresses: {
+      bootloader: '0x0',
+      partitions: '0x8000',
+      nvs: '0x9000',
+      firmware: '0x10000',
+      spiffs: '0x190000'  // Default ESP32-S3 partition table uses 0x190000 for SPIFFS
+    }
+  },
   'esp32-s2': {
     name: 'ESP32-S2 Dev Module',
     chip: 'esp32s2',
@@ -1164,6 +1175,7 @@ async function flashWithPlatformIO(event, projectPath, boardType, port, customCo
       'esp32dev': 'esp32dev',
       'esp32-s3': 'esp32-s3',
       'esp32-s3-touch': 'esp32-s3-touch',
+      'esp32-s3-t-energy': 'esp32-s3-t-energy',
       'esp32-s2': 'esp32-s2',
       'jc2432w328c': 'jc2432w328c'
     };
@@ -1689,7 +1701,7 @@ async function uploadSPIFFSFromPrebuilt(event, firmwarePath, boardType, port, sp
     // Use default from config (which is now correct for ESP32-S3)
     spiffsAddress = config.flashAddresses.spiffs;
     event.sender.send('flash-progress', `⚠ Using default SPIFFS address: ${spiffsAddress}\n`);
-    if (boardType === 'esp32-s3' || boardType === 'esp32-s3-touch') {
+    if (boardType === 'esp32-s3' || boardType === 'esp32-s3-touch' || boardType === 'esp32-s3-t-energy') {
       event.sender.send('flash-progress', `   NOTE: ESP32-S3 default is 0x190000 (matches PlatformIO default partition table).\n`);
       event.sender.send('flash-progress', `   Common ESP32-S3 SPIFFS addresses: 0x190000 (default), 0x290000 (legacy), 0x3D0000 (custom)\n`);
     }

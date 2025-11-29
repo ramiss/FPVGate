@@ -76,6 +76,7 @@ npm run build:all
 - ESP32 Dev Module (Original ESP32)
 - ESP32-S3 Dev Module
 - ESP32-S3 Touch LCD (no PSRAM)
+- ESP32-S3 T-Energy (LilyGo with Battery)
 - ESP32-S2 Dev Module
 - JC2432W328C (ESP32 with LCD/Touch)
 
