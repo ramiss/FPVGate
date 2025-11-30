@@ -8,6 +8,10 @@
 #include "hardware/battery_monitor.h"
 #endif
 
+#if defined(STATUS_LED_PIN)
+#include "hardware/status_led.h"
+#endif
+
 #if ENABLE_LCD_UI
 #include "hardware/audio_output.h"
 #endif
@@ -42,6 +46,13 @@ StandaloneMode::StandaloneMode() : _timingCore(nullptr) {
     #endif
 #endif
 
+    // Initialize status LED (optional, disabled if STATUS_LED_PIN not defined)
+#if defined(STATUS_LED_PIN)
+    _statusLed = new StatusLed();
+#else
+    _statusLed = nullptr;
+#endif
+
 #if ENABLE_LCD_UI
     _lcdUI = nullptr;
     _lcdInstance = this;
@@ -68,6 +79,20 @@ void StandaloneMode::begin(TimingCore* timingCore) {
         // Battery monitoring enabled but pin not defined - silently fail with warning
         Serial.println("Warning: ENABLE_BATTERY_MONITOR=1 but BATTERY_ADC_PIN not defined. Battery monitoring disabled.");
     #endif
+#endif
+
+    // Initialize status LED - rapid blink in standalone mode (3 times per second)
+#if defined(STATUS_LED_PIN)
+    if (_statusLed) {
+        _statusLed->init(STATUS_LED_PIN, STATUS_LED_INVERTED);
+#if defined(STATUS_LED_WS2812) && STATUS_LED_WS2812
+        // Set blue color for standalone mode (WS2812 RGB LED) - dim brightness
+        _statusLed->setColor(0, 0, 20);  // Blue (dimmed)
+#endif
+        // Rapid blink: 3 times per second = ~150ms on, 183ms off
+        _statusLed->blink(150, 183);
+        Serial.printf("Status LED initialized on GPIO%d (standalone mode: rapid blink)\n", STATUS_LED_PIN);
+    }
 #endif
 
 #if ENABLE_LCD_UI && ENABLE_AUDIO
@@ -249,6 +274,13 @@ void StandaloneMode::process() {
 
             last_settings_update = millis();
         }
+    }
+#endif
+
+    // Update status LED
+#if defined(STATUS_LED_PIN)
+    if (_statusLed) {
+        _statusLed->update(millis());
     }
 #endif
 }

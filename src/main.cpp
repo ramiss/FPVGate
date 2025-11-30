@@ -18,6 +18,8 @@
     #pragma message "BUILD: LilyGo T-Energy (ESP32-S3) detected"
 #elif defined(BOARD_NUCLEARCOUNTER)
     #pragma message "BUILD: NuclearCounter (ESP32-C3) detected"
+#elif defined(BOARD_ESP32_C3_ZERO)
+    #pragma message "BUILD: ESP32-C3 Zero detected"
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
     #pragma message "BUILD: ESP32-C6 detected"
 #elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)

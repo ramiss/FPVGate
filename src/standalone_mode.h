@@ -15,6 +15,8 @@ class WebServerManager;
 class BatteryMonitor;
 #endif
 
+class StatusLed;
+
 #if ENABLE_LCD_UI
 #include "ui/lcd_ui.h"
 class AudioOutput;
@@ -47,6 +49,9 @@ private:
     // May be nullptr if BATTERY_ADC_PIN is not defined
     BatteryMonitor* _batteryMonitor;
 #endif
+
+    // Status LED for activity indication (optional, disabled if STATUS_LED_PIN not defined)
+    StatusLed* _statusLed;
 
 #if ENABLE_LCD_UI
     // LCD UI

@@ -44,8 +44,8 @@ static void findBandChannelFromFrequency(uint16_t freq, uint8_t& band, uint8_t& 
 }
 
 WebServerManager::WebServerManager() : _server(80), _timingCore(nullptr),
-    _settingsManager(nullptr), _raceActive(nullptr), _raceStartTime(nullptr),
-    _laps(nullptr)
+    _settingsManager(nullptr), _raceActive(nullptr), 
+    _raceStartTime(nullptr), _laps(nullptr)
 #if ENABLE_BATTERY_MONITOR && defined(BATTERY_ADC_PIN)
     , _cachedBatteryVoltage(0.0f)
     , _cachedBatteryPercentage(0)

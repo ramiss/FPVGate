@@ -12,6 +12,8 @@
     #define MODE_SWITCH_PIN     1     // GPIO1 - Mode selection switch
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
+    #define STATUS_LED_PIN      8     // GPIO8 - Built-in status LED (if present, optional)
+    #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
 #elif defined(BOARD_NUCLEARCOUNTER)
     // NuclearCounter (ESP32-C3 based board)
     #define RSSI_INPUT_PIN      3     // GPIO3 (ADC1_CH3) - RSSI input from RX5808
@@ -21,8 +23,10 @@
     #define MODE_SWITCH_PIN     20    // GPIO20 - Mode selection switch
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
-#elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
-    // ESP32-C3 SuperMini (Hertz-hunter compatible)
+    #define STATUS_LED_PIN      8     // GPIO1 - Built-in status LED (if present, optional)
+    #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
+#elif defined(BOARD_ESP32_C3_ZERO)
+    // ESP32-C3 Zero - Must come BEFORE generic ESP32-C3 check (more specific)
     #define RSSI_INPUT_PIN      3     // GPIO3 (ADC1_CH3) - RSSI input from RX5808
     #define RX5808_DATA_PIN     6     // GPIO6 - DATA (SPI MOSI) to RX5808
     #define RX5808_CLK_PIN      4     // GPIO4 - CLK (SPI SCK) to RX5808
@@ -30,6 +34,22 @@
     #define MODE_SWITCH_PIN     1     // GPIO1 - Mode selection switch
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
+    // WS2812 RGB LED on GPIO10 - uses built-in neopixelWrite() function
+    #define STATUS_LED_PIN      10     // GPIO10 - WS2812 RGB LED
+    #define STATUS_LED_WS2812   1     // Enable WS2812 support (uses built-in neopixelWrite() function)
+    #define STATUS_LED_INVERTED 0     // Not used for WS2812 (color-based control)
+#elif defined(ARDUINO_ESP32C3_DEV) || defined(CONFIG_IDF_TARGET_ESP32C3)
+    // ESP32-C3 SuperMini (Hertz-hunter compatible)
+    // Generic ESP32-C3 - Must come AFTER specific board checks
+    #define RSSI_INPUT_PIN      3     // GPIO3 (ADC1_CH3) - RSSI input from RX5808
+    #define RX5808_DATA_PIN     6     // GPIO6 - DATA (SPI MOSI) to RX5808
+    #define RX5808_CLK_PIN      4     // GPIO4 - CLK (SPI SCK) to RX5808
+    #define RX5808_SEL_PIN      7     // GPIO7 - LE (Latch Enable / SPI CS) to RX5808
+    #define MODE_SWITCH_PIN     1     // GPIO1 - Mode selection switch
+    #define USE_DMA_ADC         1     // Enabled for best RSSI performance
+    #define UART_BAUD_RATE      921600  // USB CDC ignores this, but set for compatibility
+    #define STATUS_LED_PIN      8     // GPIO8 - Built-in status LED (if present, optional)
+    #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
 #elif defined(BOARD_ESP32_S3_TOUCH)
     // Waveshare ESP32-S3-Touch-LCD-2 with 2" ST7789T3 LCD (240x320) and CST816D touch
     // Pin configuration verified from official Waveshare demo code
@@ -57,6 +77,7 @@
     // BATTERY_ADC_PIN is defined later in the LCD UI section (GPIO34, repurposed from light sensor)
     #define USE_DMA_ADC         0     // Disabled for battery monitoring compatibility
     #define UART_BAUD_RATE      921600  // Fast baud rate (works with most UART bridges)
+    // No status LED defined - board may have addressable LED (not yet configured)
 #elif defined(BOARD_T_ENERGY)
     // LilyGo T-Energy (ESP32-S3 with built-in battery)
     // Built-in 18650 battery slot with voltage sensing circuit
@@ -82,6 +103,12 @@
     
     // Power button configuration
     #define ENABLE_POWER_BUTTON         0     // No power button on T-Energy board
+    
+    // Status LED configuration
+    // T-Energy may have an addressable LED (not confirmed in schematics)
+    // Using GPIO2 as default for ESP32-S3 built-in LED (if present)
+    #define STATUS_LED_PIN      1     // GPIO2 - Status LED (if present, optional)
+    #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
 #elif defined(BOARD_ESP32_S3_DEVKITC)
     // ESP32-S3-DevKitC-1 (standard development board)
     // Standard pinout for ESP32-S3-DevKitC-1
@@ -93,6 +120,8 @@
     #define MODE_SWITCH_PIN     9     // GPIO9 - Mode selection switch (tie to 3.3v for WiFi mode)
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      921600  // USB CDC for serial communication
+    #define STATUS_LED_PIN      2     // GPIO2 - Built-in status LED (if present, optional)
+    #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
 #else
     // Generic ESP32 DevKit / ESP32-WROOM-32 (ESP32-D0WD-V3, NodeMCU-32S, etc)
     // Pin mapping compatible with standard ESP32 dev boards
@@ -103,6 +132,8 @@
     #define MODE_SWITCH_PIN     33    // GPIO33 - Mode selection switch (with internal pullup)
     #define USE_DMA_ADC         1     // Enabled for best RSSI performance
     #define UART_BAUD_RATE      115200  // UART bridge baud rate
+    // #define STATUS_LED_PIN      2     // GPIO2 - Built-in status LED (if present, optional)
+    // #define STATUS_LED_INVERTED 0     // LED active state (0 = HIGH is ON, 1 = LOW is ON)
 #endif
 
 // Mode selection (ESP32-C3 with pullup)

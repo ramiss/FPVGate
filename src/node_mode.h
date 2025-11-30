@@ -4,6 +4,11 @@
 #include <Arduino.h>
 #include "timing_core.h" // To interact with timing data
 
+// Forward declaration
+#if defined(STATUS_LED_PIN)
+class StatusLed;
+#endif
+
 // Node settings structure (matching original node code)
 struct NodeSettings {
     uint16_t vtxFreq = 5800;
@@ -36,6 +41,9 @@ private:
     NodeLastPass _lastPass;
     uint8_t _nodeIndex = 0;
     uint8_t _slotIndex = 0;
+#if defined(STATUS_LED_PIN)
+    StatusLed* _statusLed;
+#endif
 
     void sendLapDataToHost(const LapData& lap);
 };

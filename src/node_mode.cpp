@@ -1,6 +1,9 @@
 #include "node_mode.h"
 #include "config/config.h"
 #include <string.h>
+#if defined(STATUS_LED_PIN)
+#include "hardware/status_led.h"
+#endif
 
 // Adapted from the original rhnode.cpp and commands.cpp
 // This implements the RotorHazard node protocol over serial
@@ -170,7 +173,14 @@ struct Message {
 // Message buffer for serial communication
 Message serialMessage;
 
-NodeMode::NodeMode() : _timingCore(nullptr) {
+NodeMode::NodeMode() : _timingCore(nullptr)
+#if defined(STATUS_LED_PIN)
+    , _statusLed(nullptr)
+#endif
+{
+#if defined(STATUS_LED_PIN)
+    _statusLed = new StatusLed();
+#endif
 }
 
 void NodeMode::begin(TimingCore* timingCore) {
@@ -200,9 +210,29 @@ void NodeMode::begin(TimingCore* timingCore) {
     if (_timingCore) {
         _timingCore->setActivated(true);
     }
+    
+    // Initialize status LED - slow blink in RotorHazard node mode (every 2 seconds)
+#if defined(STATUS_LED_PIN)
+    if (_statusLed) {
+        _statusLed->init(STATUS_LED_PIN, STATUS_LED_INVERTED);
+#if defined(STATUS_LED_WS2812) && STATUS_LED_WS2812
+        // Set green color for node mode (WS2812 RGB LED) - dim brightness
+        _statusLed->setColor(0, 20, 0);  // Green (dimmed)
+#endif
+        // Slow blink: every 2 seconds = 300ms on, 1700ms off
+        _statusLed->blink(300, 1700);
+    }
+#endif
 }
 
 void NodeMode::process() {
+    // Update status LED
+#if defined(STATUS_LED_PIN)
+    if (_statusLed) {
+        _statusLed->update(millis());
+    }
+#endif
+    
     // Handle incoming serial data
     handleSerialInput();
     
