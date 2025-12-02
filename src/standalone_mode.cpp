@@ -277,10 +277,16 @@ void StandaloneMode::process() {
     }
 #endif
 
-    // Update status LED
+    // Update status LED (throttled to every 10ms to avoid blocking main loop)
 #if defined(STATUS_LED_PIN)
     if (_statusLed) {
-        _statusLed->update(millis());
+        static uint32_t last_led_update = 0;
+        uint32_t current_time = millis();
+        // Only update LED every 10ms to prevent blocking and reduce overhead
+        if (current_time - last_led_update >= 10) {
+            _statusLed->update(current_time);
+            last_led_update = current_time;
+        }
     }
 #endif
 }

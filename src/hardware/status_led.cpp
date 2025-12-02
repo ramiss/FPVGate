@@ -39,19 +39,20 @@ void StatusLed::init(uint8_t pin, bool inverted) {
 }
 
 void StatusLed::update(uint32_t currentTimeMs) {
+    // Early return for idle state - no work needed
+    if (_state == STATUS_LED_IDLE) {
+        return;
+    }
+    
+    // Time wrap-around protection (check once at start)
+    if (currentTimeMs < _lastUpdateMs) {
+        _lastUpdateMs = currentTimeMs;
+        return;
+    }
+    
     switch (_state) {
-        case STATUS_LED_IDLE:
-            // LED stays off
-            break;
-            
         case STATUS_LED_BLINKING:
-            // Continuous blink pattern
-            if (currentTimeMs < _lastUpdateMs) {
-                // Time wrap-around protection
-                _lastUpdateMs = currentTimeMs;
-                return;
-            }
-            
+            // Continuous blink pattern - only update when state needs to change
             if (_currentState == !_initialState) {
                 // Currently ON - check if time to turn OFF
                 if ((currentTimeMs - _lastUpdateMs) >= _onTimeMs) {
@@ -71,12 +72,6 @@ void StatusLed::update(uint32_t currentTimeMs) {
             
         case STATUS_LED_ON:
             // LED on for specific duration
-            if (currentTimeMs < _lastUpdateMs) {
-                // Time wrap-around protection
-                _lastUpdateMs = currentTimeMs;
-                return;
-            }
-            
             if (_onTimeMs > 0 && (currentTimeMs - _lastUpdateMs) >= _onTimeMs) {
                 // Time to turn off
                 _currentState = _initialState;
@@ -87,18 +82,15 @@ void StatusLed::update(uint32_t currentTimeMs) {
             
         case STATUS_LED_ACTIVITY:
             // Quick flash on activity - automatically returns to idle
-            if (currentTimeMs < _lastUpdateMs) {
-                // Time wrap-around protection
-                _lastUpdateMs = currentTimeMs;
-                return;
-            }
-            
             if ((currentTimeMs - _lastUpdateMs) >= ACTIVITY_FLASH_MS) {
                 // Flash duration elapsed - turn off
                 _currentState = _initialState;
                 _setLedState(_currentState);
                 _state = STATUS_LED_IDLE;
             }
+            break;
+            
+        default:
             break;
     }
 }
