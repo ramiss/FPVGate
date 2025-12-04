@@ -44,6 +44,7 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     g_storage = stor;  // Set global pointer for static functions
     selftest = test;
     rx = rx5808;
+    transportMgr = nullptr;
 
     wifi_ap_ssid = String(wifi_ap_ssid_prefix) + "_" + WiFi.macAddress().substring(WiFi.macAddress().length() - 6);
     wifi_ap_ssid.replace(":", "");
@@ -64,6 +65,18 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     lastStatus = WL_DISCONNECTED;
 }
 
+void Webserver::setTransportManager(TransportManager *tm) {
+    transportMgr = tm;
+}
+
+// TransportInterface implementation
+void Webserver::sendLapEvent(uint32_t lapTimeMs) {
+    if (!servicesStarted) return;
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%u", lapTimeMs);
+    events.send(buf, "lap");
+}
+
 void Webserver::sendRssiEvent(uint8_t rssi) {
     if (!servicesStarted) return;
     char buf[16];
@@ -71,17 +84,24 @@ void Webserver::sendRssiEvent(uint8_t rssi) {
     events.send(buf, "rssi");
 }
 
-void Webserver::sendLaptimeEvent(uint32_t lapTime) {
+void Webserver::sendRaceStateEvent(const char* state) {
     if (!servicesStarted) return;
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%u", lapTime);
-    events.send(buf, "lap");
+    events.send(state, "raceState");
+}
+
+bool Webserver::isConnected() {
+    // WiFi transport is always "connected" if services are started
+    // Individual clients connect/disconnect via SSE but that's transparent
+    return servicesStarted;
+}
+
+void Webserver::update(uint32_t currentTimeMs) {
+    handleWebUpdate(currentTimeMs);
 }
 
 void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
-    if (timer->isLapAvailable()) {
-        sendLaptimeEvent(timer->getLapTime());
-    }
+    // Note: Lap events are now broadcast via TransportManager in main.cpp
+    // This method only handles WiFi-specific logic
 
     if (sendRssi && ((currentTimeMs - rssiSentMs) > WEB_RSSI_SEND_TIMEOUT_MS)) {
         sendRssiEvent(timer->getRssi());
@@ -190,7 +210,11 @@ static String toStringIp(IPAddress ip) {
 static bool captivePortal(AsyncWebServerRequest *request) {
     extern const char *wifi_hostname;
 
-    if (!isIp(request->host()) && request->host() != (String(wifi_hostname) + ".local")) {
+    // Allow fpvgate.xyz, IP addresses, and hostname.local without redirecting
+    if (!isIp(request->host()) && 
+        request->host() != (String(wifi_hostname) + ".local") &&
+        request->host() != "fpvgate.xyz" &&
+        request->host() != "www.fpvgate.xyz") {
         DEBUG("Request redirected to captive portal\n");
         request->redirect(String("http://") + toStringIp(request->client()->localIP()));
         return true;
@@ -347,11 +371,17 @@ Battery Voltage:\t%0.1fv";
 
     server.on("/timer/start", HTTP_POST, [this](AsyncWebServerRequest *request) {
         timer->start();
+        if (transportMgr) {
+            transportMgr->broadcastRaceStateEvent("started");
+        }
         request->send(200, "application/json", "{\"status\": \"OK\"}");
     });
 
     server.on("/timer/stop", HTTP_POST, [this](AsyncWebServerRequest *request) {
         timer->stop();
+        if (transportMgr) {
+            transportMgr->broadcastRaceStateEvent("stopped");
+        }
         request->send(200, "application/json", "{\"status\": \"OK\"}");
     });
 
@@ -363,6 +393,24 @@ Battery Voltage:\t%0.1fv";
 #endif
         request->send(200, "application/json", "{\"status\": \"OK\"}");
     });
+
+    // Manual lap addition - broadcasts lap event to all clients
+    AsyncCallbackJsonWebHandler *addLapHandler = new AsyncCallbackJsonWebHandler("/timer/addLap", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        JsonObject jsonObj = json.as<JsonObject>();
+        if (jsonObj.containsKey("lapTime")) {
+            uint32_t lapTimeMs = jsonObj["lapTime"].as<uint32_t>();
+            if (transportMgr) {
+                transportMgr->broadcastLapEvent(lapTimeMs);
+            }
+#ifdef ESP32S3
+            if (g_rgbLed) {
+                g_rgbLed->flashLap();
+            }
+#endif
+        }
+        request->send(200, "application/json", "{\"status\": \"OK\"}");
+    });
+    server.addHandler(addLapHandler);
 
     server.on("/timer/rssiStart", HTTP_POST, [this](AsyncWebServerRequest *request) {
         sendRssi = true;

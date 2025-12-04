@@ -1,3 +1,9 @@
+// Transport manager for WiFi/USB connectivity
+let transportManager = null;
+let currentConnectionMode = 'auto'; // 'auto', 'wifi', 'usb'
+let usbConnected = false;
+let eventSource = null;
+
 const bcf = document.getElementById("bandChannelFreq");
 const bandSelect = document.getElementById("bandSelect");
 const channelSelect = document.getElementById("channelSelect");
@@ -65,33 +71,273 @@ var selectedVoice = 'default';
 // Initialize hybrid audio announcer
 const audioAnnouncer = new AudioAnnouncer();
 
-onload = function (e) {
+// Transport initialization functions
+async function initializeTransport() {
+  // Check if we have USB transport available (Electron or Web Serial API)
+  const hasUSB = (typeof window.electronAPI !== 'undefined') || ('serial' in navigator);
+  console.log('[Init] USB available:', hasUSB, 'Mode:', currentConnectionMode);
+  console.log('[Init] electronAPI:', typeof window.electronAPI);
+  
+  if (!hasUSB || currentConnectionMode === 'wifi') {
+    // WiFi-only mode
+    console.log('[Init] Initializing WiFi-only mode');
+    setupWiFiEvents();
+    updateConnectionStatus('WiFi', true);
+    return;
+  }
+  
+  // Try USB first in auto/usb mode
+  if (currentConnectionMode === 'auto' || currentConnectionMode === 'usb') {
+    try {
+      console.log('[Init] Creating USBTransport...');
+      transportManager = new USBTransport();
+      
+      // List available ports and auto-connect in auto mode
+      console.log('[Init] Listing ports...');
+      const ports = await transportManager.listPorts();
+      console.log('[Init] Found ports:', ports);
+      
+      if (ports.length > 0) {
+        // Populate COM port dropdown
+        const comPortSelect = document.getElementById('comPort');
+        comPortSelect.innerHTML = '<option value="">Select a port...</option>';
+        ports.forEach(port => {
+          console.log('[Init] Adding port:', port.path, port.manufacturer);
+          const option = document.createElement('option');
+          option.value = port.path;
+          option.textContent = `${port.path}${port.manufacturer ? ' - ' + port.manufacturer : ''}`;
+          comPortSelect.appendChild(option);
+        });
+        
+        // Auto-connect to first FPVGate device in auto mode
+        if (currentConnectionMode === 'auto') {
+          // Try to find by manufacturer first
+          let fpvgatePort = ports.find(p => 
+            p.manufacturer && (p.manufacturer.includes('Espressif') || p.manufacturer.includes('Silicon Labs'))
+          );
+          
+          // If not found, look for COM12 specifically (common FPVGate port on Windows)
+          if (!fpvgatePort) {
+            fpvgatePort = ports.find(p => p.path === 'COM12');
+          }
+          
+          console.log('[Init] FPVGate port found:', fpvgatePort);
+          if (fpvgatePort) {
+            await connectUSB(fpvgatePort.path);
+            return;
+          }
+        }
+      } else {
+        console.log('[Init] No ports found');
+      }
+    } catch (err) {
+      console.error('[Init] USB initialization failed:', err);
+    }
+  }
+  
+  // Fall back to WiFi if USB failed and in auto mode
+  if (currentConnectionMode === 'auto' && !usbConnected) {
+    console.log('USB not available, falling back to WiFi');
+    setupWiFiEvents();
+    updateConnectionStatus('WiFi', true);
+  } else if (currentConnectionMode === 'usb' && !usbConnected) {
+    updateConnectionStatus('USB', false);
+  }
+}
+
+async function connectUSB(portPath) {
+  try {
+    await transportManager.connect(portPath);
+    usbConnected = true;
+    setupUSBEvents();
+    updateConnectionStatus('USB', true);
+    
+    // Update COM port dropdown to show selected port
+    const comPortSelect = document.getElementById('comPort');
+    comPortSelect.value = portPath;
+    
+    console.log('Connected to USB:', portPath);
+  } catch (err) {
+    console.error('Failed to connect USB:', err);
+    usbConnected = false;
+    updateConnectionStatus('USB', false);
+    throw err;
+  }
+}
+
+function setupWiFiEvents() {
+  if (eventSource) {
+    eventSource.close();
+  }
+  
+  if (window.EventSource) {
+    eventSource = new EventSource("/events");
+    
+    eventSource.addEventListener("open", function (e) {
+      console.log("WiFi Events Connected");
+    }, false);
+    
+    eventSource.addEventListener("error", function (e) {
+      if (e.target.readyState != EventSource.OPEN) {
+        console.log("WiFi Events Disconnected");
+      }
+    }, false);
+    
+    eventSource.addEventListener("rssi", function (e) {
+      rssiBuffer.push(e.data);
+      if (rssiBuffer.length > 10) {
+        rssiBuffer.shift();
+      }
+      console.log("rssi", e.data, "buffer size", rssiBuffer.length);
+    }, false);
+    
+    eventSource.addEventListener("lap", function (e) {
+      var lap = (parseFloat(e.data) / 1000).toFixed(2);
+      addLap(lap);
+      console.log("lap raw:", e.data, " formatted:", lap);
+    }, false);
+  }
+}
+
+function setupUSBEvents() {
+  if (!transportManager) return;
+  
+  transportManager.on('rssi', (data) => {
+    rssiBuffer.push(data);
+    if (rssiBuffer.length > 10) {
+      rssiBuffer.shift();
+    }
+    console.log("USB rssi", data, "buffer size", rssiBuffer.length);
+  });
+  
+  transportManager.on('lap', (data) => {
+    var lap = (parseFloat(data) / 1000).toFixed(2);
+    addLap(lap);
+    console.log("USB lap raw:", data, " formatted:", lap);
+  });
+  
+  transportManager.on('disconnect', () => {
+    console.log('USB disconnected');
+    usbConnected = false;
+    updateConnectionStatus('USB', false);
+    
+    // Auto-fallback to WiFi if in auto mode
+    if (currentConnectionMode === 'auto') {
+      setupWiFiEvents();
+      updateConnectionStatus('WiFi', true);
+    }
+  });
+}
+
+function updateConnectionStatus(mode, connected) {
+  const statusEl = document.getElementById('comPortStatus');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.textContent = `Status: ${connected ? 'Connected' : 'Disconnected'} (${mode})`;
+    statusEl.style.color = connected ? 'var(--success-color, #4CAF50)' : 'var(--error-color, #f44336)';
+  }
+}
+
+async function changeConnectionMode() {
+  const modeSelect = document.getElementById('connectionMode');
+  currentConnectionMode = modeSelect.value;
+  
+  const comPortSection = document.getElementById('comPortSection');
+  
+  // Show COM port selector in USB mode
+  if (currentConnectionMode === 'usb') {
+    comPortSection.style.display = 'flex';
+  } else {
+    comPortSection.style.display = 'none';
+  }
+  
+  // Disconnect current connection
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  if (transportManager && usbConnected) {
+    await transportManager.disconnect();
+    usbConnected = false;
+  }
+  
+  // Reinitialize with new mode
+  await initializeTransport();
+}
+
+async function selectComPort() {
+  const comPortSelect = document.getElementById('comPort');
+  const portPath = comPortSelect.value;
+  
+  if (!portPath) return;
+  
+  // Disconnect if already connected
+  if (transportManager && usbConnected) {
+    await transportManager.disconnect();
+    usbConnected = false;
+  }
+  
+  // Connect to selected port
+  if (!transportManager) {
+    transportManager = new USBTransport();
+  }
+  
+  await connectUSB(portPath);
+}
+
+onload = async function (e) {
   // Load dark mode preference
   loadDarkMode();
   
   config.style.display = "none";
   race.style.display = "block";
   calib.style.display = "none";
-  fetch("/config")
-    .then((response) => response.json())
-    .then((config) => {
-      console.log(config);
-      setBandChannelIndex(config.freq);
-      minLapInput.value = (parseFloat(config.minLap) / 10).toFixed(1);
-      updateMinLap(minLapInput, minLapInput.value);
-      alarmThreshold.value = (parseFloat(config.alarm) / 10).toFixed(1);
-      updateAlarmThreshold(alarmThreshold, alarmThreshold.value);
-      announcerSelect.selectedIndex = config.anType;
-      announcerRateInput.value = (parseFloat(config.anRate) / 10).toFixed(1);
-      updateAnnouncerRate(announcerRateInput, announcerRateInput.value);
-      enterRssiInput.value = config.enterRssi;
-      updateEnterRssi(enterRssiInput, enterRssiInput.value);
-      exitRssiInput.value = config.exitRssi;
-      updateExitRssi(exitRssiInput, exitRssiInput.value);
-      pilotNameInput.value = config.name;
-      ssidInput.value = config.ssid;
-      pwdInput.value = config.pwd;
-      maxLapsInput.value = (config.maxLaps !== undefined) ? config.maxLaps : 0;
+  
+  // Initialize transport (USB/WiFi)
+  await initializeTransport();
+  
+  // Fetch config using appropriate transport
+  let configData;
+  try {
+    if (usbConnected && transportManager) {
+      configData = await transportManager.sendCommand('config', 'GET');
+    } else {
+      const response = await fetch("/config");
+      configData = await response.json();
+    }
+    console.log(configData);
+  } catch (err) {
+    console.error('[Script] Failed to fetch config:', err);
+    // Set defaults if config fetch fails
+    configData = {};
+  }
+  {
+      if (configData.freq !== undefined) setBandChannelIndex(configData.freq);
+      if (configData.minLap !== undefined) {
+        minLapInput.value = (parseFloat(configData.minLap) / 10).toFixed(1);
+        updateMinLap(minLapInput, minLapInput.value);
+      }
+      if (configData.alarm !== undefined) {
+        alarmThreshold.value = (parseFloat(configData.alarm) / 10).toFixed(1);
+        updateAlarmThreshold(alarmThreshold, alarmThreshold.value);
+      }
+      if (configData.anType !== undefined) announcerSelect.selectedIndex = configData.anType;
+      if (configData.anRate !== undefined) {
+        announcerRateInput.value = (parseFloat(configData.anRate) / 10).toFixed(1);
+        updateAnnouncerRate(announcerRateInput, announcerRateInput.value);
+      }
+      if (configData.enterRssi !== undefined) {
+        enterRssiInput.value = configData.enterRssi;
+        updateEnterRssi(enterRssiInput, enterRssiInput.value);
+      }
+      if (configData.exitRssi !== undefined) {
+        exitRssiInput.value = configData.exitRssi;
+        updateExitRssi(exitRssiInput, exitRssiInput.value);
+      }
+      if (configData.name !== undefined) pilotNameInput.value = configData.name;
+      if (configData.ssid !== undefined) ssidInput.value = configData.ssid;
+      if (configData.pwd !== undefined) pwdInput.value = configData.pwd;
+      maxLapsInput.value = (configData.maxLaps !== undefined) ? configData.maxLaps : 0;
       updateMaxLaps(maxLapsInput, maxLapsInput.value);
       
       // Load pilot callsign, phonetic name, and color from localStorage (frontend-only settings)
@@ -142,24 +388,24 @@ onload = function (e) {
       const customColorSection = document.getElementById('customColorSection');
       
       // Set defaults or load from backend config
-      if (config.ledMode !== undefined) {
+      if (configData.ledMode !== undefined) {
         // Map ledMode to preset (0-3 are old modes, map to appropriate presets)
         let preset = 1; // Default to Rainbow Wave
-        if (config.ledMode === 0) preset = 0; // Off
-        else if (config.ledMode === 1) preset = 3; // Green solid
-        else if (config.ledMode === 2) preset = 2; // Red pulse
-        else if (config.ledMode === 3) preset = 1; // Rainbow wave
+        if (configData.ledMode === 0) preset = 0; // Off
+        else if (configData.ledMode === 1) preset = 3; // Green solid
+        else if (configData.ledMode === 2) preset = 2; // Red pulse
+        else if (configData.ledMode === 3) preset = 1; // Rainbow wave
         if (ledPresetSelect) ledPresetSelect.value = preset;
       }
       
-      if (config.ledBrightness !== undefined && ledBrightnessInput) {
-        ledBrightnessInput.value = config.ledBrightness;
-        updateLedBrightness(ledBrightnessInput, config.ledBrightness);
+      if (configData.ledBrightness !== undefined && ledBrightnessInput) {
+        ledBrightnessInput.value = configData.ledBrightness;
+        updateLedBrightness(ledBrightnessInput, configData.ledBrightness);
       }
       
-      if (config.ledColor !== undefined && ledColorInput) {
+      if (configData.ledColor !== undefined && ledColorInput) {
         // Convert color integer to hex string
-        const hexColor = '#' + ('000000' + config.ledColor.toString(16)).slice(-6).toUpperCase();
+        const hexColor = '#' + ('000000' + configData.ledColor.toString(16)).slice(-6).toUpperCase();
         ledColorInput.value = hexColor;
       }
       
@@ -167,22 +413,47 @@ onload = function (e) {
       if (ledPresetSelect && customColorSection) {
         customColorSection.style.display = (parseInt(ledPresetSelect.value) === 9) ? 'flex' : 'none';
       }
-    });
+      
+      // Initialize LED preset UI on page load
+      if (ledPresetSelect) {
+        changeLedPreset();
+      }
+      
+      // Initialize battery monitoring UI on page load (default is disabled)
+      const batterySection = document.getElementById('batteryMonitoringSection');
+      const batteryToggle = document.getElementById('batteryMonitorToggle');
+      if (batterySection && batteryToggle) {
+        batterySection.style.display = batteryToggle.checked ? 'block' : 'none';
+      }
+  }
 };
 
-function getBatteryVoltage() {
-  fetch("/status")
-    .then((response) => response.text())
-    .then((response) => {
-      const batteryVoltageMatch = response.match(/Battery Voltage:\s*([\d.]+v)/);
-      const batteryVoltage = batteryVoltageMatch ? batteryVoltageMatch[1] : null;
+async function getBatteryVoltage() {
+  try {
+    let response;
+    if (usbConnected && transportManager) {
+      const data = await transportManager.sendCommand('status', 'GET');
+      response = JSON.stringify(data);
+    } else {
+      const resp = await fetch("/status");
+      response = await resp.text();
+    }
+    
+    const batteryVoltageMatch = response.match(/Battery Voltage:\s*([\d.]+v)/);
+    const batteryVoltage = batteryVoltageMatch ? batteryVoltageMatch[1] : null;
+    if (batteryVoltageDisplay) {
       batteryVoltageDisplay.innerText = batteryVoltage;
-    });
+    }
+  } catch (err) {
+    console.error('Failed to get battery voltage:', err);
+  }
 }
 
 setInterval(getBatteryVoltage, 2000);
 
 function addRssiPoint() {
+  if (!rssiChart) return; // Chart not initialized yet
+  
   if (calib.style.display != "none") {
     rssiChart.start();
     if (rssiBuffer.length > 0) {
@@ -273,31 +544,49 @@ function openTab(evt, tabName) {
 
   // if event comes from calibration tab, signal to start sending RSSI events
   if (tabName === "calib" && !rssiSending) {
-    fetch("/timer/rssiStart", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    })
-      .then((response) => {
-        if (response.ok) rssiSending = true;
-        return response.json();
+    if (usbConnected && transportManager) {
+      transportManager.sendCommand('timer/rssiStart', 'POST')
+        .then((response) => {
+          rssiSending = true;
+          console.log("/timer/rssiStart:", response);
+        })
+        .catch(err => console.error('Failed to start RSSI:', err));
+    } else {
+      fetch("/timer/rssiStart", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
       })
-      .then((response) => console.log("/timer/rssiStart:" + JSON.stringify(response)));
+        .then((response) => {
+          if (response.ok) rssiSending = true;
+          return response.json();
+        })
+        .then((response) => console.log("/timer/rssiStart:" + JSON.stringify(response)));
+    }
   } else if (rssiSending) {
-    fetch("/timer/rssiStop", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    })
-      .then((response) => {
-        if (response.ok) rssiSending = false;
-        return response.json();
+    if (usbConnected && transportManager) {
+      transportManager.sendCommand('timer/rssiStop', 'POST')
+        .then((response) => {
+          rssiSending = false;
+          console.log("/timer/rssiStop:", response);
+        })
+        .catch(err => console.error('Failed to stop RSSI:', err));
+    } else {
+      fetch("/timer/rssiStop", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
       })
-      .then((response) => console.log("/timer/rssiStop:" + JSON.stringify(response)));
+        .then((response) => {
+          if (response.ok) rssiSending = false;
+          return response.json();
+        })
+        .then((response) => console.log("/timer/rssiStop:" + JSON.stringify(response)));
+    }
   }
   
   // Load race history when opening history tab
@@ -335,7 +624,7 @@ function autoSaveConfig() {
   }, 1000); // Wait 1 second after last change before saving
 }
 
-function saveConfig() {
+async function saveConfig() {
   // Save frontend-only settings to localStorage
   const callsignInput = document.getElementById('pcallsign');
   const phoneticInput = document.getElementById('pphonetic');
@@ -345,28 +634,35 @@ function saveConfig() {
   if (colorInput) localStorage.setItem('pilotColor', colorInput.value);
   
   // Save backend settings
-  fetch("/config", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      freq: frequency,
-      minLap: parseInt(minLapInput.value * 10),
-      alarm: parseInt(alarmThreshold.value * 10),
-      anType: announcerSelect.selectedIndex,
-      anRate: parseInt(announcerRate * 10),
-      enterRssi: enterRssi,
-      exitRssi: exitRssi,
-      maxLaps: maxLaps,
-      name: pilotNameInput.value,
-      ssid: ssidInput.value,
-      pwd: pwdInput.value,
-    }),
-  })
-    .then((response) => response.json())
-    .then((response) => console.log("/config:" + JSON.stringify(response)));
+  const configData = {
+    freq: frequency,
+    minLap: parseInt(minLapInput.value * 10),
+    alarm: parseInt(alarmThreshold.value * 10),
+    anType: announcerSelect.selectedIndex,
+    anRate: parseInt(announcerRate * 10),
+    enterRssi: enterRssi,
+    exitRssi: exitRssi,
+    maxLaps: maxLaps,
+    name: pilotNameInput.value,
+    ssid: ssidInput.value,
+    pwd: pwdInput.value,
+  };
+  
+  if (usbConnected && transportManager) {
+    const response = await transportManager.sendCommand('config', 'POST', configData);
+    console.log("/config:", response);
+  } else {
+    fetch("/config", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(configData),
+    })
+      .then((response) => response.json())
+      .then((response) => console.log("/config:" + JSON.stringify(response)));
+  }
 }
 
 function populateFreqOutput() {
@@ -597,15 +893,21 @@ function startTimer() {
     timer.innerHTML = `${m}:${s}:${ms}s`;
   }, 10);
 
-  fetch("/timer/start", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  })
-    .then((response) => response.json())
-    .then((response) => console.log("/timer/start:" + JSON.stringify(response)));
+  if (usbConnected && transportManager) {
+    transportManager.sendCommand('timer/start', 'POST')
+      .then((response) => console.log("/timer/start:", response))
+      .catch(err => console.error('Failed to start timer:', err));
+  } else {
+    fetch("/timer/start", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => response.json())
+      .then((response) => console.log("/timer/start:" + JSON.stringify(response)));
+  }
 }
 
 function queueSpeak(obj) {
@@ -631,6 +933,11 @@ function saveVoiceSelection() {
     localStorage.setItem('selectedVoice', selectedVoice);
     console.log('Voice selection saved:', selectedVoice);
     
+    // Update audioAnnouncer voice (this clears cache and updates voice directory)
+    if (audioAnnouncer) {
+      audioAnnouncer.setVoice(selectedVoice);
+    }
+    
     // If PiperTTS selected, use piper engine, otherwise use webspeech for fallback
     if (selectedVoice === 'piper') {
       localStorage.setItem('ttsEngine', 'piper');
@@ -643,8 +950,6 @@ function saveVoiceSelection() {
       if (audioAnnouncer) {
         audioAnnouncer.setTtsEngine('webspeech');
       }
-      // Show reminder to regenerate audio files for ElevenLabs voices
-      alert('Voice changed to ' + voiceSelect.options[voiceSelect.selectedIndex].text + '\n\nTo use this voice, you need to regenerate audio files with the generate_voice_files.py script.');
     }
   }
 }
@@ -667,9 +972,11 @@ function updateVoiceButtons() {
 }
 
 async function enableAudioLoop() {
+  console.log('[Script] Enabling audio...');
   audioEnabled = true;
   audioAnnouncer.enable();
   updateVoiceButtons();
+  console.log('[Script] Audio enabled, audioEnabled:', audioEnabled);
 }
 
 function disableAudioLoop() {
@@ -695,12 +1002,61 @@ function toggleBatteryMonitor(enabled) {
   }
 }
 
+// Generic fetch wrapper that works with both WiFi and USB
+async function transportFetch(url, options = {}) {
+  const method = options.method || 'GET';
+  const path = url.startsWith('/') ? url.substring(1) : url;
+  
+  if (usbConnected && transportManager) {
+    // Parse body if JSON
+    let data = null;
+    if (options.body) {
+      if (options.headers && options.headers['Content-Type'] === 'application/json') {
+        data = JSON.parse(options.body);
+      } else if (options.body instanceof URLSearchParams || typeof options.body === 'string') {
+        // Parse form data
+        const params = new URLSearchParams(options.body);
+        data = Object.fromEntries(params.entries());
+      }
+    }
+    
+    return transportManager.sendCommand(path, method, data);
+  } else {
+    // Standard WiFi fetch
+    const response = await fetch(url, options);
+    if (options.headers && options.headers['Accept'] === 'application/json') {
+      return response.json();
+    } else {
+      return response.text();
+    }
+  }
+}
+
+// Helper function for LED commands
+async function sendLedCommand(endpoint, params) {
+  if (usbConnected && transportManager) {
+    return transportManager.sendCommand(`led/${endpoint}`, 'POST', params);
+  } else {
+    const body = Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&');
+    const response = await fetch(`/led/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body
+    });
+    return response.json();
+  }
+}
+
 // LED control functions
 function changeLedPreset() {
   const presetSelect = document.getElementById('ledPreset');
   const solidColorSection = document.getElementById('solidColorSection');
   const fadeColorSection = document.getElementById('fadeColorSection');
   const strobeColorSection = document.getElementById('strobeColorSection');
+  const speedSection = document.getElementById('ledSpeed')?.closest('.config-item');
   const preset = parseInt(presetSelect.value);
   
   // Show/hide color pickers based on preset
@@ -714,29 +1070,20 @@ function changeLedPreset() {
     strobeColorSection.style.display = (preset === 7) ? 'flex' : 'none';
   }
   
+  // Hide animation speed for Solid Colour (preset 1) and Off (preset 0)
+  if (speedSection) {
+    speedSection.style.display = (preset === 0 || preset === 1) ? 'none' : 'block';
+  }
+  
   // If Pilot Colour preset (9) is selected, use pilot color
   if (preset === 9) {
     const pilotColor = document.getElementById('pilotColor')?.value || '#0080FF';
     const color = pilotColor.substring(1); // Remove #
-    fetch('/led/color', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `color=${color}`
-    }).catch(err => console.error('Failed to set pilot color:', err));
+    sendLedCommand('color', { color })
+      .catch(err => console.error('Failed to set pilot color:', err));
   }
   
-  fetch('/led/preset', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `preset=${preset}`
-  })
-    .then(response => response.json())
+  sendLedCommand('preset', { preset })
     .then(data => console.log('LED preset changed:', data))
     .catch(err => console.error('Failed to change LED preset:', err));
 }
@@ -745,15 +1092,7 @@ function setSolidColor() {
   const colorInput = document.getElementById('ledSolidColor');
   const color = colorInput.value.substring(1);
   
-  fetch('/led/color', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `color=${color}`
-  })
-    .then(response => response.json())
+  sendLedCommand('color', { color })
     .then(data => console.log('LED solid color changed:', data))
     .catch(err => console.error('Failed to change LED solid color:', err));
 }
@@ -762,15 +1101,7 @@ function setFadeColor() {
   const colorInput = document.getElementById('ledFadeColor');
   const color = colorInput.value.substring(1);
   
-  fetch('/led/fadecolor', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `color=${color}`
-  })
-    .then(response => response.json())
+  sendLedCommand('fadecolor', { color })
     .then(data => console.log('LED fade color changed:', data))
     .catch(err => console.error('Failed to change LED fade color:', err));
 }
@@ -779,15 +1110,7 @@ function setStrobeColor() {
   const colorInput = document.getElementById('ledStrobeColor');
   const color = colorInput.value.substring(1);
   
-  fetch('/led/strobecolor', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `color=${color}`
-  })
-    .then(response => response.json())
+  sendLedCommand('strobecolor', { color })
     .then(data => console.log('LED strobe color changed:', data))
     .catch(err => console.error('Failed to change LED strobe color:', err));
 }
@@ -796,15 +1119,7 @@ function updateLedBrightness(obj, value) {
   const brightness = parseInt(value);
   $(obj).parent().find('span').text(brightness);
   
-  fetch('/led/brightness', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `brightness=${brightness}`
-  })
-    .then(response => response.json())
+  sendLedCommand('brightness', { brightness })
     .then(data => console.log('LED brightness changed:', data))
     .catch(err => console.error('Failed to change LED brightness:', err));
 }
@@ -813,15 +1128,7 @@ function updateLedSpeed(obj, value) {
   const speed = parseInt(value);
   $(obj).parent().find('span').text(speed);
   
-  fetch('/led/speed', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `speed=${speed}`
-  })
-    .then(response => response.json())
+  sendLedCommand('speed', { speed })
     .then(data => console.log('LED speed changed:', data))
     .catch(err => console.error('Failed to change LED speed:', err));
 }
@@ -829,15 +1136,7 @@ function updateLedSpeed(obj, value) {
 function toggleLedManualOverride(enabled) {
   const enable = enabled ? 1 : 0;
   
-  fetch('/led/override', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `enable=${enable}`
-  })
-    .then(response => response.json())
+  sendLedCommand('override', { enable })
     .then(data => console.log('LED manual override:', enabled ? 'enabled' : 'disabled', data))
     .catch(err => console.error('Failed to toggle LED manual override:', err));
 }
@@ -935,15 +1234,21 @@ function stopRace() {
   clearInterval(timerInterval);
   timer.innerHTML = "00:00:00s";
 
-  fetch("/timer/stop", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  })
-    .then((response) => response.json())
-    .then((response) => console.log("/timer/stop:" + JSON.stringify(response)));
+  if (usbConnected && transportManager) {
+    transportManager.sendCommand('timer/stop', 'POST')
+      .then((response) => console.log("/timer/stop:", response))
+      .catch(err => console.error('Failed to stop timer:', err));
+  } else {
+    fetch("/timer/stop", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => response.json())
+      .then((response) => console.log("/timer/stop:" + JSON.stringify(response)));
+  }
 
   stopRaceButton.disabled = true;
   startRaceButton.disabled = false;
@@ -986,49 +1291,7 @@ function clearLaps() {
   document.getElementById('statBest3Laps').textContent = '';
 }
 
-if (!!window.EventSource) {
-  var source = new EventSource("/events");
-
-  source.addEventListener(
-    "open",
-    function (e) {
-      console.log("Events Connected");
-    },
-    false
-  );
-
-  source.addEventListener(
-    "error",
-    function (e) {
-      if (e.target.readyState != EventSource.OPEN) {
-        console.log("Events Disconnected");
-      }
-    },
-    false
-  );
-
-  source.addEventListener(
-    "rssi",
-    function (e) {
-      rssiBuffer.push(e.data);
-      if (rssiBuffer.length > 10) {
-        rssiBuffer.shift();
-      }
-      console.log("rssi", e.data, "buffer size", rssiBuffer.length);
-    },
-    false
-  );
-
-  source.addEventListener(
-    "lap",
-    function (e) {
-      var lap = (parseFloat(e.data) / 1000).toFixed(2);
-      addLap(lap);
-      console.log("lap raw:", e.data, " formatted:", lap);
-    },
-    false
-  );
-}
+// EventSource initialization moved to setupWiFiEvents() function above
 
 function setBandChannelIndex(freq) {
   for (var i = 0; i < freqLookup.length; i++) {
@@ -1091,23 +1354,30 @@ function addManualLap() {
     const centiseconds = parseInt(match[3]);
     const totalMs = (minutes * 60000) + (seconds * 1000) + (centiseconds * 10);
     
-    // Calculate lap time
-    const lapTime = totalMs - (lapNo >= 0 ? lapTimes.reduce((a, b) => a + (b * 1000), 0) : 0);
-    const lapTimeSeconds = (lapTime / 1000).toFixed(2);
+    // Calculate lap time in milliseconds
+    const lapTimeMs = totalMs - (lapNo >= 0 ? lapTimes.reduce((a, b) => a + (b * 1000), 0) : 0);
     
-    // Trigger white LED flash
-    fetch('/timer/lap', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      }
-    })
-      .then(response => response.json())
-      .then(data => console.log('LED flash triggered:', data))
-      .catch(err => console.error('Failed to trigger LED flash:', err));
+    // Send lap to backend to broadcast to all clients (including OSD)
+    if (usbConnected && transportManager) {
+      transportManager.sendCommand('timer/addLap', 'POST', { lapTime: lapTimeMs })
+        .then(data => console.log('Manual lap broadcasted:', data))
+        .catch(err => console.error('Failed to broadcast manual lap:', err));
+    } else {
+      fetch('/timer/addLap', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lapTime: lapTimeMs })
+      })
+        .then(response => response.json())
+        .then(data => console.log('Manual lap broadcasted:', data))
+        .catch(err => console.error('Failed to broadcast manual lap:', err));
+    }
     
-    addLap(lapTimeSeconds);
+    // Note: The lap will be added via EventSource lap event
+    // No need to call addLap() here as it will come back through the event stream
   }
 }
 
@@ -1623,6 +1893,33 @@ function clearAllRaces() {
     closeRaceDetails();
   })
   .catch(error => console.error('Error clearing races:', error));
+}
+
+// OSD Overlay Function
+function openOSD() {
+  const osdUrl = window.location.origin + '/osd.html';
+  
+  // Open OSD in new tab
+  window.open(osdUrl, '_blank');
+  
+  // Copy URL to clipboard
+  navigator.clipboard.writeText(osdUrl)
+    .then(() => {
+      // Show temporary success message
+      const button = event.target;
+      const originalText = button.textContent;
+      button.textContent = '✓ URL Copied!';
+      button.style.backgroundColor = '#27ae60';
+      
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.backgroundColor = '';
+      }, 2000);
+    })
+    .catch(err => {
+      console.error('Failed to copy URL:', err);
+      alert('OSD opened, but failed to copy URL. URL: ' + osdUrl);
+    });
 }
 
 // Config Download/Import Functions

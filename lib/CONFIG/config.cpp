@@ -60,6 +60,7 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
     config["ledColor"] = conf.ledColor;
+    config["opMode"] = conf.operationMode;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
@@ -79,6 +80,7 @@ void Config::toJsonString(char* buf) {
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
     config["ledColor"] = conf.ledColor;
+    config["opMode"] = conf.operationMode;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
@@ -128,6 +130,10 @@ void Config::fromJson(JsonObject source) {
     }
     if (source.containsKey("ledColor") && source["ledColor"] != conf.ledColor) {
         conf.ledColor = source["ledColor"];
+        modified = true;
+    }
+    if (source.containsKey("opMode") && source["opMode"] != conf.operationMode) {
+        conf.operationMode = source["opMode"];
         modified = true;
     }
     if (source["name"] != conf.pilotName) {
@@ -188,6 +194,39 @@ uint32_t Config::getLedColor() {
     return conf.ledColor;
 }
 
+uint8_t Config::getOperationMode() {
+    return conf.operationMode;
+}
+
+// Setters for RotorHazard node mode
+void Config::setFrequency(uint16_t freq) {
+    if (conf.frequency != freq) {
+        conf.frequency = freq;
+        modified = true;
+    }
+}
+
+void Config::setEnterRssi(uint8_t rssi) {
+    if (conf.enterRssi != rssi) {
+        conf.enterRssi = rssi;
+        modified = true;
+    }
+}
+
+void Config::setExitRssi(uint8_t rssi) {
+    if (conf.exitRssi != rssi) {
+        conf.exitRssi = rssi;
+        modified = true;
+    }
+}
+
+void Config::setOperationMode(uint8_t mode) {
+    if (conf.operationMode != mode) {
+        conf.operationMode = mode;
+        modified = true;
+    }
+}
+
 void Config::setDefaults(void) {
     DEBUG("Setting EEPROM defaults\n");
     // Reset everything to 0/false and then just set anything that zero is not appropriate
@@ -204,6 +243,7 @@ void Config::setDefaults(void) {
     conf.ledMode = 3;  // Rainbow wave by default
     conf.ledBrightness = 80;
     conf.ledColor = 0xFF00FF;  // Purple by default
+    conf.operationMode = 0;  // WiFi mode by default
     strlcpy(conf.ssid, "", sizeof(conf.ssid));
     strlcpy(conf.password, "", sizeof(conf.password));
     strlcpy(conf.pilotName, "", sizeof(conf.pilotName));

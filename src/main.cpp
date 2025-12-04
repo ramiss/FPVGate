@@ -4,16 +4,51 @@
 #include "racehistory.h"
 #include "storage.h"
 #include "selftest.h"
+#include "transport.h"
+#include "usb.h"
+// DISABLED FOR NOW: #include "nodemode.h"  // Uncomment to re-enable RotorHazard support
 #include <ElegantOTA.h>
 #ifdef ESP32S3
 #include "rgbled.h"
 #endif
+
+// ====================================================================
+// ROTORHAZARD MODE - CURRENTLY DISABLED
+// To re-enable RotorHazard support in the future:
+// 1. Uncomment the OperationMode enum below
+// 2. Uncomment nodeMode initialization and usage throughout this file
+// 3. Uncomment the mode detection logic in setup()
+// 4. Uncomment the mode-specific code in loop()
+// ====================================================================
+
+// DISABLED: Operation mode enumeration
+// enum OperationMode {
+//     MODE_WIFI,
+//     MODE_ROTORHAZARD
+// };
+// 
+// OperationMode currentMode = MODE_WIFI;
+// static NodeMode nodeMode;  // RotorHazard node mode controller
+
+// Mode Switching Information:
+// =========================
+// SOFTWARE MODE SWITCH:
+// - Change "opMode" in config via web interface (0=WiFi, 1=RotorHazard)
+// - Requires REBOOT to take effect
+// - Setting is stored in EEPROM and persists across reboots
+//
+// PHYSICAL MODE SWITCH (when installed):
+// - GPIO9 to GND = Force WiFi mode (overrides software setting)
+// - GPIO9 floating = Use software config setting
+// - Hardware switch always takes priority over software setting
 
 static RX5808 rx(PIN_RX5808_RSSI, PIN_RX5808_DATA, PIN_RX5808_SELECT, PIN_RX5808_CLOCK);
 static Config config;
 static Storage storage;
 static SelfTest selfTest;
 static Webserver ws;
+static USBTransport usbTransport;
+static TransportManager transportManager;
 static Buzzer buzzer;
 static Led led;
 static RaceHistory raceHistory;
@@ -38,6 +73,7 @@ static void parallelTask(void *pvArgs) {
         rgbLed.handleRgbLed(currentTimeMs);
 #endif
         ws.handleWebUpdate(currentTimeMs);
+        usbTransport.update(currentTimeMs);
         config.handleEeprom(currentTimeMs);
         rx.handleFrequencyChange(currentTimeMs, config.getFrequency());
         monitor.checkBatteryState(currentTimeMs, config.getAlarmThreshold());
@@ -52,13 +88,57 @@ static void initParallelTask() {
 }
 
 void setup() {
+    // ====================================================================
+    // ROTORHAZARD MODE DETECTION - CURRENTLY DISABLED
+    // Mode switching has been disabled - system now runs in WiFi mode only
+    // To re-enable: uncomment the mode detection block below
+    // ====================================================================
+    
+    // Initialize config first
+    config.init();
+    
+    /* DISABLED: RotorHazard mode detection
+    // Check physical mode switch
+    pinMode(PIN_MODE_SWITCH, INPUT_PULLUP);
+    delay(10);  // Allow pin to settle
+    
+    int modePin = digitalRead(PIN_MODE_SWITCH);
+    
+    // Physical switch overrides software setting
+    // If pin is explicitly pulled LOW (to GND), force WiFi mode
+    // If pin reads HIGH (floating with pullup), use software config
+    if (modePin == WIFI_MODE) {
+        // Physical switch connected to GND = force WiFi mode
+        currentMode = MODE_WIFI;
+    } else {
+        // Pin is HIGH (floating) = use software config
+        uint8_t configMode = config.getOperationMode();
+        if (configMode == 0) {
+            currentMode = MODE_WIFI;
+        } else {
+            currentMode = MODE_ROTORHAZARD;
+        }
+    }
+    */
+    
+    // Initialize serial (115200)
+    Serial.begin(115200);
+    delay(100);
+    
+    // Clear serial buffer
+    while (Serial.available()) {
+        Serial.read();
+    }
+    
+    // Always enable debug output (WiFi mode only)
     DEBUG_INIT;
 #ifdef ESP32S3
-    DEBUG("ESP32S3 build detected\n");
+        DEBUG("ESP32S3 build detected - WiFi Mode\n");
 #else
-    DEBUG("Generic ESP32 build\n");
+        DEBUG("Generic ESP32 build - WiFi Mode\n");
 #endif
-    config.init();
+    
+    // Note: config.init() already called above
     rx.init();
     buzzer.init(PIN_BUZZER, BUZZER_INVERTED);
     led.init(PIN_LED, false);
@@ -80,16 +160,58 @@ void setup() {
 #endif
     timer.init(&config, &rx, &buzzer, &led);
     monitor.init(PIN_VBAT, VBAT_SCALE, VBAT_ADD, &buzzer, &led);
+    
+    // WiFi mode initialization (RotorHazard mode disabled)
     selfTest.init(&storage);
     ws.init(&config, &timer, &monitor, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    
+    // Initialize USB transport
+    usbTransport.init(&config, &timer, &monitor, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    
+    // Register transports with TransportManager
+    transportManager.addTransport(&ws);
+    transportManager.addTransport(&usbTransport);
+    
+    // Set TransportManager in webserver for event broadcasting
+    ws.setTransportManager(&transportManager);
+    
+    DEBUG("Transport system initialized (WiFi + USB)\n");
+    
     led.on(400);
     buzzer.beep(200);
-    initParallelTask();
+    initParallelTask();  // Start Core 0 task
+    
+    /* DISABLED: RotorHazard mode initialization
+    if (currentMode == MODE_WIFI) {
+        // WiFi mode - start web server and services
+        selfTest.init(&storage);
+        ws.init(&config, &timer, &monitor, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+        led.on(400);
+        buzzer.beep(200);
+        initParallelTask();  // Start Core 0 task
+    } else {
+        // RotorHazard mode - start node protocol
+        nodeMode.begin(&timer, &config);
+        led.blink(100, 1900);  // Slow blink = node mode active (100ms on, 1900ms off)
+        // NO parallel task (avoid WiFi interference)
+        // NO buzzer beep (silent operation)
+    }
+    */
 }
 
 void loop() {
     uint32_t currentTimeMs = millis();
+    
+    // Timing always runs
     timer.handleLapTimerUpdate(currentTimeMs);
+    
+    // Broadcast lap events to all transports (WiFi + USB)
+    if (timer.isLapAvailable()) {
+        uint32_t lapTime = timer.getLapTime();
+        transportManager.broadcastLapEvent(lapTime);
+    }
+    
+    // WiFi mode - original behavior (RotorHazard mode disabled)
     ElegantOTA.loop();
     
     // Initialize SD card after boot (deferred to prevent watchdog timeout)
@@ -110,4 +232,25 @@ void loop() {
             DEBUG("SD card not available - using LittleFS only\n");
         }
     }
+    
+    /* DISABLED: RotorHazard mode loop
+    if (currentMode == MODE_WIFI) {
+        // WiFi mode - original behavior
+        ElegantOTA.loop();
+        
+        // ... SD card initialization code ...
+    } else {
+        // RotorHazard mode - run node protocol
+        nodeMode.process();
+        
+        // Still update hardware (LED, buzzer) but NOT web server
+        buzzer.handleBuzzer(currentTimeMs);
+        led.handleLed(currentTimeMs);
+#ifdef ESP32S3
+        rgbLed.handleRgbLed(currentTimeMs);
+#endif
+        rx.handleFrequencyChange(currentTimeMs, config.getFrequency());
+        monitor.checkBatteryState(currentTimeMs, config.getAlarmThreshold());
+    }
+    */
 }

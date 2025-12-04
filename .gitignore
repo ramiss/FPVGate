@@ -34,10 +34,19 @@ api_key.txt
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
+tools/__pycache__/
+
+# Node.js / Electron
+node_modules/
+electron/dist/
+electron/node_modules/
+package-lock.json
 
 # WARP temporary files and documentation
 .warp/
 WARP.md
+CODE_REVIEW.md
 
 # Voice generation output (too large for git)
 data_full_voices/

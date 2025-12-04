@@ -6,20 +6,27 @@
 #include "racehistory.h"
 #include "storage.h"
 #include "selftest.h"
+#include "transport.h"
 
 #define WIFI_CONNECTION_TIMEOUT_MS 30000
 #define WIFI_RECONNECT_TIMEOUT_MS 500
 #define WEB_RSSI_SEND_TIMEOUT_MS 200
 
-class Webserver {
+class Webserver : public TransportInterface {
    public:
     void init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808);
+    void setTransportManager(TransportManager *tm);
     void handleWebUpdate(uint32_t currentTimeMs);
+    
+    // TransportInterface implementation
+    void sendLapEvent(uint32_t lapTimeMs) override;
+    void sendRssiEvent(uint8_t rssi) override;
+    void sendRaceStateEvent(const char* state) override;
+    bool isConnected() override;
+    void update(uint32_t currentTimeMs) override;
 
    private:
     void startServices();
-    void sendRssiEvent(uint8_t rssi);
-    void sendLaptimeEvent(uint32_t lapTime);
 
     Config *conf;
     LapTimer *timer;
@@ -30,6 +37,7 @@ class Webserver {
     Storage *storage;
     SelfTest *selftest;
     RX5808 *rx;
+    TransportManager *transportMgr;
 
     wifi_mode_t wifiMode = WIFI_OFF;
     wl_status_t lastStatus = WL_IDLE_STATUS;

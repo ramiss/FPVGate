@@ -14,6 +14,7 @@
 #ifdef ESP32S3
 #include <SD.h>
 #include "rgbled.h"
+#include "USB.h"
 #endif
 
 SelfTest::SelfTest() : storage(nullptr), allPassed(true) {
@@ -54,6 +55,13 @@ bool SelfTest::runAllTests() {
     TestResult wifiTest = testWiFi();
     results.push_back(wifiTest);
     if (!wifiTest.passed) allPassed = false;
+    
+#ifdef ESP32S3
+    // Test USB Serial CDC
+    TestResult usbTest = testUSB();
+    results.push_back(usbTest);
+    // USB failure is not critical - don't fail overall test
+#endif
     
     DEBUG("Self-tests complete: %s\n", allPassed ? "PASSED" : "FAILED");
     return allPassed;
@@ -454,6 +462,38 @@ TestResult SelfTest::testRGBLED(RgbLed* rgbLed) {
     
     result.passed = true;
     result.details = "All channels tested (R,G,B)";
+    result.duration_ms = millis() - start;
+    return result;
+}
+
+TestResult SelfTest::testUSB() {
+    TestResult result;
+    result.name = "USB Serial CDC";
+    uint32_t start = millis();
+    
+    // Check if USB CDC is available
+    #if ARDUINO_USB_CDC_ON_BOOT
+    if (!USBSerial) {
+        result.passed = false;
+        result.details = "USB CDC not available";
+        result.duration_ms = millis() - start;
+        return result;
+    }
+    
+    // Test if USB is connected
+    bool connected = (bool)USBSerial;
+    
+    // Check USB transport files
+    bool transportFileExists = LittleFS.exists("/usb-transport.js");
+    
+    result.passed = true;
+    result.details = String("CDC ") + (connected ? "connected" : "disconnected") + 
+                    ", Transport: " + (transportFileExists ? "loaded" : "missing");
+    #else
+    result.passed = false;
+    result.details = "USB CDC not enabled in build";
+    #endif
+    
     result.duration_ms = millis() - start;
     return result;
 }

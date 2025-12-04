@@ -1,3 +1,6 @@
+#ifndef BATTERY_H
+#define BATTERY_H
+
 #include <stdint.h>
 
 #include "buzzer.h"
@@ -30,3 +33,5 @@ class BatteryMonitor {
     Buzzer *buz;
     Led *led;
 };
+
+#endif  // BATTERY_H

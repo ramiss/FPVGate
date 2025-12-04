@@ -55,9 +55,12 @@ FPVGate is a lap timer that measures the time it takes to complete a lap by dete
 
 ## Confirmed Working Features
 
+- **USB Connectivity** - Direct USB Serial CDC connection for local-only operation (ESP32-S3)  
+- **Electron Desktop App** - Native desktop application with USB support for Windows/Mac/Linux  
+- **Dual Transport** - Use WiFi or USB simultaneously, automatic fallback between transports  
 - **Single Node RSSI Timing** - Accurate lap detection via 5.8GHz signal strength  
 - **ESP32-S3 Support** - Optimized for ESP32-S3-DevKitC-1  
-- **SD Card Storage** - Audio files stored on SD card, 85% more free flash space  
+- **SD Card Storage** - Audio files stored on SD card, 85% more free flash space
 - **System Self-Test** - Comprehensive diagnostics testing all hardware/software components  
 - **RGB LED Indicators** - Visual feedback with 10 presets including customizable colors  
 - **Web Interface** - Modern Material Design UI with **23 theme options**  
@@ -220,9 +223,44 @@ pio run -e ESP32S3 -t upload
 pio run -e ESP32S3 -t uploadfs
 ```
 
+### Building the Electron Desktop App (Optional)
+
+If you want to build the Electron app from source:
+
+1. **Install Node.js** (v16 or newer)
+   - Download from [nodejs.org](https://nodejs.org/)
+
+2. **Navigate to electron folder**
+   ```bash
+   cd electron
+   ```
+
+3. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+4. **Run in development mode**
+   ```bash
+   npm start
+   ```
+
+5. **Build for production**
+   ```bash
+   npm run build
+   ```
+   - Creates packaged app in `electron/dist/`
+   - Windows: `FPVGate-win32-x64/FPVGate.exe`
+   - macOS: `FPVGate-darwin-x64/FPVGate.app`
+   - Linux: `FPVGate-linux-x64/FPVGate`
+
 ## Using FPVGate
 
-### First Connection
+### Connection Options
+
+FPVGate supports two connection methods:
+
+#### Option 1: WiFi Connection (Default)
 
 1. **Power On** - Plug in your FPVGate device
 2. **Connect to WiFi**
@@ -231,6 +269,40 @@ pio run -e ESP32S3 -t uploadfs
 3. **Open Web Interface**
    - Navigate to: `http://www.fpvgate.xyz` or `http://192.168.4.1`
    - The web interface should load automatically
+
+#### Option 2: USB Connection (ESP32-S3 Only)
+
+**Direct USB connection for zero-latency, local-only operation.**
+
+**Benefits:**
+- No WiFi required - works completely offline
+- Lower latency for race control and LED commands
+- Eliminates potential network connectivity issues
+- WiFi remains available for multiple clients simultaneously
+
+**Using the Electron Desktop App:**
+
+1. **Download** the Electron app from the [Releases page](https://github.com/LouisHitchcock/FPVGate/releases)
+2. **Install** and launch the FPVGate desktop application
+3. **Connect** your ESP32-S3 via USB
+4. **Select COM Port** in Configuration → System Setup
+   - App auto-detects available serial ports
+   - COM port selection dropdown added to config menu
+5. The app automatically uses USB transport when connected
+
+**Using Web Interface with USB:**
+
+1. Connect your ESP32-S3 via USB
+2. Open the web interface in a browser
+3. Click the USB connection mode selector in Configuration
+4. Select your COM port from the dropdown
+5. All features work identically to WiFi mode
+
+**Transport Features:**
+- Automatic fallback: USB ↔ WiFi seamless switching
+- Simultaneous connections: USB for race control, WiFi for spectators
+- All features supported: race control, LED commands, lap timing, voice announcements
+- JSON-based command protocol over Serial CDC
 
 ### RGB LED Status Indicators
 
@@ -569,22 +641,42 @@ FPVGate/
 ├── data/                  # Web interface files
 │   ├── index.html        # Main web app
 │   ├── script.js         # UI logic and race control
+│   ├── usb-transport.js  # USB Serial CDC transport
 │   ├── style.css         # Material Design themes
 │   └── ...               # Supporting libraries
+├── docs/                  # Documentation
+│   ├── MULTI_VOICE_SETUP.md
+│   ├── VOICE_GENERATION_README.md
+│   └── SD_CARD_MIGRATION_GUIDE.md
+├── electron/              # Desktop application
+│   ├── main.js           # Electron main process
+│   ├── preload.js        # Preload script
+│   └── package.json      # Electron dependencies
 ├── lib/
 │   ├── CONFIG/           # Configuration & EEPROM
 │   ├── LAPTIMER/         # Core timing logic
 │   ├── RACEHISTORY/      # Race storage & persistence
 │   ├── RGBLED/           # RGB LED control (ESP32-S3)
 │   ├── RX5808/           # VRx SPI communication
+│   ├── TRANSPORT/        # Transport abstraction layer
+│   ├── USB/              # USB Serial CDC transport
 │   ├── WEBSERVER/        # WiFi & web server
+│   ├── SELFTEST/         # System diagnostics
 │   ├── KALMAN/           # RSSI filtering
 │   ├── BUZZER/           # Audio feedback
 │   └── BATTERY/          # Voltage monitoring
+├── release/               # Prebuilt firmware releases
+│   ├── v1.2.1/           # Latest release
+│   └── v1.2.0/           # Previous release
 ├── src/
 │   └── main.cpp          # Main application entry
 ├── targets/
-│   └── ESP32S3.ini       # ESP32-S3 build config
+│   ├── ESP32S3.ini       # ESP32-S3 build config
+│   └── custom_8mb.csv    # Custom partition table
+├── tools/                 # Python utilities
+│   ├── generate_voice_files.py
+│   ├── upload_sounds_to_sd.py
+│   └── ...               # Voice generation scripts
 └── platformio.ini        # PlatformIO configuration
 ```
 

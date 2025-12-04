@@ -34,6 +34,7 @@
 #define PIN_RX5808_CLOCK 4    //CH3
 #define PIN_BUZZER 5
 #define BUZZER_INVERTED false
+#define PIN_MODE_SWITCH 1     // Mode selection: LOW=WiFi, HIGH=RotorHazard
 
 //ESP32-S3
 #elif defined(ESP32S3)
@@ -49,6 +50,7 @@
 #define PIN_RX5808_CLOCK 12    // CH3 on Pin 12
 #define PIN_BUZZER 5
 #define BUZZER_INVERTED false
+#define PIN_MODE_SWITCH 9      // Mode selection: LOW=WiFi, HIGH=RotorHazard
 // SD Card SPI pins (tested and working configuration)
 #define PIN_SD_CS 39
 #define PIN_SD_SCK 36
@@ -68,8 +70,13 @@
 #define PIN_RX5808_CLOCK 23  //CH3
 #define PIN_BUZZER 27
 #define BUZZER_INVERTED false
+#define PIN_MODE_SWITCH 33   // Mode selection: LOW=WiFi, HIGH=RotorHazard
 
 #endif
+
+// Mode selection constants
+#define WIFI_MODE LOW          // GND on switch pin = WiFi/Standalone mode
+#define ROTORHAZARD_MODE HIGH  // HIGH (floating/pullup) = RotorHazard node mode
 
 #define EEPROM_RESERVED_SIZE 256
 #define CONFIG_MAGIC_MASK (0b11U << 30)
@@ -91,6 +98,7 @@ typedef struct {
     uint8_t ledMode;           // 0=off, 1=solid, 2=pulse, 3=rainbow
     uint8_t ledBrightness;     // 0-255
     uint32_t ledColor;         // RGB as 0xRRGGBB
+    uint8_t operationMode;     // 0=WiFi, 1=RotorHazard (software switch)
     char pilotName[21];
     char ssid[33];
     char password[33];
@@ -118,6 +126,13 @@ class Config {
     uint32_t getLedColor();
     char* getSsid();
     char* getPassword();
+    uint8_t getOperationMode();
+    
+    // Setters for RotorHazard node mode
+    void setFrequency(uint16_t freq);
+    void setEnterRssi(uint8_t rssi);
+    void setExitRssi(uint8_t rssi);
+    void setOperationMode(uint8_t mode);
 
    private:
     laptimer_config_t conf;

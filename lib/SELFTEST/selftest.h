@@ -49,6 +49,7 @@ class SelfTest {
     
 #ifdef ESP32S3
     TestResult testRGBLED(RgbLed* rgbLed);
+    TestResult testUSB();
 #endif
     
     // Get results
