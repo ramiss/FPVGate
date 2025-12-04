@@ -26,7 +26,8 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 **Visual Feedback**
 - RGB LED indicators with 10 customizable presets
 - Real-time RSSI visualization
-- OSD overlay for live streaming
+- OSD overlay for live streaming (transparent, multi-monitor support)
+- Mobile-responsive web interface
 
 **Natural Voice Announcements**
 - Pre-recorded ElevenLabs voices (4 voices included)
@@ -38,13 +39,16 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Real-time lap tracking with gap analysis
 - Fastest lap highlighting
 - Fastest 3 consecutive laps (RaceGOW format)
-- Race history with export/import
+- Race history with export/import (cross-device SD card storage)
+- Race tagging and naming
+- Detailed race analysis view
 
 **Smart Storage**
-- SD card support for audio files
+- SD card support for audio files and race data
 - Auto-migration from flash to SD
-- Race history persistence
+- Cross-device race history (accessible from all connected devices)
 - Config backup/restore
+- Multi-voice audio library (4 voice packs)
 
 **Developer Friendly**
 - Self-test diagnostics
@@ -163,14 +167,23 @@ Exit  ├/──────────\─
 
 ## Project Status
 
-**Current Version:** v1.2.1  
+**Current Version:** v1.3.0  
 **Platform:** ESP32-S3 (ESP32-C3 support legacy)  
 **License:** MIT  
 **Status:** Stable - actively maintained
 
 ### Recent Updates
 
-**v1.2.1 (Latest)**
+**v1.3.0 (Latest)**
+- iOS/Safari full audio support with vibration feedback
+- Mobile-responsive interface for phones and tablets
+- USB Serial CDC connectivity with Electron desktop app
+- OSD overlay system for streaming (transparent, real-time)
+- Cross-device race storage on SD card
+- Race tagging, naming, and detailed analysis
+- Enhanced race management with import/export
+
+**v1.2.1**
 - SD card storage for audio files
 - Automatic flash-to-SD migration
 - Enhanced OTA capacity (2MB updates)
@@ -181,12 +194,6 @@ Exit  ├/──────────\─
 - PiperTTS integration
 - Enhanced LED presets with color pickers
 - Complete config export/import
-
-**v1.1.0**
-- Natural voice announcements
-- ElevenLabs pre-recorded audio
-- RaceGOW format support
-- Fastest lap highlighting
 
 **[Full changelog →](CHANGELOG.md)**
 

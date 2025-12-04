@@ -2,6 +2,112 @@
 
 All notable changes to FPVGate will be documented in this file.
 
+## [1.3.0] - 2024-12-04
+
+### Added - Mobile & iOS Support
+- **iOS/Safari Audio Support**: Full audio functionality on iOS devices
+  - Automatic audio context unlocking on user interaction
+  - Shared AudioContext for beep tones to prevent suspension
+  - Web Audio API properly resumed on iOS/Safari
+  - Web Speech API voice loading for iOS
+- **Mobile-Responsive Interface**: Optimized web interface for phones and tablets
+  - Responsive tables and navigation with flex-wrap
+  - Mobile-optimized chart heights (250px)
+  - Single-column stat boxes on phones
+  - Touch-friendly buttons and controls
+- **Vibration Feedback**: Race start vibration (works even in silent mode)
+  - 500ms vibration on race start
+  - Vibration API integration for mobile devices
+
+### Added - USB Connectivity & Desktop
+- **USB Serial CDC**: Direct USB connection for low-latency communication
+  - Zero-latency local connection
+  - Automatic USB/WiFi detection and switching
+- **Electron Desktop App**: Native desktop application
+  - Windows, macOS, and Linux support
+  - Native USB connectivity via serialport
+  - Full feature parity with web interface
+  - Bundled with all dependencies
+- **Transport Abstraction Layer**: Unified API for WiFi and USB
+  - `usb-transport.js` - WebUSB and native USB support
+  - Single codebase works over both WiFi and USB
+  - Automatic transport selection
+
+### Added - OSD Overlay System
+- **Live Race Display**: Dedicated OSD page for streaming
+  - Real-time lap time updates via Server-Sent Events
+  - Transparent background for OBS/StreamLabs overlay
+  - Customizable layout with pilot name, lap times, race timer
+  - Multi-monitor support
+  - One-click URL copying for easy setup
+- **OSD HTML/CSS/JS**: Complete overlay implementation
+  - `osd.html`, `osd.css`, `osd.js`
+  - Event-driven architecture for real-time updates
+
+### Added - Cross-Device Race Storage
+- **SD Card Race Storage**: Races stored on SD card for shared access
+  - Race storage path: `/races.json` → `/sd/races/races.json`
+  - Automatic `/sd/races/` directory creation
+  - Cross-device accessibility (all connected devices see same data)
+  - LittleFS fallback if SD card unavailable
+
+### Added - Enhanced Race Management
+- **Race Tagging**: Add custom tags to races for organization
+- **Race Naming**: Name races for easy identification
+- **Race Details View**: Comprehensive analysis with lap-by-lap breakdown
+- **Fastest Round Analysis**: Best consecutive 3-lap combinations
+- **Individual Race Export**: Download single races for sharing
+- **Race Search & Filter**: Find races by name, tag, or date
+
+### Added - Documentation
+- **Comprehensive Wiki**: New wiki-style documentation
+  - `docs/GETTING_STARTED.md` - Setup and flashing guide
+  - `docs/USER_GUIDE.md` - Complete feature walkthrough
+  - `docs/HARDWARE_GUIDE.md` - Components and wiring
+  - `docs/FEATURES.md` - In-depth technical documentation
+  - `docs/DEVELOPMENT.md` - Building and contributing
+- **Updated README**: Clearer project overview and quick start
+
+### Changed
+- **Audio System**: iOS/Safari compatibility improvements
+  - Beep tones use persistent AudioContext
+  - Audio unlock during "Enable Audio" button press
+  - PiperTTS AudioContext resume on iOS
+- **LED Control**: Enhanced configuration options
+  - Pattern selection with color pickers
+  - Speed and brightness controls
+  - Manual override mode
+- **Battery Monitoring**: Improved UI with voltage tracking and alerts
+- **Theme Support**: Multiple color themes (Oceanic, Darker, Lighter, Midnight)
+
+### Fixed
+- **PiperTTS on iOS**: Fixed suspended AudioContext preventing audio playback
+- **Race Start Beeps on Mobile**: Fixed beep tones not playing on iOS/Safari
+- **USBSerial Compilation Error**: Changed `USBSerial` to `Serial` for ESP32-S3
+- **Audio Requiring Multiple Interactions**: Single interaction now unlocks all audio
+
+### Technical
+- **Server-Sent Events**: Real-time race updates for OSD and multi-client sync
+- **WebUSB Support**: Browser-based USB communication
+- **Electron Integration**: Desktop app with serialport
+- **iOS Detection**: Platform and user agent detection for iOS/Safari
+- **Media Queries**: Responsive CSS for mobile, tablet, desktop
+- **Race Storage Migration**: Moved from internal flash to SD card
+
+### Compatibility
+- **Hardware**: ESP32-S3 DevKitC-1 (8MB Flash)
+- **Browsers**: Chrome, Firefox, Safari (iOS 12+), Edge
+- **WebUSB**: Chrome 89+, Edge 89+
+- **Desktop App**: Windows 10+, macOS 10.13+, Linux (Ubuntu 18.04+)
+- **Mobile**: iOS 12+, Android 8+
+- **SD Card**: FAT32, 4GB-32GB recommended
+
+### Known Issues
+- iOS silent mode mutes audio (by design, cannot be bypassed)
+- Vibration API only works on mobile devices
+- WebUSB not available on Firefox or Safari
+- Race migration from LittleFS to SD card not automatic
+
 ## [1.2.1] - 2024-12-01
 
 ### Added
