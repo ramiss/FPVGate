@@ -4,7 +4,7 @@
 
 This is a maintenance release with important bug fixes and calibration wizard improvements.
 
-## 🐛 Bug Fixes
+## Bug Fixes
 
 ### Race History Storage Fixed
 - **Fixed race history not saving** - Race history was not being initialized with the storage backend, preventing races from being saved to SD card or LittleFS
@@ -20,7 +20,7 @@ This is a maintenance release with important bug fixes and calibration wizard im
 - **Enhanced visual display** - Added smooth 15-point moving average filter and filled area under the calibration chart for easier peak identification
 - **Better UI instructions** - Updated wizard text to clarify that only peak points need to be marked
 
-## 📝 Technical Details
+## Technical Details
 
 ### Changed Files
 - `src/main.cpp` - Added race history initialization
@@ -41,14 +41,14 @@ exitRssi = avgPeak - (peakRange * 0.40)
 
 This provides more intuitive and accurate threshold values that work better across different signal strengths and environments.
 
-## 🔄 Upgrading from v1.3.0
+## Upgrading from v1.3.0
 
 1. Flash the new firmware as normal
 2. No configuration changes required
 3. Existing race history will be preserved
 4. Re-run calibration wizard to take advantage of improved threshold calculation
 
-## 📦 What's Included
+## What's Included
 
 - Firmware binary for ESP32-S3
 - Firmware binary for ESP32-C3
@@ -56,10 +56,10 @@ This provides more intuitive and accurate threshold values that work better acro
 - Updated web interface (LittleFS image)
 - Source code
 
-## 🙏 Credits
+## Credits
 
 Thank you to all contributors and testers who helped identify and fix these issues!
 
-## 📄 Full Changelog
+## Full Changelog
 
 See [CHANGELOG.md](../../CHANGELOG.md) for complete version history.
