@@ -48,7 +48,7 @@ void Config::write(void) {
 
 void Config::toJson(AsyncResponseStream& destination) {
     // Use https://arduinojson.org/v6/assistant to estimate memory
-    DynamicJsonDocument config(256);
+    DynamicJsonDocument config(512);
     config["freq"] = conf.frequency;
     config["minLap"] = conf.minLap;
     config["alarm"] = conf.alarm;
@@ -60,6 +60,11 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
     config["ledColor"] = conf.ledColor;
+    config["ledPreset"] = conf.ledPreset;
+    config["ledSpeed"] = conf.ledSpeed;
+    config["ledFadeColor"] = conf.ledFadeColor;
+    config["ledStrobeColor"] = conf.ledStrobeColor;
+    config["ledManualOverride"] = conf.ledManualOverride;
     config["opMode"] = conf.operationMode;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
@@ -68,7 +73,7 @@ void Config::toJson(AsyncResponseStream& destination) {
 }
 
 void Config::toJsonString(char* buf) {
-    DynamicJsonDocument config(256);
+    DynamicJsonDocument config(512);
     config["freq"] = conf.frequency;
     config["minLap"] = conf.minLap;
     config["alarm"] = conf.alarm;
@@ -80,6 +85,11 @@ void Config::toJsonString(char* buf) {
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
     config["ledColor"] = conf.ledColor;
+    config["ledPreset"] = conf.ledPreset;
+    config["ledSpeed"] = conf.ledSpeed;
+    config["ledFadeColor"] = conf.ledFadeColor;
+    config["ledStrobeColor"] = conf.ledStrobeColor;
+    config["ledManualOverride"] = conf.ledManualOverride;
     config["opMode"] = conf.operationMode;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
@@ -130,6 +140,26 @@ void Config::fromJson(JsonObject source) {
     }
     if (source.containsKey("ledColor") && source["ledColor"] != conf.ledColor) {
         conf.ledColor = source["ledColor"];
+        modified = true;
+    }
+    if (source.containsKey("ledPreset") && source["ledPreset"] != conf.ledPreset) {
+        conf.ledPreset = source["ledPreset"];
+        modified = true;
+    }
+    if (source.containsKey("ledSpeed") && source["ledSpeed"] != conf.ledSpeed) {
+        conf.ledSpeed = source["ledSpeed"];
+        modified = true;
+    }
+    if (source.containsKey("ledFadeColor") && source["ledFadeColor"] != conf.ledFadeColor) {
+        conf.ledFadeColor = source["ledFadeColor"];
+        modified = true;
+    }
+    if (source.containsKey("ledStrobeColor") && source["ledStrobeColor"] != conf.ledStrobeColor) {
+        conf.ledStrobeColor = source["ledStrobeColor"];
+        modified = true;
+    }
+    if (source.containsKey("ledManualOverride") && source["ledManualOverride"] != conf.ledManualOverride) {
+        conf.ledManualOverride = source["ledManualOverride"];
         modified = true;
     }
     if (source.containsKey("opMode") && source["opMode"] != conf.operationMode) {
@@ -198,6 +228,26 @@ uint32_t Config::getLedColor() {
     return conf.ledColor;
 }
 
+uint8_t Config::getLedPreset() {
+    return conf.ledPreset;
+}
+
+uint8_t Config::getLedSpeed() {
+    return conf.ledSpeed;
+}
+
+uint32_t Config::getLedFadeColor() {
+    return conf.ledFadeColor;
+}
+
+uint32_t Config::getLedStrobeColor() {
+    return conf.ledStrobeColor;
+}
+
+uint8_t Config::getLedManualOverride() {
+    return conf.ledManualOverride;
+}
+
 uint8_t Config::getOperationMode() {
     return conf.operationMode;
 }
@@ -231,6 +281,55 @@ void Config::setOperationMode(uint8_t mode) {
     }
 }
 
+void Config::setLedPreset(uint8_t preset) {
+    if (conf.ledPreset != preset) {
+        conf.ledPreset = preset;
+        modified = true;
+    }
+}
+
+void Config::setLedBrightness(uint8_t brightness) {
+    if (conf.ledBrightness != brightness) {
+        conf.ledBrightness = brightness;
+        modified = true;
+    }
+}
+
+void Config::setLedSpeed(uint8_t speed) {
+    if (conf.ledSpeed != speed) {
+        conf.ledSpeed = speed;
+        modified = true;
+    }
+}
+
+void Config::setLedColor(uint32_t color) {
+    if (conf.ledColor != color) {
+        conf.ledColor = color;
+        modified = true;
+    }
+}
+
+void Config::setLedFadeColor(uint32_t color) {
+    if (conf.ledFadeColor != color) {
+        conf.ledFadeColor = color;
+        modified = true;
+    }
+}
+
+void Config::setLedStrobeColor(uint32_t color) {
+    if (conf.ledStrobeColor != color) {
+        conf.ledStrobeColor = color;
+        modified = true;
+    }
+}
+
+void Config::setLedManualOverride(uint8_t override) {
+    if (conf.ledManualOverride != override) {
+        conf.ledManualOverride = override;
+        modified = true;
+    }
+}
+
 void Config::setDefaults(void) {
     DEBUG("Setting EEPROM defaults\n");
     // Reset everything to 0/false and then just set anything that zero is not appropriate
@@ -244,9 +343,14 @@ void Config::setDefaults(void) {
     conf.enterRssi = 120;
     conf.exitRssi = 100;
     conf.maxLaps = 0;
-    conf.ledMode = 3;  // Rainbow wave by default
+    conf.ledMode = 3;  // Rainbow wave by default (legacy)
     conf.ledBrightness = 80;
     conf.ledColor = 0xFF00FF;  // Purple by default
+    conf.ledPreset = 2;  // Rainbow Wave preset by default
+    conf.ledSpeed = 5;  // Medium speed
+    conf.ledFadeColor = 0x0080FF;  // Blue for fade
+    conf.ledStrobeColor = 0xFFFFFF;  // White for strobe
+    conf.ledManualOverride = 0;  // Manual override off by default
     conf.operationMode = 0;  // WiFi mode by default
     strlcpy(conf.ssid, "", sizeof(conf.ssid));
     strlcpy(conf.password, "", sizeof(conf.password));

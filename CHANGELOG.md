@@ -2,6 +2,35 @@
 
 All notable changes to FPVGate will be documented in this file.
 
+## [1.3.2] - 2024-12-10
+
+### Added
+- **LED Settings Persistence** - All LED configuration now saves to EEPROM and persists across reboots
+  - Added `ledPreset`, `ledSpeed`, `ledFadeColor`, `ledStrobeColor`, `ledManualOverride` to config struct
+  - Config version bumped to v3 for automatic migration
+  - LED settings automatically restored on device boot
+  - Page refresh now loads current LED state from device
+  - All LED changes (/led/preset, /led/brightness, /led/speed, /led/color, /led/fadecolor, /led/strobecolor, /led/override) now save to config
+
+### Changed
+- **Default LED Preset** - Rainbow Wave is now the default LED effect (was Solid Colour in web UI)
+- **Config JSON Buffer** - Increased from 256 to 512 bytes to accommodate expanded LED settings
+- **Frontend LED Loading** - Web interface now properly loads all LED settings from device config on page load
+  - Loads preset, brightness, speed, all colors, and manual override state
+  - Removed old ledMode (0-3) mapping logic in favor of direct ledPreset usage
+
+### Fixed
+- **LED Settings Reset on Page Refresh** - LED configuration now persists properly instead of reverting to defaults
+- **Solid Colour Default Bug** - Fixed page loading with wrong LED preset (was showing Solid Colour instead of saved preset)
+
+### Technical
+- Updated `lib/CONFIG/config.h` - Added 5 new LED config fields, incremented CONFIG_VERSION to 3
+- Updated `lib/CONFIG/config.cpp` - Added getters/setters, JSON serialization, and defaults for new LED fields
+- Updated `lib/WEBSERVER/webserver.cpp` - All LED endpoints now call config setters to persist changes
+- Updated `src/main.cpp` - LED initialization now loads all settings from config (preset, speed, colors, override)
+- Updated `data/script.js` - Page load reads LED config and populates all UI elements accordingly
+- Config struct size: ~140 bytes (well within 256 byte EEPROM reservation)
+
 ## [1.3.1] - 2024-12-08
 
 ### Fixed

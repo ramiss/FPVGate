@@ -59,7 +59,8 @@ RgbLed* g_rgbLed = &rgbLed;
 void* g_rgbLed = nullptr;
 #endif
 static LapTimer timer;
-static BatteryMonitor monitor;
+// Battery monitoring removed - legacy feature no longer used
+// static BatteryMonitor monitor;
 
 static TaskHandle_t xTimerTask = NULL;
 static bool sdInitAttempted = false;
@@ -76,7 +77,8 @@ static void parallelTask(void *pvArgs) {
         usbTransport.update(currentTimeMs);
         config.handleEeprom(currentTimeMs);
         rx.handleFrequencyChange(currentTimeMs, config.getFrequency());
-        monitor.checkBatteryState(currentTimeMs, config.getAlarmThreshold());
+        // Battery monitoring removed
+        // monitor.checkBatteryState(currentTimeMs, config.getAlarmThreshold());
         buzzer.handleBuzzer(currentTimeMs);
         led.handleLed(currentTimeMs);
     }
@@ -132,6 +134,10 @@ void setup() {
     
     // Always enable debug output (WiFi mode only)
     DEBUG_INIT;
+    
+    // Suppress VFS file-not-found errors (reduces spam from API endpoint checks)
+    esp_log_level_set("vfs_api", ESP_LOG_NONE);
+    
 #ifdef ESP32S3
         DEBUG("ESP32S3 build detected - WiFi Mode\n");
 #else
@@ -144,22 +150,19 @@ void setup() {
     led.init(PIN_LED, false);
 #ifdef ESP32S3
     rgbLed.init();
-    // Apply saved LED configuration
+    // Apply saved LED configuration from config
     rgbLed.setBrightness(config.getLedBrightness());
-    uint8_t ledMode = config.getLedMode();
-    if (ledMode == 0) {
-        rgbLed.off();
-    } else if (ledMode == 1) {
-        rgbLed.setManualColor(config.getLedColor());
-    } else if (ledMode == 2) {
-        rgbLed.setManualColor(config.getLedColor());
-        rgbLed.setManualMode(RGB_PULSE);
-    } else if (ledMode == 3) {
-        rgbLed.setRainbowWave();
-    }
+    rgbLed.setEffectSpeed(config.getLedSpeed());
+    rgbLed.setManualColor(config.getLedColor());
+    rgbLed.setFadeColor(config.getLedFadeColor());
+    rgbLed.setStrobeColor(config.getLedStrobeColor());
+    rgbLed.enableManualOverride(config.getLedManualOverride());
+    // Apply preset last so all colors are set
+    rgbLed.setPreset((led_preset_e)config.getLedPreset());
 #endif
     timer.init(&config, &rx, &buzzer, &led);
-    monitor.init(PIN_VBAT, VBAT_SCALE, VBAT_ADD, &buzzer, &led);
+    // Battery monitoring removed
+    // monitor.init(PIN_VBAT, VBAT_SCALE, VBAT_ADD, &buzzer, &led);
     
     // WiFi mode initialization (RotorHazard mode disabled)
     selfTest.init(&storage);
@@ -172,10 +175,10 @@ void setup() {
         DEBUG("Race history initialization failed\n");
     }
     
-    ws.init(&config, &timer, &monitor, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    ws.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
     
     // Initialize USB transport
-    usbTransport.init(&config, &timer, &monitor, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    usbTransport.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
     
     // Register transports with TransportManager
     transportManager.addTransport(&ws);

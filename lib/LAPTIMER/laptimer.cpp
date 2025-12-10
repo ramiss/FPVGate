@@ -93,12 +93,13 @@ void LapTimer::handleLapTimerUpdate(uint32_t currentTimeMs) {
     }
     rssi[rssiCount] = sum / 3;
     
-    // Debug every 50 cycles (~50ms) when running
-    static uint32_t debugCounter = 0;
-    if (state == RUNNING && debugCounter++ % 50 == 0) {
-        DEBUG("Raw: %u -> Kalman: %u -> Avg: %u | Peak: %u, Time: %u ms\n", 
-              rawRssi, kalman_filtered, rssi[rssiCount], rssiPeak, currentTimeMs - startTimeMs);
-    }
+    // RSSI debug output disabled for cleaner serial monitor
+    // Uncomment below to re-enable RSSI filtering debug:
+    // static uint32_t debugCounter = 0;
+    // if (state == RUNNING && debugCounter++ % 50 == 0) {
+    //     DEBUG("Raw: %u -> Kalman: %u -> Avg: %u | Peak: %u, Time: %u ms\n", 
+    //           rawRssi, kalman_filtered, rssi[rssiCount], rssiPeak, currentTimeMs - startTimeMs);
+    // }
 
     switch (state) {
         case STOPPED:
@@ -111,20 +112,26 @@ void LapTimer::handleLapTimerUpdate(uint32_t currentTimeMs) {
                 startLap();
             }
             break;
-        case RUNNING:
-            // ONLY process lap detection after minimum lap time has elapsed
-            if ((currentTimeMs - startTimeMs) > conf->getMinLapMs()) {
-                // Simple logic: just capture peaks and detect laps
+        case RUNNING: {
+            // Gate 1 (first lap) bypasses minimum lap time check
+            // All subsequent laps must respect minimum lap time
+            bool isGate1 = (lapCount == 0 && !lapCountWraparound);
+            bool minLapElapsed = (currentTimeMs - startTimeMs) > conf->getMinLapMs();
+            
+            if (isGate1 || minLapElapsed) {
+                // Capture peaks and detect laps
                 lapPeakCapture();
                 
                 // Check for lap completion
                 if (lapPeakCaptured()) {
-                    DEBUG("Lap triggered! Time: %u ms\n", currentTimeMs - startTimeMs);
+                    DEBUG("Lap triggered! Time: %u ms (Gate 1: %s)\n", 
+                          currentTimeMs - startTimeMs, isGate1 ? "YES" : "NO");
                     finishLap();
                     startLap();
                 }
             }
             break;
+        }
         case CALIBRATION_WIZARD:
             // Record RSSI data without triggering lap detection
             // Sample every 20ms (50Hz) for longer recording duration with good resolution

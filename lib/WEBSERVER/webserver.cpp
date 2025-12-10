@@ -24,7 +24,7 @@ static IPAddress ipAddress;
 static AsyncWebServer server(80);
 static AsyncEventSource events("/events");
 
-static const char *wifi_hostname = "plt";
+static const char *wifi_hostname = "FPVGate";
 static const char *wifi_ap_ssid_prefix = "FPVGate";
 static const char *wifi_ap_password = "fpvgate1";
 static const char *wifi_ap_address = "192.168.4.1";
@@ -126,6 +126,9 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
                 buz->beep(200);
                 led->off();
                 wifiConnected = true;
+                DEBUG("WiFi connected successfully!\n");
+                DEBUG("IP address: %s\n", WiFi.localIP().toString().c_str());
+                DEBUG("SSID: %s\n", WiFi.SSID().c_str());
 #ifdef ESP32S3
                 if (g_rgbLed) g_rgbLed->setStatus(STATUS_USER_CONNECTED);
 #endif
@@ -139,6 +142,18 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
         changeTimeMs = currentTimeMs;
         if (!wifiConnected) {
             changeMode = WIFI_AP;  // if we didnt manage to ever connect to wifi network
+            // Signal WiFi connection failure with 3 orange LED flashes
+#ifdef ESP32S3
+            if (g_rgbLed) {
+                // Flash orange 3 times (0.5 seconds on, 0.5 seconds off)
+                for (int i = 0; i < 3; i++) {
+                    g_rgbLed->setColor(CRGB::Orange, RGB_SOLID);
+                    delay(500);
+                    g_rgbLed->off();
+                    delay(500);
+                }
+            }
+#endif
         } else {
             DEBUG("WiFi Connection failed, reconnecting\n");
             WiFi.reconnect();
@@ -335,7 +350,6 @@ void Webserver::startServices() {
         char buf[1536];
         char configBuf[256];
         conf->toJsonString(configBuf);
-        float voltage = (float)monitor->getBatteryVoltage() / 10;
         const char *format =
             "\
 Heap:\n\
@@ -357,14 +371,13 @@ Network:\n\
 \tIP:\t%s\n\
 \tMAC:\t%s\n\
 EEPROM:\n\
-%s\n\
-Battery Voltage:\t%0.1fv";
+%s";
 
         snprintf(buf, sizeof(buf), format,
                  ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap(),
                  storage->getStorageType().c_str(), storage->getUsedBytes(), storage->getTotalBytes(), storage->getFreeBytes(),
                  ESP.getChipModel(), ESP.getChipRevision(), ESP.getChipCores(), ESP.getSdkVersion(), ESP.getFlashChipSize(), ESP.getFlashChipSpeed() / 1000000, getCpuFrequencyMhz(),
-                 WiFi.localIP().toString().c_str(), WiFi.macAddress().c_str(), configBuf, voltage);
+                 WiFi.localIP().toString().c_str(), WiFi.macAddress().c_str(), configBuf);
         request->send(200, "text/plain", buf);
         led->on(200);
     });
@@ -492,6 +505,40 @@ Battery Voltage:\t%0.1fv";
         request->send(404, "text/plain", "Audio file not found");
     });
     
+    // WiFi status endpoint (register before serveStatic to prevent VFS errors)
+    server.on("/api/wifi", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        DynamicJsonDocument doc(512);
+        
+        // Get WiFi mode
+        wifi_mode_t mode = WiFi.getMode();
+        if (mode == WIFI_AP) {
+            doc["mode"] = "AP";
+            doc["ssid"] = WiFi.softAPSSID();
+            doc["ip"] = WiFi.softAPIP().toString();
+            doc["clients"] = WiFi.softAPgetStationNum();
+            doc["rssi"] = 0;
+        } else if (mode == WIFI_STA) {
+            doc["mode"] = "STA";
+            doc["ssid"] = WiFi.SSID();
+            doc["ip"] = WiFi.localIP().toString();
+            doc["clients"] = 0;
+            doc["rssi"] = WiFi.RSSI();
+            doc["connected"] = WiFi.status() == WL_CONNECTED;
+        } else {
+            doc["mode"] = "OFF";
+            doc["ssid"] = "";
+            doc["ip"] = "";
+            doc["clients"] = 0;
+            doc["rssi"] = 0;
+            doc["connected"] = false;
+        }
+        
+        String output;
+        serializeJson(doc, output);
+        request->send(200, "application/json", output);
+        led->on(200);
+    });
+    
     // Serve other static files from LittleFS only
     server.serveStatic("/", LittleFS, "/").setCacheControl("max-age=600");
 
@@ -593,6 +640,27 @@ Battery Voltage:\t%0.1fv";
         led->on(200);
     });
 
+    AsyncCallbackJsonWebHandler *updateLapsHandler = new AsyncCallbackJsonWebHandler("/races/updateLaps", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        JsonObject jsonObj = json.as<JsonObject>();
+        
+        if (!jsonObj.containsKey("timestamp") || !jsonObj.containsKey("lapTimes")) {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing parameters\"}");
+            return;
+        }
+        
+        uint32_t timestamp = jsonObj["timestamp"];
+        JsonArray lapsArray = jsonObj["lapTimes"];
+        
+        std::vector<uint32_t> lapTimes;
+        for (JsonVariant lap : lapsArray) {
+            lapTimes.push_back(lap.as<uint32_t>());
+        }
+        
+        bool success = history->updateLaps(timestamp, lapTimes);
+        request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
+        led->on(200);
+    });
+
     server.on("/races/downloadOne", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (request->hasParam("timestamp")) {
             uint32_t timestamp = request->getParam("timestamp")->value().toInt();
@@ -642,6 +710,7 @@ Battery Voltage:\t%0.1fv";
 
     server.addHandler(raceSaveHandler);
     server.addHandler(raceUploadHandler);
+    server.addHandler(updateLapsHandler);
 
     // Self-test endpoint
     server.on("/selftest", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -649,6 +718,14 @@ Battery Voltage:\t%0.1fv";
         String json = selftest->getResultsJSON();
         request->send(200, "application/json", json);
         led->on(200);
+    });
+    
+    // Reboot endpoint
+    server.on("/reboot", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Rebooting...\"}");
+        led->on(200);
+        delay(500);
+        ESP.restart();
     });
 
     // SD card initialization endpoint
@@ -737,6 +814,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setManualColor(color);
             }
+            conf->setLedColor(color);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing color\"}");
@@ -771,6 +849,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setBrightness(brightness);
             }
+            conf->setLedBrightness(brightness);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing brightness\"}");
@@ -784,6 +863,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setPreset((led_preset_e)preset);
             }
+            conf->setLedPreset(preset);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing preset\"}");
@@ -797,6 +877,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->enableManualOverride(enable);
             }
+            conf->setLedManualOverride(enable ? 1 : 0);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing enable\"}");
@@ -823,6 +904,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setEffectSpeed(speed);
             }
+            conf->setLedSpeed(speed);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing speed\"}");
@@ -837,6 +919,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setFadeColor(color);
             }
+            conf->setLedFadeColor(color);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing color\"}");
@@ -851,6 +934,7 @@ Battery Voltage:\t%0.1fv";
             if (g_rgbLed) {
                 g_rgbLed->setStrobeColor(color);
             }
+            conf->setLedStrobeColor(color);
             request->send(200, "application/json", "{\"status\": \"OK\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing color\"}");

@@ -81,7 +81,7 @@
 #define EEPROM_RESERVED_SIZE 256
 #define CONFIG_MAGIC_MASK (0b11U << 30)
 #define CONFIG_MAGIC (0b01U << 30)
-#define CONFIG_VERSION 2U
+#define CONFIG_VERSION 3U
 
 #define EEPROM_CHECK_TIME_MS 1000
 
@@ -95,9 +95,14 @@ typedef struct {
     uint8_t enterRssi;
     uint8_t exitRssi;
     uint8_t maxLaps;
-    uint8_t ledMode;           // 0=off, 1=solid, 2=pulse, 3=rainbow
+    uint8_t ledMode;           // 0=off, 1=solid, 2=pulse, 3=rainbow (legacy, kept for migration)
     uint8_t ledBrightness;     // 0-255
-    uint32_t ledColor;         // RGB as 0xRRGGBB
+    uint32_t ledColor;         // RGB as 0xRRGGBB (solid color)
+    uint8_t ledPreset;         // 0-9 (new preset system)
+    uint8_t ledSpeed;          // 1-20 (animation speed)
+    uint32_t ledFadeColor;     // RGB for COLOR_FADE preset
+    uint32_t ledStrobeColor;   // RGB for STROBE preset
+    uint8_t ledManualOverride; // Manual override flag (0=off, 1=on)
     uint8_t operationMode;     // 0=WiFi, 1=RotorHazard (software switch)
     char pilotName[21];
     char ssid[33];
@@ -124,6 +129,11 @@ class Config {
     uint8_t getLedMode();
     uint8_t getLedBrightness();
     uint32_t getLedColor();
+    uint8_t getLedPreset();
+    uint8_t getLedSpeed();
+    uint32_t getLedFadeColor();
+    uint32_t getLedStrobeColor();
+    uint8_t getLedManualOverride();
     char* getSsid();
     char* getPassword();
     uint8_t getOperationMode();
@@ -133,6 +143,15 @@ class Config {
     void setEnterRssi(uint8_t rssi);
     void setExitRssi(uint8_t rssi);
     void setOperationMode(uint8_t mode);
+    
+    // LED setters
+    void setLedPreset(uint8_t preset);
+    void setLedBrightness(uint8_t brightness);
+    void setLedSpeed(uint8_t speed);
+    void setLedColor(uint32_t color);
+    void setLedFadeColor(uint32_t color);
+    void setLedStrobeColor(uint32_t color);
+    void setLedManualOverride(uint8_t override);
 
    private:
     laptimer_config_t conf;

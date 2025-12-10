@@ -14,6 +14,7 @@ void BatteryMonitor::init(uint8_t pin, uint8_t batScale, uint8_t batAdd, Buzzer 
     memset(measurements, 0, sizeof(measurements));
     measurementIndex = 0;
     lastCheckTimeMs = millis();
+    enableDebug = false;  // Start with debug disabled
     pinMode(vbatPin, INPUT);
 
     for (int i = 0; i < AVERAGING_SIZE; i++) {
@@ -31,11 +32,17 @@ uint8_t BatteryMonitor::getBatteryVoltage() {
     averageSum += raw;                                         // update averageSum
     measurementIndex = (measurementIndex + 1) % AVERAGING_SIZE;
     uint8_t scaled = map(round(averageSum / AVERAGING_SIZE), 0, 4095, 0, 33 * scale) + add;  // 3.3v ref accuracy, divider + voltage drop
-    DEBUG("Battery raw:%u, scaled:%u\n", raw, scaled);
+    if (enableDebug) {
+        DEBUG("Battery raw:%u, scaled:%u\n", raw, scaled);
+    }
     return scaled;
 }
 
 void BatteryMonitor::checkBatteryState(uint32_t currentTimeMs, uint8_t alarmThreshold) {
+    // Update debug flag based on whether monitoring is enabled
+    // This persists across all getBatteryVoltage() calls
+    enableDebug = (alarmThreshold > 0);
+    
     switch (state) {
         case ALARM_OFF:
             if ((alarmThreshold > 0) && ((currentTimeMs - lastCheckTimeMs) > MONITOR_CHECK_TIME_MS)) {

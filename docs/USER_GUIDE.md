@@ -636,6 +636,8 @@ All races are automatically saved when you stop or clear laps.
 
 Configure RGB LED behavior and visual effects.
 
+** Settings Persist:** All LED configuration (preset, colors, brightness, speed, manual override) automatically saves to EEPROM and survives page refreshes and device reboots.
+
 ### LED Presets
 
 10 built-in effects available:

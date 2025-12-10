@@ -7,7 +7,7 @@
 #include "storage.h"
 
 #define MAX_RACES 50
-#define RACES_FILE "/sd/races/races.json"
+#define RACES_DIR "/races"
 
 struct RaceSession {
     uint32_t timestamp;
@@ -32,6 +32,7 @@ class RaceHistory {
     bool loadRaces();
     bool deleteRace(uint32_t timestamp);
     bool updateRace(uint32_t timestamp, const String& name, const String& tag);
+    bool updateLaps(uint32_t timestamp, const std::vector<uint32_t>& newLapTimes);
     bool clearAll();
     String toJsonString();
     bool fromJsonString(const String& json);
@@ -39,8 +40,6 @@ class RaceHistory {
     size_t getRaceCount() const { return races.size(); }
 
    private:
-    bool saveToFile();
-    bool loadFromFile();
     std::vector<RaceSession> races;
     Storage* storage;
 };

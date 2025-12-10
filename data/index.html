@@ -19,6 +19,10 @@
           <img src="logo-white.svg" alt="FPVGate" width="64" id="headerLogo" />
           <h1>FPVGate</h1>
         </div>
+        <div id="wifiStatus" class="wifi-status">
+          <span class="wifi-status-circle" id="wifiCircle"></span>
+          <span class="wifi-status-text" id="wifiText">Connecting...</span>
+        </div>
       </nav>
       <ul class="nav-links">
         <li><a id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
@@ -255,31 +259,6 @@
           <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">System Setup</h3>
 
           <div class="config-item">
-            <label for="batteryMonitorToggle">Battery Monitoring:</label>
-            <div style="flex: 1;">
-              <label class="switch">
-                <input type="checkbox" id="batteryMonitorToggle" onchange="toggleBatteryMonitor(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div id="batteryMonitoringSection">
-            <div class="config-item">
-              <label for="alarmThreshold">Low Battery Alarm:</label>
-              <div class="input-with-value">
-                <span class="val">3.6v</span>
-                <input type="range" id="alarmThreshold" step="0.1" min="0.0" max="3.6" oninput="updateAlarmThreshold(this,value)" />
-              </div>
-            </div>
-
-            <div class="config-item">
-              <label for="bvolt">Battery Voltage:</label>
-              <span class="val" id="bvolt">--</span>
-            </div>
-          </div>
-
-          <div class="config-item">
             <label for="connectionMode">Connection Mode:</label>
             <select id="connectionMode" onchange="changeConnectionMode()">
               <option value="auto" selected>Auto (WiFi/USB)</option>
@@ -343,14 +322,36 @@
             <a href="/update" target="_blank" class="update-link">Open Update Page</a>
           </div>
 
-          <div class="config-item" style="display: none">
-            <label for="ssid">WiFi SSID:</label>
-            <input type="text" id="ssid" maxlength="32" />
+          <!-- NETWORK SETTINGS SECTION -->
+          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">Network Settings</h3>
+          
+          <div style="margin-bottom: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
+            <p style="margin: 0 0 8px 0;"><strong>Access Point Mode (Default):</strong> Device broadcasts its own WiFi network. Leave fields below empty to use AP mode.</p>
+            <p style="margin: 0;"><strong>Station Mode:</strong> Device connects to your home network. Enter SSID and password below to enable. Device will fall back to AP mode if connection fails.</p>
           </div>
 
-          <div class="config-item" style="display: none">
+          <div class="config-item">
+            <label for="ssid">WiFi SSID:</label>
+            <input type="text" id="ssid" maxlength="32" placeholder="Leave empty for AP mode" />
+          </div>
+          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+            Enter your home WiFi network name to connect as a client
+          </div>
+
+          <div class="config-item">
             <label for="pwd">WiFi Password:</label>
-            <input type="password" id="pwd" maxlength="32" />
+            <input type="password" id="pwd" maxlength="32" placeholder="Required when SSID is set" />
+          </div>
+          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+            Password for the WiFi network (leave empty for open networks)
+          </div>
+
+          <div class="config-item">
+            <label></label>
+            <button onclick="applyWiFiAndReboot()" style="padding: 10px 20px; background-color: var(--accent-color); font-weight: bold;">Apply WiFi & Reboot</button>
+          </div>
+          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+            Saves WiFi settings and reboots device to apply changes. Device will show 3 orange LED flashes if connection fails.
           </div>
 
           <!-- SELF-TEST SECTION -->
@@ -509,8 +510,9 @@
     <footer></footer>
 
     <!-- Edit Race Modal -->
-    <div id="editRaceModal" class="modal" style="display: none;">
-      <div class="modal-content">
+    <div id="editRaceModal" class="modal" style="display: none;" onclick="closeEditModalOnBackdrop(event)">
+      <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;" onclick="event.stopPropagation()">
+        <button onclick="closeEditModal()" class="modal-close-btn" title="Close">&times;</button>
         <h3>Edit Race Details</h3>
         <div class="config-item">
           <label for="raceName">Race Name:</label>
@@ -520,8 +522,18 @@
           <label for="raceTag">Tag:</label>
           <input type="text" id="raceTag" maxlength="30" placeholder="e.g. training, race, freestyle" />
         </div>
+        
+        <h4 style="margin-top: 24px; margin-bottom: 8px; color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px;">Marshall Mode - Edit Lap Times</h4>
+        <div style="margin-bottom: 12px; font-size: 13px; color: var(--secondary-color); background-color: var(--background-color); padding: 8px; border-radius: 4px; border-left: 3px solid var(--primary-color);">
+          <strong>Tip:</strong> Edit lap times to correct mis-times. Use the delete button (×) to remove laps or add new ones.
+        </div>
+        <div id="editLapsList" class="edit-laps-container">
+          <!-- Lap rows will be inserted here dynamically -->
+        </div>
+        <button onclick="addNewLapToEdit()" class="add-lap-button">+ Add Lap</button>
+        
         <div style="display: flex; gap: 12px; margin-top: 16px;">
-          <button onclick="saveRaceEdit()">Save</button>
+          <button onclick="saveRaceEdit()">Save All Changes</button>
           <button onclick="closeEditModal()" style="background-color: var(--secondary-color);">Cancel</button>
         </div>
       </div>
