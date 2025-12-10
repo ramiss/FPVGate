@@ -43,6 +43,9 @@ bool RaceHistory::saveRace(const RaceSession& race) {
     raceObj["frequency"] = race.frequency;
     raceObj["band"] = race.band;
     raceObj["channel"] = race.channel;
+    raceObj["trackId"] = race.trackId;
+    raceObj["trackName"] = race.trackName;
+    raceObj["totalDistance"] = race.totalDistance;
     
     JsonArray lapsArray = raceObj.createNestedArray("lapTimes");
     for (uint32_t lap : race.lapTimes) {
@@ -51,6 +54,9 @@ bool RaceHistory::saveRace(const RaceSession& race) {
     
     String json;
     serializeJson(doc, json);
+    
+    DEBUG("Saving race JSON: totalDistance=%.2f\n", race.totalDistance);
+    DEBUG("JSON content: %s\n", json.c_str());
     
     bool success = storage->writeFile(filepath, json);
     if (success) {
@@ -115,6 +121,9 @@ bool RaceHistory::loadRaces() {
         race.frequency = doc["frequency"] | 0;
         race.band = doc["band"] | "";
         race.channel = doc["channel"] | 0;
+        race.trackId = doc["trackId"] | 0;
+        race.trackName = doc["trackName"] | "";
+        race.totalDistance = doc["totalDistance"] | 0.0f;
         
         JsonArray lapsArray = doc["lapTimes"];
         for (uint32_t lap : lapsArray) {
@@ -161,13 +170,16 @@ bool RaceHistory::deleteRace(uint32_t timestamp) {
     return false;
 }
 
-bool RaceHistory::updateRace(uint32_t timestamp, const String& name, const String& tag) {
+bool RaceHistory::updateRace(uint32_t timestamp, const String& name, const String& tag, float totalDistance) {
     // Update in-memory race
     RaceSession* targetRace = nullptr;
     for (auto& race : races) {
         if (race.timestamp == timestamp) {
             race.name = name;
             race.tag = tag;
+            if (totalDistance >= 0.0f) {
+                race.totalDistance = totalDistance;
+            }
             targetRace = &race;
             break;
         }
@@ -200,6 +212,9 @@ bool RaceHistory::updateRace(uint32_t timestamp, const String& name, const Strin
     raceObj["frequency"] = targetRace->frequency;
     raceObj["band"] = targetRace->band;
     raceObj["channel"] = targetRace->channel;
+    raceObj["trackId"] = targetRace->trackId;
+    raceObj["trackName"] = targetRace->trackName;
+    raceObj["totalDistance"] = targetRace->totalDistance;
     
     JsonArray lapsArray = raceObj.createNestedArray("lapTimes");
     for (uint32_t lap : targetRace->lapTimes) {
@@ -283,6 +298,9 @@ bool RaceHistory::updateLaps(uint32_t timestamp, const std::vector<uint32_t>& ne
     raceObj["frequency"] = targetRace->frequency;
     raceObj["band"] = targetRace->band;
     raceObj["channel"] = targetRace->channel;
+    raceObj["trackId"] = targetRace->trackId;
+    raceObj["trackName"] = targetRace->trackName;
+    raceObj["totalDistance"] = targetRace->totalDistance;
     
     JsonArray lapsArray = raceObj.createNestedArray("lapTimes");
     for (uint32_t lap : targetRace->lapTimes) {
@@ -332,6 +350,9 @@ String RaceHistory::toJsonString() {
         raceObj["frequency"] = race.frequency;
         raceObj["band"] = race.band;
         raceObj["channel"] = race.channel;
+        raceObj["trackId"] = race.trackId;
+        raceObj["trackName"] = race.trackName;
+        raceObj["totalDistance"] = race.totalDistance;
         
         JsonArray lapsArray = raceObj.createNestedArray("lapTimes");
         for (uint32_t lap : race.lapTimes) {
@@ -370,6 +391,9 @@ bool RaceHistory::fromJsonString(const String& json) {
         race.frequency = raceObj["frequency"] | 0;
         race.band = raceObj["band"] | "";
         race.channel = raceObj["channel"] | 0;
+        race.trackId = raceObj["trackId"] | 0;
+        race.trackName = raceObj["trackName"] | "";
+        race.totalDistance = raceObj["totalDistance"] | 0.0f;
         
         JsonArray lapsArray = raceObj["lapTimes"];
         for (uint32_t lap : lapsArray) {

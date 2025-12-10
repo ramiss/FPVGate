@@ -2,14 +2,35 @@
 
 Desktop application for FPVGate Lap Timer with WiFi and USB connectivity.
 
+**Current Version:** v1.3.3
+
 ## Features
 
+### Core Connectivity
 - ✅ **WiFi & USB Toggle** - Switch between connection modes in-app
 - ✅ **Auto-detect** - Automatically finds FPVGate USB device
 - ✅ **Smart Default** - Falls back to USB if WiFi unavailable
-- ✅ **Native App** - Runs as Windows desktop application
+- ✅ **Native App** - Runs as Windows/Mac/Linux desktop application
 - ✅ **Same UI** - Uses your existing web interface files from `data/` folder
 - ✅ **Live Updates** - Edit files in `data/` and restart app to see changes
+
+### New in v1.3.3
+- ✅ **Application Menu** - Native menu bar with keyboard shortcuts (Ctrl+O for OSD, F12 for DevTools, etc.)
+- ✅ **OSD Window** - Native transparent overlay window for streaming
+- ✅ **About Dialog** - Version info and feature summary
+- ✅ **Modern Configuration UI** - Full-screen modal with 6 organized sections
+- ✅ **Marshalling Mode** - Edit saved races (add/remove laps)
+- ✅ **Enhanced Calibration** - Simplified 3-peak marking wizard
+- ✅ **LED Persistence** - LED settings saved to EEPROM
+- ✅ **WiFi Status Display** - Real-time connection monitoring (WiFi mode only)
+
+### Racing Features
+- ✅ **Race History** - Individual race files with tags and names
+- ✅ **Lap Analysis** - Fastest lap, best 3 consecutive, median times
+- ✅ **Multi-Voice TTS** - 4 ElevenLabs voices + PiperTTS
+- ✅ **LED Effects** - 10 customizable presets with persistence
+- ✅ **Self-Test Diagnostics** - Hardware and software verification
+- ✅ **Config Backup** - Import/export full configuration
 
 ## Setup
 
@@ -143,12 +164,41 @@ npm start
 - Fully restart the app (Ctrl+C then `npm start` again)
 - Clear cache: Delete `%APPDATA%/fpvgate-desktop/` folder
 
+## USB Mode Limitations
+
+Some features require WiFi connection and won't work in USB mode:
+
+### Not Available in USB Mode
+- ❌ **WiFi Status Display** - API endpoint not accessible (gracefully fails)
+- ❌ **Firmware OTA Updates** - `/update` endpoint requires WiFi
+- ❌ **SSE Keepalive** - Not applicable to USB serial
+
+### Fully Functional in USB Mode
+- ✅ All race timing and lap tracking
+- ✅ Configuration (all 6 sections)
+- ✅ Calibration wizard
+- ✅ LED control and persistence
+- ✅ Race history and marshalling mode
+- ✅ Audio announcements
+- ✅ Self-test diagnostics
+- ✅ Config import/export
+
+All core functionality works identically in both modes. USB actually provides **lower latency** (~10ms vs ~50-100ms WiFi).
+
+## Keyboard Shortcuts
+
+- **Ctrl+O** - Open OSD overlay window
+- **Ctrl+R** - Refresh connection
+- **F11** - Toggle fullscreen
+- **F12** - Toggle DevTools (for debugging)
+- **Alt+F4** - Exit application
+
 ## Distribution
 
 ### For End Users
 
 1. Build the installer: `npm run build:win`
-2. Distribute `FPVGate Setup 1.0.0.exe`
+2. Distribute `FPVGate Setup 1.3.3.exe`
 3. Users run installer
 4. App appears on desktop and Start menu
 

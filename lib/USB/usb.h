@@ -35,6 +35,7 @@
 #include "storage.h"
 #include "selftest.h"
 #include "rx5808.h"
+#include "trackmanager.h"
 
 #ifdef ESP32S3
 #include "rgbled.h"
@@ -44,7 +45,7 @@
 class USBTransport : public TransportInterface {
    public:
     void init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, 
-              Led *led, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808);
+              Led *led, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr);
     
     // TransportInterface implementation
     void sendLapEvent(uint32_t lapTimeMs) override;
@@ -72,6 +73,7 @@ class USBTransport : public TransportInterface {
     Storage *storage;
     SelfTest *selftest;
     RX5808 *rx;
+    TrackManager *trackManager;
     
     bool rssiStreamingEnabled;
     uint32_t lastRssiSentMs;

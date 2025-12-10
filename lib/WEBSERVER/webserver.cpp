@@ -30,7 +30,7 @@ static const char *wifi_ap_password = "fpvgate1";
 static const char *wifi_ap_address = "192.168.4.1";
 String wifi_ap_ssid;
 
-void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808) {
+void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr) {
 
     ipAddress.fromString(wifi_ap_address);
 
@@ -44,6 +44,7 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     g_storage = stor;  // Set global pointer for static functions
     selftest = test;
     rx = rx5808;
+    trackManager = trackMgr;
     transportMgr = nullptr;
 
     wifi_ap_ssid = String(wifi_ap_ssid_prefix) + "_" + WiFi.macAddress().substring(WiFi.macAddress().length() - 6);
@@ -53,7 +54,9 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     WiFi.persistent(false);
     WiFi.disconnect();
     WiFi.mode(WIFI_OFF);
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+    // Reduce TX power to prevent boot-looping in AP mode due to power consumption
+    // WIFI_POWER_11dBm provides good range while keeping power consumption manageable
+    WiFi.setTxPower(WIFI_POWER_11dBm);
     esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
     esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_LR);
     if (conf->getSsid()[0] == 0) {
@@ -148,16 +151,10 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
         changeTimeMs = currentTimeMs;
         if (!wifiConnected) {
             changeMode = WIFI_AP;  // if we didnt manage to ever connect to wifi network
-            // Signal WiFi connection failure with 3 orange LED flashes
+            // Signal WiFi connection failure - set orange color briefly
 #ifdef ESP32S3
             if (g_rgbLed) {
-                // Flash orange 3 times (0.5 seconds on, 0.5 seconds off)
-                for (int i = 0; i < 3; i++) {
-                    g_rgbLed->setColor(CRGB::Orange, RGB_SOLID);
-                    delay(500);
-                    g_rgbLed->off();
-                    delay(500);
-                }
+                g_rgbLed->setColor(CRGB::Orange, RGB_SOLID);
             }
 #endif
         } else {
@@ -178,10 +175,23 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
                 WiFi.setHostname(wifi_hostname);  // hostname must be set before the mode is set to STA
                 WiFi.mode(wifiMode);
                 changeTimeMs = currentTimeMs;
+                
+                // Power-saving settings for AP mode to prevent boot-looping
+                // Reduce TX power specifically for AP mode (already set globally but ensure it's applied)
+                WiFi.setTxPower(WIFI_POWER_11dBm);
+                
                 WiFi.softAPConfig(ipAddress, ipAddress, netMsk);
                 DEBUG("Starting WiFi AP: %s with password: %s\n", wifi_ap_ssid.c_str(), wifi_ap_password);
-                WiFi.softAP(wifi_ap_ssid.c_str(), wifi_ap_password);
-                DEBUG("WiFi AP started. SSID: %s\n", WiFi.softAPSSID().c_str());
+                
+                // Start AP with max 4 connections to limit power draw
+                // Channel 6 is typically less crowded, beacon interval 200ms (higher = less power)
+                WiFi.softAP(wifi_ap_ssid.c_str(), wifi_ap_password, 6, 0, 4);
+                
+                // Set lower beacon interval to reduce power consumption (in multiples of 100ms, default is 100)
+                // Note: Higher values = less frequent beacons = lower power but slightly slower connection
+                esp_wifi_set_max_tx_power(44); // 11dBm in 0.25dBm units (44 * 0.25 = 11dBm)
+                
+                DEBUG("WiFi AP started. SSID: %s, Power: 11dBm, Max clients: 4\n", WiFi.softAPSSID().c_str());
                 startServices();
                 buz->beep(1000);
                 led->on(1000);
@@ -596,6 +606,13 @@ EEPROM:\n\
         race.band = jsonObj["band"] | "";
         race.channel = jsonObj["channel"] | 0;
         
+        DEBUG("Parsing race save: trackId=%u\n", (uint32_t)(jsonObj["trackId"] | 0));
+        race.trackId = jsonObj["trackId"] | 0;
+        race.trackName = jsonObj["trackName"] | "";
+        DEBUG("Parsing totalDistance...\n");
+        race.totalDistance = jsonObj["totalDistance"] | 0.0;
+        DEBUG("Parsed totalDistance=%.2f\n", race.totalDistance);
+        
         JsonArray lapsArray = jsonObj["lapTimes"];
         for (uint32_t lap : lapsArray) {
             race.lapTimes.push_back(lap);
@@ -638,7 +655,11 @@ EEPROM:\n\
             uint32_t timestamp = request->getParam("timestamp", true)->value().toInt();
             String name = request->getParam("name", true)->value();
             String tag = request->getParam("tag", true)->value();
-            bool success = history->updateRace(timestamp, name, tag);
+            float totalDistance = -1.0f;
+            if (request->hasParam("totalDistance", true)) {
+                totalDistance = request->getParam("totalDistance", true)->value().toFloat();
+            }
+            bool success = history->updateRace(timestamp, name, tag, totalDistance);
             request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
         } else {
             request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing parameters\"}");
@@ -718,6 +739,130 @@ EEPROM:\n\
     server.addHandler(raceUploadHandler);
     server.addHandler(updateLapsHandler);
 
+    // Track endpoints
+    server.on("/tracks", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        String json = trackManager->toJsonString();
+        request->send(200, "application/json", json);
+        led->on(200);
+    });
+
+    AsyncCallbackJsonWebHandler *trackCreateHandler = new AsyncCallbackJsonWebHandler("/tracks/create", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        JsonObject jsonObj = json.as<JsonObject>();
+        
+        Track track;
+        track.trackId = jsonObj["trackId"];
+        track.name = jsonObj["name"] | "";
+        track.tags = jsonObj["tags"] | "";
+        track.distance = jsonObj["distance"] | 0.0f;
+        track.notes = jsonObj["notes"] | "";
+        track.imagePath = "";
+        
+        bool success = trackManager->createTrack(track);
+        request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
+        led->on(200);
+    });
+
+    AsyncCallbackJsonWebHandler *trackUpdateHandler = new AsyncCallbackJsonWebHandler("/tracks/update", [this](AsyncWebServerRequest *request, JsonVariant &json) {
+        JsonObject jsonObj = json.as<JsonObject>();
+        
+        if (!jsonObj.containsKey("trackId")) {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing trackId\"}");
+            return;
+        }
+        
+        uint32_t trackId = jsonObj["trackId"];
+        Track updatedTrack;
+        updatedTrack.trackId = trackId;
+        updatedTrack.name = jsonObj["name"] | "";
+        updatedTrack.tags = jsonObj["tags"] | "";
+        updatedTrack.distance = jsonObj["distance"] | 0.0f;
+        updatedTrack.notes = jsonObj["notes"] | "";
+        
+        bool success = trackManager->updateTrack(trackId, updatedTrack);
+        request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
+        led->on(200);
+    });
+
+    server.on("/tracks/delete", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (request->hasParam("trackId", true)) {
+            uint32_t trackId = request->getParam("trackId", true)->value().toInt();
+            bool success = trackManager->deleteTrack(trackId);
+            
+            // If deleted track was selected, deselect it
+            if (success && conf->getSelectedTrackId() == trackId) {
+                conf->setSelectedTrackId(0);
+                timer->setTrack(nullptr);
+            }
+            
+            request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing trackId\"}");
+        }
+        led->on(200);
+    });
+
+    server.on("/tracks/select", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (request->hasParam("trackId", true)) {
+            uint32_t trackId = request->getParam("trackId", true)->value().toInt();
+            
+            if (trackId == 0) {
+                // Deselect track
+                conf->setSelectedTrackId(0);
+                timer->setTrack(nullptr);
+                request->send(200, "application/json", "{\"status\": \"OK\"}");
+            } else {
+                Track* track = trackManager->getTrackById(trackId);
+                if (track) {
+                    conf->setSelectedTrackId(trackId);
+                    timer->setTrack(track);
+                    request->send(200, "application/json", "{\"status\": \"OK\"}");
+                } else {
+                    request->send(404, "application/json", "{\"status\": \"ERROR\", \"message\": \"Track not found\"}");
+                }
+            }
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing trackId\"}");
+        }
+        led->on(200);
+    });
+
+    server.on("/tracks/clear", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        bool success = trackManager->clearAll();
+        
+        // Clear selected track if any
+        if (success && conf->getSelectedTrackId() != 0) {
+            conf->setSelectedTrackId(0);
+            timer->setTrack(nullptr);
+        }
+        
+        request->send(200, "application/json", success ? "{\"status\": \"OK\"}" : "{\"status\": \"ERROR\"}");
+        led->on(200);
+    });
+
+    server.on("/timer/distance", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        DynamicJsonDocument doc(512);
+        doc["totalDistance"] = timer->getTotalDistance();
+        doc["distanceRemaining"] = timer->getDistanceRemaining();
+        
+        Track* selectedTrack = timer->getSelectedTrack();
+        if (selectedTrack) {
+            doc["trackId"] = selectedTrack->trackId;
+            doc["trackName"] = selectedTrack->name;
+            doc["trackDistance"] = selectedTrack->distance;
+        } else {
+            doc["trackId"] = 0;
+            doc["trackName"] = "";
+            doc["trackDistance"] = 0.0f;
+        }
+        
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    server.addHandler(trackCreateHandler);
+    server.addHandler(trackUpdateHandler);
+
     // Self-test endpoint
     server.on("/selftest", HTTP_GET, [this](AsyncWebServerRequest *request) {
         selftest->runAllTests();
@@ -730,7 +875,7 @@ EEPROM:\n\
     server.on("/reboot", HTTP_POST, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Rebooting...\"}");
         led->on(200);
-        delay(500);
+        // Restart immediately without delay to avoid blocking async_tcp task
         ESP.restart();
     });
 

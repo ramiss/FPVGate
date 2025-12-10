@@ -81,13 +81,13 @@ None reported. This is a stable UI improvement release.
 - **Flash:** 50.0% (1,048,005 / 2,097,152 bytes)
 
 ## Support
-- **Documentation:** https://github.com/YourUsername/FPVGate/wiki
-- **Issues:** https://github.com/YourUsername/FPVGate/issues
-- **Discussions:** https://github.com/YourUsername/FPVGate/discussions
+- **Documentation:** https://github.com/LouisHitchcock/FPVGate/wiki
+- **Issues:** https://github.com/LouisHitchcock/FPVGate/issues
+- **Discussions:** https://github.com/LouisHitchcock/FPVGate/discussions
 
 ## Credits
 Special thanks to the FPV community for feedback on the configuration interface!
 
 ---
 
-**Full Changelog:** https://github.com/YourUsername/FPVGate/blob/main/CHANGELOG.md
+**Full Changelog:** https://github.com/LouisHitchcock/FPVGate/blob/main/CHANGELOG.md

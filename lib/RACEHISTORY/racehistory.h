@@ -22,6 +22,9 @@ struct RaceSession {
     uint16_t frequency;
     String band;
     uint8_t channel;
+    uint32_t trackId;
+    String trackName;
+    float totalDistance;
 };
 
 class RaceHistory {
@@ -31,7 +34,7 @@ class RaceHistory {
     bool saveRace(const RaceSession& race);
     bool loadRaces();
     bool deleteRace(uint32_t timestamp);
-    bool updateRace(uint32_t timestamp, const String& name, const String& tag);
+    bool updateRace(uint32_t timestamp, const String& name, const String& tag, float totalDistance = -1.0f);
     bool updateLaps(uint32_t timestamp, const std::vector<uint32_t>& newLapTimes);
     bool clearAll();
     String toJsonString();

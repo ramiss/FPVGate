@@ -1,4 +1,5 @@
 #include "laptimer.h"
+#include "trackmanager.h"
 
 #include "debug.h"
 
@@ -21,6 +22,10 @@ void LapTimer::init(Config *config, RX5808 *rx5808, Buzzer *buzzer, Led *l) {
 
     filter.setMeasurementNoise(rssi_filter_q * 0.01f);
     filter.setProcessNoise(rssi_filter_r * 0.0001f);
+
+    selectedTrack = nullptr;
+    totalDistanceTravelled = 0.0f;
+    distanceRemaining = 0.0f;
 
     stop();
     memset(rssi, 0, sizeof(rssi));
@@ -48,6 +53,8 @@ void LapTimer::start() {
     rssiPeak = 0;  // Clear any spurious peak values
     rssiPeakTimeMs = 0;
     gateExited = true;  // Start assuming we're outside the gate
+    totalDistanceTravelled = 0.0f;
+    distanceRemaining = 0.0f;
     buz->beep(500);
     led->on(500);
 #ifdef ESP32S3
@@ -66,6 +73,8 @@ void LapTimer::stop() {
     rssiPeakTimeMs = 0;
     startTimeMs = 0;
     gateExited = true;
+    totalDistanceTravelled = 0.0f;
+    distanceRemaining = 0.0f;
     memset(lapTimes, 0, sizeof(lapTimes));
     buz->beep(500);
     led->on(500);
@@ -210,6 +219,28 @@ void LapTimer::finishLap() {
         lapTimes[lapCount] = rssiPeakTimeMs - startTimeMs;
     }
     DEBUG("Lap finished, lap time = %u\n", lapTimes[lapCount]);
+    
+    // Update distance if track is selected
+    if (selectedTrack && selectedTrack->distance > 0) {
+        totalDistanceTravelled += selectedTrack->distance;
+        
+        // Calculate remaining distance if maxLaps is set
+        uint8_t maxLaps = conf->getMaxLaps();
+        if (maxLaps > 0) {
+            int lapsCompleted = lapCount + 1;
+            if (lapCountWraparound) {
+                lapsCompleted = LAPTIMER_LAP_HISTORY + (lapCount + 1);
+            }
+            int lapsRemaining = maxLaps - lapsCompleted;
+            distanceRemaining = (lapsRemaining > 0) ? (lapsRemaining * selectedTrack->distance) : 0.0f;
+        } else {
+            distanceRemaining = 0.0f;  // No max laps set, can't calculate remaining
+        }
+        
+        DEBUG("Distance: Travelled = %.2f m, Remaining = %.2f m\n", 
+              totalDistanceTravelled, distanceRemaining);
+    }
+    
     if ((lapCount + 1) % LAPTIMER_LAP_HISTORY == 0) {
         lapCountWraparound = true;
     }
@@ -279,4 +310,27 @@ uint32_t LapTimer::getCalibrationTimestamp(uint16_t index) {
         return calibrationTimestamps[index];
     }
     return 0;
+}
+
+void LapTimer::setTrack(Track* track) {
+    selectedTrack = track;
+    totalDistanceTravelled = 0.0f;
+    distanceRemaining = 0.0f;
+    if (track) {
+        DEBUG("Track selected: %s (%.2f m)\n", track->name.c_str(), track->distance);
+    } else {
+        DEBUG("Track deselected\n");
+    }
+}
+
+float LapTimer::getTotalDistance() {
+    return totalDistanceTravelled;
+}
+
+float LapTimer::getDistanceRemaining() {
+    return distanceRemaining;
+}
+
+Track* LapTimer::getSelectedTrack() {
+    return selectedTrack;
 }

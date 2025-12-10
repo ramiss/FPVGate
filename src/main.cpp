@@ -5,6 +5,7 @@
 #include "storage.h"
 #include "selftest.h"
 #include "transport.h"
+#include "trackmanager.h"
 #include "usb.h"
 // DISABLED FOR NOW: #include "nodemode.h"  // Uncomment to re-enable RotorHazard support
 #include <ElegantOTA.h>
@@ -52,6 +53,7 @@ static TransportManager transportManager;
 static Buzzer buzzer;
 static Led led;
 static RaceHistory raceHistory;
+static TrackManager trackManager;
 #ifdef ESP32S3
 static RgbLed rgbLed;
 RgbLed* g_rgbLed = &rgbLed;
@@ -175,10 +177,26 @@ void setup() {
         DEBUG("Race history initialization failed\n");
     }
     
-    ws.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    // Initialize track manager
+    if (trackManager.init(&storage)) {
+        DEBUG("Track manager initialized, %d tracks loaded\n", trackManager.getTrackCount());
+    } else {
+        DEBUG("Track manager initialization failed\n");
+    }
+    
+    // Load selected track if tracks are enabled
+    if (config.getTracksEnabled() && config.getSelectedTrackId() != 0) {
+        Track* selectedTrack = trackManager.getTrackById(config.getSelectedTrackId());
+        if (selectedTrack) {
+            timer.setTrack(selectedTrack);
+            DEBUG("Selected track loaded: %s\n", selectedTrack->name.c_str());
+        }
+    }
+    
+    ws.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx, &trackManager);
     
     // Initialize USB transport
-    usbTransport.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx);
+    usbTransport.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx, &trackManager);
     
     // Register transports with TransportManager
     transportManager.addTransport(&ws);
@@ -246,6 +264,22 @@ void loop() {
                 DEBUG("Race history reloaded from SD card, %d races available\n", raceHistory.getRaceCount());
             } else {
                 DEBUG("Race history reload from SD card failed\n");
+            }
+            
+            // Reload tracks from SD card
+            if (trackManager.loadTracks()) {
+                DEBUG("Tracks reloaded from SD card, %d tracks available\n", trackManager.getTrackCount());
+                
+                // Reload selected track if tracks are enabled
+                if (config.getTracksEnabled() && config.getSelectedTrackId() != 0) {
+                    Track* selectedTrack = trackManager.getTrackById(config.getSelectedTrackId());
+                    if (selectedTrack) {
+                        timer.setTrack(selectedTrack);
+                        DEBUG("Selected track reloaded: %s\n", selectedTrack->name.c_str());
+                    }
+                }
+            } else {
+                DEBUG("Tracks reload from SD card failed\n");
             }
         } else {
             DEBUG("SD card not available - using LittleFS only\n");

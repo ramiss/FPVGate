@@ -52,8 +52,16 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Fastest 3 consecutive laps (RaceGOW format)
 - Race history with export/import (cross-device SD card storage)
 - Race tagging and naming
-- Marshalling mode for post-race lap editing (add/remove laps)
+- Marshalling mode for post-race lap editing (add/remove/edit laps)
 - Detailed race analysis view
+
+**Track Management**
+- Create and manage track profiles with metadata
+- Track distance tracking (real-time distance display)
+- Track images and custom notes
+- Total distance and distance remaining calculations
+- Track association with races
+- Up to 50 tracks stored on SD card
 
 **Smart Storage**
 - SD card support for audio files and race data
@@ -180,22 +188,30 @@ Exit  ├/──────────\─
 
 ## Project Status
 
-**Current Version:** v1.3.2  
+**Current Version:** v1.4.0  
 **Platform:** ESP32-S3 (ESP32-C3 support legacy)  
 **License:** MIT  
 **Status:** Stable - actively maintained
 
 ### Recent Updates
 
-**v1.3.2 (Latest)**
+**v1.4.0 (Latest)**
+- Track Management System - Create, edit, and manage track profiles with images
+- Distance Tracking - Real-time distance display and statistics
+- Enhanced Race Editing - Edit race metadata, lap times, and track associations
+- Track Selection - Choose active track before racing (persists to EEPROM)
+- Race Distance Stats - Total distance and per-lap calculations in history
+- Improved Race Edit UI - Tabbed interface for metadata and lap editing
+
+**v1.3.3**
+- Modern Configuration UI with full-screen overlay modal
+- WebSocket Stability with SSE keepalive mechanism
+- Fixed duplicate element IDs and WiFi configuration issues
+
+**v1.3.2**
 - WiFi Status Display with real-time connection monitoring
-- Marshalling Mode for post-race lap editing (add/remove laps)
-- LED settings persistence to EEPROM (survives reboots)
-- Improved race history file structure (individual files + index)
-- Rainbow Wave default LED preset
-- Fixed Gate 1 timing calculation
-- Fixed race history saving to SD card
-- Fixed WiFi Station mode connection
+- Marshalling Mode for post-race lap editing
+- LED settings persistence to EEPROM
 
 **v1.3.1**
 - Fixed race history storage initialization bug

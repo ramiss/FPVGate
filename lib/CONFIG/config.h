@@ -81,7 +81,7 @@
 #define EEPROM_RESERVED_SIZE 256
 #define CONFIG_MAGIC_MASK (0b11U << 30)
 #define CONFIG_MAGIC (0b01U << 30)
-#define CONFIG_VERSION 3U
+#define CONFIG_VERSION 4U
 
 #define EEPROM_CHECK_TIME_MS 1000
 
@@ -104,6 +104,8 @@ typedef struct {
     uint32_t ledStrobeColor;   // RGB for STROBE preset
     uint8_t ledManualOverride; // Manual override flag (0=off, 1=on)
     uint8_t operationMode;     // 0=WiFi, 1=RotorHazard (software switch)
+    uint8_t tracksEnabled;     // Track feature enabled (0=disabled, 1=enabled)
+    uint32_t selectedTrackId;  // Currently selected track (0=none)
     char pilotName[21];
     char ssid[33];
     char password[33];
@@ -134,6 +136,8 @@ class Config {
     uint32_t getLedFadeColor();
     uint32_t getLedStrobeColor();
     uint8_t getLedManualOverride();
+    uint8_t getTracksEnabled();
+    uint32_t getSelectedTrackId();
     char* getSsid();
     char* getPassword();
     uint8_t getOperationMode();
@@ -152,6 +156,8 @@ class Config {
     void setLedFadeColor(uint32_t color);
     void setLedStrobeColor(uint32_t color);
     void setLedManualOverride(uint8_t override);
+    void setTracksEnabled(uint8_t enabled);
+    void setSelectedTrackId(uint32_t trackId);
 
    private:
     laptimer_config_t conf;

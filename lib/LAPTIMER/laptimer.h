@@ -7,6 +7,9 @@
 #include "kalman.h"
 #include "led.h"
 
+// Forward declaration to avoid circular dependency
+struct Track;
+
 typedef enum {
     STOPPED,
     WAITING,
@@ -34,6 +37,12 @@ class LapTimer {
     uint16_t getCalibrationRssiCount();
     uint8_t getCalibrationRssi(uint16_t index);
     uint32_t getCalibrationTimestamp(uint16_t index);
+    
+    // Track/distance methods
+    void setTrack(Track* track);
+    float getTotalDistance();
+    float getDistanceRemaining();
+    Track* getSelectedTrack();
 
    private:
     laptimer_state_e state = STOPPED;
@@ -63,6 +72,11 @@ class LapTimer {
     uint8_t calibrationRssi[LAPTIMER_CALIBRATION_HISTORY];
     uint32_t calibrationTimestamps[LAPTIMER_CALIBRATION_HISTORY];
     uint32_t lastCalibrationSampleMs;  // Track when last sample was taken
+    
+    // Track/distance tracking
+    Track* selectedTrack;
+    float totalDistanceTravelled;
+    float distanceRemaining;
 
     void lapPeakCapture();
     bool lapPeakCaptured();

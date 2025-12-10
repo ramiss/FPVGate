@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('serial-disconnected', () => callback());
   },
   
+  // Open OSD overlay window
+  openOSD: () => ipcRenderer.invoke('open-osd'),
+  
   // Check if running in Electron
   isElectron: true
 });

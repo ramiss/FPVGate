@@ -66,6 +66,8 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["ledStrobeColor"] = conf.ledStrobeColor;
     config["ledManualOverride"] = conf.ledManualOverride;
     config["opMode"] = conf.operationMode;
+    config["tracksEnabled"] = conf.tracksEnabled;
+    config["selectedTrackId"] = conf.selectedTrackId;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
@@ -91,6 +93,8 @@ void Config::toJsonString(char* buf) {
     config["ledStrobeColor"] = conf.ledStrobeColor;
     config["ledManualOverride"] = conf.ledManualOverride;
     config["opMode"] = conf.operationMode;
+    config["tracksEnabled"] = conf.tracksEnabled;
+    config["selectedTrackId"] = conf.selectedTrackId;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
@@ -164,6 +168,14 @@ void Config::fromJson(JsonObject source) {
     }
     if (source.containsKey("opMode") && source["opMode"] != conf.operationMode) {
         conf.operationMode = source["opMode"];
+        modified = true;
+    }
+    if (source.containsKey("tracksEnabled") && source["tracksEnabled"] != conf.tracksEnabled) {
+        conf.tracksEnabled = source["tracksEnabled"];
+        modified = true;
+    }
+    if (source.containsKey("selectedTrackId") && source["selectedTrackId"] != conf.selectedTrackId) {
+        conf.selectedTrackId = source["selectedTrackId"];
         modified = true;
     }
     if (source["name"] != conf.pilotName) {
@@ -252,6 +264,14 @@ uint8_t Config::getOperationMode() {
     return conf.operationMode;
 }
 
+uint8_t Config::getTracksEnabled() {
+    return conf.tracksEnabled;
+}
+
+uint32_t Config::getSelectedTrackId() {
+    return conf.selectedTrackId;
+}
+
 // Setters for RotorHazard node mode
 void Config::setFrequency(uint16_t freq) {
     if (conf.frequency != freq) {
@@ -330,6 +350,20 @@ void Config::setLedManualOverride(uint8_t override) {
     }
 }
 
+void Config::setTracksEnabled(uint8_t enabled) {
+    if (conf.tracksEnabled != enabled) {
+        conf.tracksEnabled = enabled;
+        modified = true;
+    }
+}
+
+void Config::setSelectedTrackId(uint32_t trackId) {
+    if (conf.selectedTrackId != trackId) {
+        conf.selectedTrackId = trackId;
+        modified = true;
+    }
+}
+
 void Config::setDefaults(void) {
     DEBUG("Setting EEPROM defaults\n");
     // Reset everything to 0/false and then just set anything that zero is not appropriate
@@ -352,6 +386,8 @@ void Config::setDefaults(void) {
     conf.ledStrobeColor = 0xFFFFFF;  // White for strobe
     conf.ledManualOverride = 0;  // Manual override off by default
     conf.operationMode = 0;  // WiFi mode by default
+    conf.tracksEnabled = 0;  // Tracks disabled by default
+    conf.selectedTrackId = 0;  // No track selected by default
     strlcpy(conf.ssid, "", sizeof(conf.ssid));
     strlcpy(conf.password, "", sizeof(conf.password));
     strlcpy(conf.pilotName, "", sizeof(conf.pilotName));

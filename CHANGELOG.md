@@ -2,6 +2,132 @@
 
 All notable changes to FPVGate will be documented in this file.
 
+## [1.4.0] - 2024-12-10
+
+### Added - Track Management System
+- **Track Library** - Create and manage track profiles with complete metadata
+  - Track name, tags, and custom notes
+  - Distance specification in meters for lap distance tracking
+  - Track images (upload via web interface)
+  - Up to 50 tracks stored on SD card or LittleFS
+  - Individual track files: `/tracks/track_<id>.json`
+  - Track images: `/tracks/images/track_<id>.jpg`
+- **Track Selection** - Choose active track before racing
+  - Dropdown selector in Configuration tab
+  - Selected track persists to EEPROM
+  - Track info displayed during race
+- **Track CRUD Operations** - Full management via web interface
+  - Create new track
+  - Edit existing track (name, distance, tags, notes)
+  - Delete track (with confirmation)
+  - Import/export tracks
+  - Track search and filtering
+
+### Added - Distance Tracking
+- **Real-Time Distance Display** - Track total distance travelled during race
+  - Live distance counter updates every 100ms
+  - Shows distance per lap (when track selected)
+  - Shows total distance travelled
+  - Shows distance remaining (finite lap races)
+  - Displays in race interface: "Lap 1: 12.34s | 125/500m"
+- **Race Distance Statistics** - Distance data stored with race history
+  - Total race distance recorded
+  - Track association (trackId and trackName)
+  - Distance displayed in race history
+  - Race history shows: "Track: MyTrack (1250m)"
+  - Per-lap distance calculations in race details
+- **LapTimer Integration** - Distance calculation in timing engine
+  - `setTrack()` - Associates track with timer
+  - `getTotalDistance()` - Returns total distance travelled
+  - `getDistanceRemaining()` - Returns distance to finish
+  - Automatic distance increment on lap completion
+  - Distance reset on race start
+
+### Added - Enhanced Race Editing
+- **Race Metadata Editing** - Edit race information after completion
+  - Edit race name
+  - Edit race tags
+  - Edit race notes
+  - Associate/change track
+  - Update total distance
+  - Metadata saved separately from lap times
+- **Lap Time Editing** - Full lap manipulation (expanded from v1.3.2)
+  - Add lap at any position
+  - Remove lap with confirmation
+  - Edit individual lap times (NEW)
+  - Drag-and-drop lap reordering (NEW)
+  - Real-time statistics recalculation
+  - Separate API endpoints for metadata vs lap changes
+- **Edit UI Improvements** - Better race editing experience
+  - Tabbed interface: Info tab and Laps tab
+  - Track selector dropdown in edit modal
+  - Visual lap editor with inline controls
+  - Validation for lap time formats
+  - Confirmation dialogs for destructive actions
+
+### Added - API Endpoints
+- **Track Management API**
+  - `GET /tracks` - List all tracks
+  - `POST /tracks/create` - Create new track
+  - `POST /tracks/update` - Update existing track
+  - `POST /tracks/delete` - Delete track
+  - `POST /tracks/select` - Set active track
+  - `GET /tracks/image/<id>` - Retrieve track image
+- **Distance Tracking API**
+  - `GET /timer/distance` - Get current distance stats
+  - Returns: totalDistance, distanceRemaining, trackId, trackName
+- **Enhanced Race API**
+  - `POST /races/update` - Update race metadata only
+  - `POST /races/updateLaps` - Update race lap times only
+  - Separated for better granularity and performance
+
+### Changed
+- **Race History Structure** - Enhanced race data format
+  - Added `trackId` field (uint32_t)
+  - Added `trackName` field (String)
+  - Added `totalDistance` field (float, in meters)
+  - Added `notes` field for race notes
+  - Backwards compatible with older races (null values)
+- **Configuration** - Expanded config storage
+  - Added `selectedTrackId` (uint32_t) - persists to EEPROM
+  - Config version remains v3 (compatible)
+  - Selected track restored on boot
+- **Race Interface** - Improved race display
+  - Current lap time shown during race
+  - Distance counter (when track selected)
+  - Track name displayed in race stats
+  - Distance remaining countdown (finite lap races)
+- **Race History UI** - Enhanced history display
+  - Track name and total distance in history list
+  - Distance statistics in race details
+  - Track filter in history search
+  - Improved edit modal with tabbed interface
+
+### Fixed
+- **Race Saving** - Fixed race data not including distance information
+- **Lap Distance Calculation** - Fixed per-lap distance display
+- **Track Selection Persistence** - Fixed selected track not restoring after reboot
+
+### Technical
+- **New Libraries**
+  - `lib/TRACKMANAGER/` - Track management system
+  - `trackmanager.h` - Track struct and TrackManager class
+  - `trackmanager.cpp` - CRUD operations and storage
+- **LapTimer Enhancements**
+  - Added track pointer and distance tracking fields
+  - `setTrack()`, `getTotalDistance()`, `getDistanceRemaining()` methods
+  - Distance calculation in `finishLap()`
+- **Frontend Enhancements**
+  - Track management UI in Configuration modal
+  - Distance polling system (100ms interval)
+  - Enhanced race edit modal with tabs
+  - Track selector components
+- **Storage Structure**
+  - `/tracks/` directory for track files
+  - `/tracks/images/` for track images
+  - Individual track files: `track_<timestamp>.json`
+  - SD card preferred, LittleFS fallback
+
 ## [1.3.3] - 2024-12-10
 
 ### Added
