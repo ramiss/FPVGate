@@ -19,369 +19,18 @@
           <img src="logo-white.svg" alt="FPVGate" width="64" id="headerLogo" />
           <h1>FPVGate</h1>
         </div>
-        <div id="wifiStatus" class="wifi-status">
-          <span class="wifi-status-circle" id="wifiCircle"></span>
-          <span class="wifi-status-text" id="wifiText">Connecting...</span>
-        </div>
       </nav>
       <ul class="nav-links">
         <li><a id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
         <li><a id="nav-link-history" class="tablinks" onclick="openTab(event, 'history')">Race History</a></li>
         <li><a id="nav-link-calib" class="tablinks" onclick="openTab(event, 'calib')">Calibration</a></li>
-        <li><a id="nav-link-config" class="tablinks" onclick="openTab(event, 'config')">Configuration</a></li>
+        <li><a id="nav-link-config" class="tablinks" onclick="openSettingsModal()">Configuration</a></li>
       </ul>
     </header>
 
     <main>
-      <div id="config" class="tabcontent">
-        <div class="config-container">
-          <!-- RACE SETUP SECTION -->
-          <h3 style="margin-top: 0; color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px;">Race Setup</h3>
-          
-          <div class="config-item">
-            <label for="maxLaps">Number of Laps:</label>
-            <div class="input-with-value">
-              <span class="val">Infinite</span>
-              <input type="range" id="maxLaps" step="1" min="0" max="50" value="0" oninput="updateMaxLaps(this,value)" />
-            </div>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Tip: Set to 0 for infinite laps
-          </div>
-
-          <div class="config-item">
-            <label for="minLap">Minimum Lap Time:</label>
-            <div class="input-with-value">
-              <span class="val">10.0s</span>
-              <input type="range" id="minLap" step="0.5" min="1" max="20" oninput="updateMinLap(this,value)" />
-            </div>
-          </div>
-
-          <!-- TTS SETTINGS SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">TTS Settings</h3>
-
-          <div class="config-item">
-            <label for="announcerSelect">Announcer Type:</label>
-            <select id="announcerSelect">
-              <option value="none">None</option>
-              <option value="beep">Beep</option>
-              <option value="1lap">Lap Time</option>
-              <option value="2lap">2 Consecutive Laps Time</option>
-              <option value="3lap">3 Consecutive Laps Time</option>
-            </select>
-          </div>
-
-          <div class="config-item">
-            <label for="lapFormatSelect">Lap Announcement Format:</label>
-            <select id="lapFormatSelect" onchange="saveLapFormat()">
-              <option value="full" selected>Pilot + Lap + Time</option>
-              <option value="laptime">Lap + Time</option>
-              <option value="timeonly">Time Only</option>
-            </select>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Examples: "Louis Lap 5, 12.34" / "Lap 5, 12.34" / "12.34"
-          </div>
-
-          <div class="config-item">
-            <label for="voiceSelect">Voice:</label>
-            <select id="voiceSelect" onchange="saveVoiceSelection()">
-              <option value="default" selected>ElevenLabs (Sarah - Energetic)</option>
-              <option value="rachel">ElevenLabs (Rachel - Calm)</option>
-              <option value="adam">ElevenLabs (Adam - Deep Male)</option>
-              <option value="antoni">ElevenLabs (Antoni - Male)</option>
-              <option value="piper">PiperTTS (Lower Latency)</option>
-            </select>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Note: ElevenLabs voices require pre-generated audio files
-          </div>
-
-          <div class="config-item">
-            <label for="rate">Announcer Rate:</label>
-            <div class="input-with-value">
-              <span class="val">1.0</span>
-              <input type="range" min="0.1" max="2" step="0.1" id="rate" oninput="updateAnnouncerRate(this,value)" />
-            </div>
-          </div>
-
-          <div class="config-item">
-            <label>Voice Control:</label>
-            <div style="display: flex; gap: 8px; flex: 1;">
-              <button id="EnableAudioButton" onclick="enableAudioLoop()" style="flex: 1; padding: 8px;">Enable Voice</button>
-              <button id="DisableAudioButton" onclick="disableAudioLoop()" style="flex: 1; padding: 8px;">Disable Voice</button>
-              <button id="GenerateAudioButton" onclick="generateAudio()" style="flex: 1; padding: 8px;">Test Voice</button>
-            </div>
-          </div>
-
-          <!-- PILOT INFO SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">Pilot Info</h3>
-          
-          <div id="bandChannelFreq">
-            <div class="config-item">
-              <label for="bandSelect">Band:</label>
-              <select id="bandSelect">
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="E">E</option>
-                <option value="F">F</option>
-                <option value="R">R</option>
-                <option value="L">L</option>
-              </select>
-            </div>
-
-            <div class="config-item">
-              <label for="channelSelect">Channel:</label>
-              <select id="channelSelect">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-              </select>
-            </div>
-
-            <div class="config-item">
-              <span id="freqOutput"></span>
-            </div>
-          </div>
-
-          <div class="config-item">
-            <label for="pname">Pilot Name:</label>
-            <input type="text" id="pname" maxlength="20" placeholder="Full Name" />
-          </div>
-
-          <div class="config-item">
-            <label for="pcallsign">Pilot Callsign:</label>
-            <input type="text" id="pcallsign" maxlength="10" placeholder="Displayed Name" />
-          </div>
-
-          <div class="config-item">
-            <label for="pphonetic">Phonetic Name:</label>
-            <input type="text" id="pphonetic" maxlength="30" placeholder="How TTS pronounces your name" />
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Tip: Use phonetic spelling (e.g., "Louie" instead of "Louis")
-          </div>
-
-          <div class="config-item">
-            <label for="pilotColor">Pilot Color:</label>
-            <select id="pilotColor">
-              <option value="#FF0000">Red</option>
-              <option value="#FF6B00">Orange</option>
-              <option value="#FFD700">Gold</option>
-              <option value="#00FF00">Green</option>
-              <option value="#00FFFF">Cyan</option>
-              <option value="#0080FF" selected>Blue</option>
-              <option value="#8000FF">Purple</option>
-              <option value="#FF00FF">Magenta</option>
-              <option value="#FF1493">Pink</option>
-              <option value="#FFFFFF">White</option>
-              <option value="#808080">Gray</option>
-              <option value="#000000">Black</option>
-              <option value="#8B4513">Brown</option>
-              <option value="#00FF7F">Spring Green</option>
-              <option value="#FF69B4">Hot Pink</option>
-            </select>
-            <span id="colorPreview" style="display: inline-block; width: 30px; height: 30px; margin-left: 10px; border: 2px solid var(--border-color); border-radius: 4px; background-color: #FF0000;"></span>
-          </div>
-
-          <!-- LED SETUP SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">LED Setup</h3>
-          
-          <div class="config-item">
-            <label for="ledPreset">LED Preset:</label>
-            <select id="ledPreset" onchange="changeLedPreset()">
-              <option value="0">Off</option>
-              <option value="1">Solid Colour</option>
-              <option value="2" selected>Rainbow Wave</option>
-              <option value="3">Color Fade</option>
-              <option value="4">Fire</option>
-              <option value="5">Ocean</option>
-              <option value="6">Police</option>
-              <option value="7">Strobe</option>
-              <option value="8">Comet</option>
-              <option value="9">Pilot Colour</option>
-            </select>
-          </div>
-
-          <div class="config-item" id="solidColorSection" style="display: none;">
-            <label for="ledSolidColor">Solid Color:</label>
-            <input type="color" id="ledSolidColor" value="#FF00FF" onchange="setSolidColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
-          </div>
-
-          <div class="config-item" id="fadeColorSection" style="display: none;">
-            <label for="ledFadeColor">Fade Color:</label>
-            <input type="color" id="ledFadeColor" value="#0080FF" onchange="setFadeColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
-          </div>
-
-          <div class="config-item" id="strobeColorSection" style="display: none;">
-            <label for="ledStrobeColor">Strobe Color:</label>
-            <input type="color" id="ledStrobeColor" value="#FFFFFF" onchange="setStrobeColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
-          </div>
-
-          <div class="config-item">
-            <label for="ledSpeed">Animation Speed:</label>
-            <div class="input-with-value">
-              <span class="val">5</span>
-              <input type="range" id="ledSpeed" step="1" min="1" max="20" value="5" oninput="updateLedSpeed(this,value)" />
-            </div>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Controls rainbow, pulse, and animation speed
-          </div>
-
-          <div class="config-item">
-            <label for="ledBrightness">LED Brightness:</label>
-            <div class="input-with-value">
-              <span class="val">80</span>
-              <input type="range" id="ledBrightness" step="5" min="0" max="255" value="80" oninput="updateLedBrightness(this,value)" />
-            </div>
-          </div>
-
-          <div class="config-item">
-            <label for="ledManualOverride">Manual LED Control:</label>
-            <div style="flex: 1;">
-              <label class="switch">
-                <input type="checkbox" id="ledManualOverride" onchange="toggleLedManualOverride(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            When enabled, race events won't affect LED settings
-          </div>
-
-          <!-- SYSTEM SETUP SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">System Setup</h3>
-
-          <div class="config-item">
-            <label for="connectionMode">Connection Mode:</label>
-            <select id="connectionMode" onchange="changeConnectionMode()">
-              <option value="auto" selected>Auto (WiFi/USB)</option>
-              <option value="wifi">WiFi Only</option>
-              <option value="usb">USB Only</option>
-            </select>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Auto mode detects USB connection, falls back to WiFi
-          </div>
-
-          <div class="config-item" id="comPortSection" style="display: none;">
-            <label for="comPort">COM Port:</label>
-            <select id="comPort" onchange="selectComPort()">
-              <option value="">Select a port...</option>
-            </select>
-          </div>
-          <div id="comPortStatus" style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px; display: none;">
-            Status: Disconnected
-          </div>
-
-          <div class="config-item">
-            <label for="themeSelect">Theme:</label>
-            <select id="themeSelect" onchange="changeTheme()">
-              <option value="lighter">Material Lighter</option>
-              <option value="oceanic" selected>Material Oceanic</option>
-              <option value="darker">Material Darker</option>
-              <option value="palenight">Material Palenight</option>
-              <option value="deepocean">Material Deep Ocean</option>
-              <option value="forest">Material Forest</option>
-              <option value="skyblue">Material Sky Blue</option>
-              <option value="sandybeach">Material Sandy Beach</option>
-              <option value="volcano">Material Volcano</option>
-              <option value="space">Material Space</option>
-              <option value="monokai">Monokai Pro</option>
-              <option value="dracula">Dracula</option>
-              <option value="github">GitHub</option>
-              <option value="githubdark">GitHub Dark</option>
-              <option value="arcdark">Arc Dark</option>
-              <option value="onedark">One Dark</option>
-              <option value="onelight">One Light</option>
-              <option value="solarizeddark">Solarized Dark</option>
-              <option value="solarizedlight">Solarized Light</option>
-              <option value="nightowl">Night Owl</option>
-              <option value="lightowl">Light Owl</option>
-              <option value="moonlight">Moonlight</option>
-              <option value="synthwave">SynthWave '84</option>
-            </select>
-          </div>
-
-          <div class="config-item">
-            <label>OBS Streaming Overlay:</label>
-            <button onclick="openOSD()" style="padding: 8px 16px; background-color: var(--accent-color);">Open OSD & Copy URL</button>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Opens overlay in new tab and copies URL for OBS Browser Source
-          </div>
-
-          <div class="config-item">
-            <label>Firmware Update:</label>
-            <a href="/update" target="_blank" class="update-link">Open Update Page</a>
-          </div>
-
-          <!-- NETWORK SETTINGS SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">Network Settings</h3>
-          
-          <div style="margin-bottom: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
-            <p style="margin: 0 0 8px 0;"><strong>Access Point Mode (Default):</strong> Device broadcasts its own WiFi network. Leave fields below empty to use AP mode.</p>
-            <p style="margin: 0;"><strong>Station Mode:</strong> Device connects to your home network. Enter SSID and password below to enable. Device will fall back to AP mode if connection fails.</p>
-          </div>
-
-          <div class="config-item">
-            <label for="ssid">WiFi SSID:</label>
-            <input type="text" id="ssid" maxlength="32" placeholder="Leave empty for AP mode" />
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Enter your home WiFi network name to connect as a client
-          </div>
-
-          <div class="config-item">
-            <label for="pwd">WiFi Password:</label>
-            <input type="password" id="pwd" maxlength="32" placeholder="Required when SSID is set" />
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Password for the WiFi network (leave empty for open networks)
-          </div>
-
-          <div class="config-item">
-            <label></label>
-            <button onclick="applyWiFiAndReboot()" style="padding: 10px 20px; background-color: var(--accent-color); font-weight: bold;">Apply WiFi & Reboot</button>
-          </div>
-          <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
-            Saves WiFi settings and reboots device to apply changes. Device will show 3 orange LED flashes if connection fails.
-          </div>
-
-          <!-- SELF-TEST SECTION -->
-          <h3 style="color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-top: 24px;">System Diagnostics</h3>
-          
-          <div style="margin-bottom: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
-            <p style="margin: 0;">Run comprehensive hardware and software tests to verify all FPVGate components are functioning correctly.</p>
-          </div>
-
-          <button id="runTestsButton" onclick="runSelfTest()" style="width: 100%; padding: 12px; margin-bottom: 16px; background-color: var(--accent-color);">Run System Self-Test</button>
-          
-          <div id="testResults" style="display: none; margin-bottom: 16px;">
-            <h4 style="margin-bottom: 12px; color: var(--primary-color);">Test Results</h4>
-            <div id="testResultsList"></div>
-          </div>
-          
-          <div id="testLoading" style="display: none; text-align: center; padding: 24px; background-color: var(--bg-secondary); border-radius: 8px; margin-bottom: 16px;">
-            <p style="margin: 0; font-size: 14px; color: var(--primary-color);">Running tests...</p>
-          </div>
-        </div>
-        <br>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <button onclick="saveConfig()" style="flex: 1; min-width: 150px;">Save Configuration</button>
-          <button onclick="downloadConfig()" style="flex: 1; min-width: 150px; background-color: var(--secondary-color);">Download Config</button>
-          <button onclick="document.getElementById('importConfigFile').click()" style="flex: 1; min-width: 150px; background-color: var(--secondary-color);">Import Config</button>
-          <input type="file" id="importConfigFile" accept=".json" style="display: none;" onchange="importConfig(this)" />
-        </div>
-        <div class="credits">
-          <p>FPVGate - A fork of <a href="https://github.com/phobos-/PhobosLT" target="_blank">PhobosLT</a></p>
-        </div>
+      <div id="config" class="tabcontent" style="display: none;">
+        <!-- Config moved to settings modal -->
       </div>
 
       <div id="race" class="tabcontent">
@@ -510,9 +159,8 @@
     <footer></footer>
 
     <!-- Edit Race Modal -->
-    <div id="editRaceModal" class="modal" style="display: none;" onclick="closeEditModalOnBackdrop(event)">
-      <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;" onclick="event.stopPropagation()">
-        <button onclick="closeEditModal()" class="modal-close-btn" title="Close">&times;</button>
+    <div id="editRaceModal" class="modal" style="display: none;">
+      <div class="modal-content">
         <h3>Edit Race Details</h3>
         <div class="config-item">
           <label for="raceName">Race Name:</label>
@@ -522,18 +170,8 @@
           <label for="raceTag">Tag:</label>
           <input type="text" id="raceTag" maxlength="30" placeholder="e.g. training, race, freestyle" />
         </div>
-        
-        <h4 style="margin-top: 24px; margin-bottom: 8px; color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 8px;">Marshall Mode - Edit Lap Times</h4>
-        <div style="margin-bottom: 12px; font-size: 13px; color: var(--secondary-color); background-color: var(--background-color); padding: 8px; border-radius: 4px; border-left: 3px solid var(--primary-color);">
-          <strong>Tip:</strong> Edit lap times to correct mis-times. Use the delete button (×) to remove laps or add new ones.
-        </div>
-        <div id="editLapsList" class="edit-laps-container">
-          <!-- Lap rows will be inserted here dynamically -->
-        </div>
-        <button onclick="addNewLapToEdit()" class="add-lap-button">+ Add Lap</button>
-        
         <div style="display: flex; gap: 12px; margin-top: 16px;">
-          <button onclick="saveRaceEdit()">Save All Changes</button>
+          <button onclick="saveRaceEdit()">Save</button>
           <button onclick="closeEditModal()" style="background-color: var(--secondary-color);">Cancel</button>
         </div>
       </div>
@@ -610,7 +248,432 @@
         </div>
       </div>
     </div>
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal">
+      <div class="settings-modal-container">
+        <div class="settings-sidebar">
+          <div class="settings-sidebar-header">
+            <h2>Settings</h2>
+            <button class="settings-close-button" onclick="closeSettingsModal()">✕</button>
+          </div>
+          <div class="settings-nav">
+            <div class="settings-nav-item active" onclick="switchSettingsSection('general')">
+              <span>Lap & Announcer Settings</span>
+            </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('pilot')">
+              <span>Pilot Info</span>
+            </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('led')">
+              <span>LED Setup</span>
+            </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('wifi')">
+              <span>WiFi & Connection</span>
+            </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('system')">
+              <span>System Settings</span>
+            </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('diagnostics')">
+              <span>Diagnostics</span>
+            </div>
+          </div>
+        </div>
+        <div class="settings-content-wrapper">
+          <div class="settings-content">
+            <!-- General Section -->
+            <div id="settings-general" class="settings-section active">
+              <h2>Lap & Announcer Settings</h2>
+              
+              <h3>Race Setup</h3>
+              <div class="config-item">
+                <label for="maxLaps">Number of Laps:</label>
+                <div class="input-with-value">
+                  <span class="val">Infinite</span>
+                  <input type="range" id="maxLaps" step="1" min="0" max="50" value="0" oninput="updateMaxLaps(this,value)" />
+                </div>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Tip: Set to 0 for infinite laps
+              </div>
+
+              <div class="config-item">
+                <label for="minLap">Minimum Lap Time:</label>
+                <div class="input-with-value">
+                  <span class="val">10.0s</span>
+                  <input type="range" id="minLap" step="0.5" min="1" max="20" oninput="updateMinLap(this,value)" />
+                </div>
+              </div>
+
+              <h3>TTS Settings</h3>
+              
+              <div class="config-item">
+                <label for="announcerSelect">Announcer Type:</label>
+                <select id="announcerSelect">
+                  <option value="none">None</option>
+                  <option value="beep">Beep</option>
+                  <option value="1lap">Lap Time</option>
+                  <option value="2lap">2 Consecutive Laps Time</option>
+                  <option value="3lap">3 Consecutive Laps Time</option>
+                </select>
+              </div>
+
+              <div class="config-item">
+                <label for="lapFormatSelect">Lap Announcement Format:</label>
+                <select id="lapFormatSelect" onchange="saveLapFormat()">
+                  <option value="full" selected>Pilot + Lap + Time</option>
+                  <option value="laptime">Lap + Time</option>
+                  <option value="timeonly">Time Only</option>
+                </select>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Examples: "Louis Lap 5, 12.34" / "Lap 5, 12.34" / "12.34"
+              </div>
+
+              <div class="config-item">
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect" onchange="saveVoiceSelection()">
+                  <option value="default" selected>ElevenLabs (Sarah - Energetic)</option>
+                  <option value="rachel">ElevenLabs (Rachel - Calm)</option>
+                  <option value="adam">ElevenLabs (Adam - Deep Male)</option>
+                  <option value="antoni">ElevenLabs (Antoni - Male)</option>
+                  <option value="piper">PiperTTS (Lower Latency)</option>
+                </select>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Note: ElevenLabs voices require pre-generated audio files
+              </div>
+
+              <div class="config-item">
+                <label for="rate">Announcer Rate:</label>
+                <div class="input-with-value">
+                  <span class="val">1.0</span>
+                  <input type="range" min="0.1" max="2" step="0.1" id="rate" oninput="updateAnnouncerRate(this,value)" />
+                </div>
+              </div>
+
+              <div class="config-item">
+                <label>Voice Control:</label>
+                <div style="display: flex; gap: 8px; flex: 1;">
+                  <button id="EnableAudioButton" onclick="enableAudioLoop()" style="flex: 1; padding: 8px; transition: background-color 0.3s;">Enable Voice</button>
+                  <button id="DisableAudioButton" onclick="disableAudioLoop()" style="flex: 1; padding: 8px; transition: background-color 0.3s;">Disable Voice</button>
+                  <button id="GenerateAudioButton" onclick="generateAudio()" style="flex: 1; padding: 8px;">Test Voice</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pilot Section -->
+            <div id="settings-pilot" class="settings-section">
+              <h2>Pilot Info</h2>
+              
+              <div id="bandChannelFreq">
+                <div class="config-item">
+                  <label for="bandSelect">Band:</label>
+                  <select id="bandSelect">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="R">R</option>
+                    <option value="L">L</option>
+                  </select>
+                </div>
+
+                <div class="config-item">
+                  <label for="channelSelect">Channel:</label>
+                  <select id="channelSelect">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                  </select>
+                </div>
+
+                <div class="config-item">
+                  <span id="freqOutput"></span>
+                </div>
+              </div>
+
+              <div class="config-item">
+                <label for="pname">Pilot Name:</label>
+                <input type="text" id="pname" maxlength="20" placeholder="Full Name" />
+              </div>
+
+              <div class="config-item">
+                <label for="pcallsign">Pilot Callsign:</label>
+                <input type="text" id="pcallsign" maxlength="10" placeholder="Displayed Name" />
+              </div>
+
+              <div class="config-item">
+                <label for="pphonetic">Phonetic Name:</label>
+                <input type="text" id="pphonetic" maxlength="30" placeholder="How TTS pronounces your name" />
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Tip: Use phonetic spelling (e.g., "Louie" instead of "Louis")
+              </div>
+
+              <div class="config-item">
+                <label for="pilotColor">Pilot Color:</label>
+                <select id="pilotColor">
+                  <option value="#FF0000">Red</option>
+                  <option value="#FF6B00">Orange</option>
+                  <option value="#FFD700">Gold</option>
+                  <option value="#00FF00">Green</option>
+                  <option value="#00FFFF">Cyan</option>
+                  <option value="#0080FF" selected>Blue</option>
+                  <option value="#8000FF">Purple</option>
+                  <option value="#FF00FF">Magenta</option>
+                  <option value="#FF1493">Pink</option>
+                  <option value="#FFFFFF">White</option>
+                  <option value="#808080">Gray</option>
+                  <option value="#000000">Black</option>
+                  <option value="#8B4513">Brown</option>
+                  <option value="#00FF7F">Spring Green</option>
+                  <option value="#FF69B4">Hot Pink</option>
+                </select>
+                <span id="colorPreview" style="display: inline-block; width: 30px; height: 30px; margin-left: 10px; border: 2px solid var(--border-color); border-radius: 4px; background-color: #FF0000;"></span>
+              </div>
+            </div>
+
+            <!-- LED Section -->
+            <div id="settings-led" class="settings-section">
+              <h2>LED Setup</h2>
+              
+              <div class="config-item">
+                <label for="ledPreset">LED Preset:</label>
+                <select id="ledPreset" onchange="changeLedPreset()">
+                  <option value="0">Off</option>
+                  <option value="1">Solid Colour</option>
+                  <option value="2" selected>Rainbow Wave</option>
+                  <option value="3">Color Fade</option>
+                  <option value="4">Fire</option>
+                  <option value="5">Ocean</option>
+                  <option value="6">Police</option>
+                  <option value="7">Strobe</option>
+                  <option value="8">Comet</option>
+                  <option value="9">Pilot Colour</option>
+                </select>
+              </div>
+
+              <div class="config-item" id="solidColorSection" style="display: none;">
+                <label for="ledSolidColor">Solid Color:</label>
+                <input type="color" id="ledSolidColor" value="#FF00FF" onchange="setSolidColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
+              </div>
+
+              <div class="config-item" id="fadeColorSection" style="display: none;">
+                <label for="ledFadeColor">Fade Color:</label>
+                <input type="color" id="ledFadeColor" value="#0080FF" onchange="setFadeColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
+              </div>
+
+              <div class="config-item" id="strobeColorSection" style="display: none;">
+                <label for="ledStrobeColor">Strobe Color:</label>
+                <input type="color" id="ledStrobeColor" value="#FFFFFF" onchange="setStrobeColor()" style="height: 40px; border: 2px solid var(--border-color); border-radius: 4px;" />
+              </div>
+
+              <div class="config-item" id="ledSpeedSection">
+                <label for="ledSpeed">Animation Speed:</label>
+                <div class="input-with-value">
+                  <span class="val">5</span>
+                  <input type="range" id="ledSpeed" step="1" min="1" max="20" value="5" oninput="updateLedSpeed(this,value)" />
+                </div>
+              </div>
+              <div id="ledSpeedNote" style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Controls rainbow, pulse, and animation speed
+              </div>
+
+              <div class="config-item">
+                <label for="ledBrightness">LED Brightness:</label>
+                <div class="input-with-value">
+                  <span class="val">80</span>
+                  <input type="range" id="ledBrightness" step="5" min="0" max="255" value="80" oninput="updateLedBrightness(this,value)" />
+                </div>
+              </div>
+
+              <div class="config-item">
+                <label for="ledManualOverride">Manual LED Control:</label>
+                <div style="flex: 1;">
+                  <label class="switch">
+                    <input type="checkbox" id="ledManualOverride" onchange="toggleLedManualOverride(this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                When enabled, race events won't affect LED settings
+              </div>
+            </div>
+
+            <!-- WiFi & Connection Section -->
+            <div id="settings-wifi" class="settings-section">
+              <h2>WiFi & Connection</h2>
+              
+              <h3 style="margin-top: 0;">Connection Mode</h3>
+              <div class="config-item">
+                <label for="connectionMode">Connection Mode:</label>
+                <select id="connectionMode" onchange="changeConnectionMode()">
+                  <option value="auto" selected>Auto (WiFi/USB)</option>
+                  <option value="wifi">WiFi Only</option>
+                  <option value="usb">USB Only</option>
+                </select>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Auto mode detects USB connection, falls back to WiFi
+              </div>
+
+              <div class="config-item" id="comPortSection" style="display: none;">
+                <label for="comPort">COM Port:</label>
+                <select id="comPort" onchange="selectComPort()">
+                  <option value="">Select a port...</option>
+                </select>
+              </div>
+              <div id="comPortStatus" style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px; display: none;">
+                Status: Disconnected
+              </div>
+
+              <h3>WiFi Configuration</h3>
+              <div class="config-item">
+                <label for="ssid">WiFi SSID:</label>
+                <input type="text" id="ssid" maxlength="32" placeholder="Enter WiFi network name" />
+              </div>
+
+              <div class="config-item">
+                <label for="pwd">WiFi Password:</label>
+                <input type="password" id="pwd" maxlength="32" placeholder="Enter WiFi password" />
+              </div>
+
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button onclick="applyWiFiSettings()" style="flex: 1;">Apply WiFi Settings</button>
+                <button onclick="resetWiFiSettings()" style="flex: 1; background-color: var(--secondary-color);">Reset</button>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-top: 8px;">
+                Note: Device will restart after applying WiFi settings
+              </div>
+            </div>
+
+            <!-- System Section -->
+            <div id="settings-system" class="settings-section">
+              <h2>System Settings</h2>
+              
+              <h3 style="margin-top: 0;">Battery Monitoring</h3>
+              <div class="config-item">
+                <label for="batteryMonitorToggle">Battery Monitoring:</label>
+                <div style="flex: 1;">
+                  <label class="switch">
+                    <input type="checkbox" id="batteryMonitorToggle" onchange="toggleBatteryMonitor(this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="batteryMonitoringSection" style="display: none;">
+                <div class="config-item">
+                  <label for="alarmThreshold">Low Battery Alarm:</label>
+                  <div class="input-with-value">
+                    <span class="val">3.6v</span>
+                    <input type="range" id="alarmThreshold" step="0.1" min="0.0" max="3.6" oninput="updateAlarmThreshold(this,value)" />
+                  </div>
+                </div>
+
+                <div class="config-item">
+                  <label for="bvolt">Battery Voltage:</label>
+                  <span class="val" id="bvolt">--</span>
+                </div>
+              </div>
+
+              <h3 style="margin-top: 0;">RSSI Detection</h3>
+              <div class="config-item">
+                <label for="rssiSensitivity">RSSI Sensitivity:</label>
+                <select id="rssiSensitivity">
+                  <option value="0">Normal (Legacy)</option>
+                  <option value="1" selected>High (1.5x Boost)</option>
+                </select>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                High sensitivity provides better weak signal detection. Use Normal if experiencing false triggers.
+              </div>
+
+              <h3>Appearance</h3>
+              <div class="config-item">
+                <label for="themeSelect">Theme:</label>
+                <select id="themeSelect" onchange="changeTheme()">
+                  <option value="lighter">Material Lighter</option>
+                  <option value="oceanic" selected>Material Oceanic</option>
+                  <option value="darker">Material Darker</option>
+                  <option value="palenight">Material Palenight</option>
+                  <option value="deepocean">Material Deep Ocean</option>
+                  <option value="forest">Material Forest</option>
+                  <option value="skyblue">Material Sky Blue</option>
+                  <option value="sandybeach">Material Sandy Beach</option>
+                  <option value="volcano">Material Volcano</option>
+                  <option value="space">Material Space</option>
+                  <option value="monokai">Monokai Pro</option>
+                  <option value="dracula">Dracula</option>
+                  <option value="github">GitHub</option>
+                  <option value="githubdark">GitHub Dark</option>
+                  <option value="arcdark">Arc Dark</option>
+                  <option value="onedark">One Dark</option>
+                  <option value="onelight">One Light</option>
+                  <option value="solarizeddark">Solarized Dark</option>
+                  <option value="solarizedlight">Solarized Light</option>
+                  <option value="nightowl">Night Owl</option>
+                  <option value="lightowl">Light Owl</option>
+                  <option value="moonlight">Moonlight</option>
+                  <option value="synthwave">SynthWave '84</option>
+                </select>
+              </div>
+
+              <h3>Integration</h3>
+              <div class="config-item">
+                <label>OBS Streaming Overlay:</label>
+                <button onclick="openOSD()" style="padding: 8px 16px; background-color: var(--accent-color);">Open OSD & Copy URL</button>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Opens overlay in new tab and copies URL for OBS Browser Source
+              </div>
+
+              <h3>Firmware</h3>
+              <div class="config-item">
+                <label>Firmware Update:</label>
+                <a href="/update" target="_blank" class="update-link">Open Update Page</a>
+              </div>
+            </div>
+
+            <!-- Diagnostics Section -->
+            <div id="settings-diagnostics" class="settings-section">
+              <h2>System Diagnostics</h2>
+              
+              <div style="margin-bottom: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
+                <p style="margin: 0;">Run comprehensive hardware and software tests to verify all FPVGate components are functioning correctly.</p>
+              </div>
+
+              <button id="runTestsButton" onclick="runSelfTest()" style="width: 100%; padding: 12px; margin-bottom: 16px; background-color: var(--accent-color);">Run System Self-Test</button>
+              
+              <div id="testResults" style="display: none; margin-bottom: 16px;">
+                <h4 style="margin-bottom: 12px; color: var(--primary-color);">Test Results</h4>
+                <div id="testResultsList"></div>
+              </div>
+              
+              <div id="testLoading" style="display: none; text-align: center; padding: 24px; background-color: var(--bg-secondary); border-radius: 8px; margin-bottom: 16px;">
+                <p style="margin: 0; font-size: 14px; color: var(--primary-color);">Running tests...</p>
+              </div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button onclick="downloadConfig()" style="background-color: var(--secondary-color);">Download Config</button>
+            <button onclick="document.getElementById('importConfigFile').click()" style="background-color: var(--secondary-color);">Import Config</button>
+            <input type="file" id="importConfigFile" accept=".json" style="display: none;" onchange="importConfig(this)" />
+            <button onclick="saveConfig()">Save Configuration</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
 
     <script src="script.js"></script>
   </body>
 </html>
+
+

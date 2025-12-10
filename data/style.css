@@ -328,74 +328,6 @@ nav {
   font-size: 32px;
 }
 
-.wifi-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: help;
-  position: relative;
-}
-
-.wifi-status-circle {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 8px currentColor;
-}
-
-.wifi-status-text {
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  color: white;
-  opacity: 0;
-  max-width: 0;
-  overflow: hidden;
-  transition: opacity 0.3s ease, max-width 0.3s ease;
-}
-
-.wifi-status:hover .wifi-status-text {
-  opacity: 1;
-  max-width: 400px;
-  padding-left: 4px;
-}
-
-/* AP Mode - Green (no connected clients) */
-.wifi-status.ap-no-clients .wifi-status-circle {
-  background-color: #4CAF50;
-  color: #4CAF50;
-}
-
-/* AP Mode - Green with glow (connected clients) */
-.wifi-status.ap-clients .wifi-status-circle {
-  background-color: #4CAF50;
-  color: #4CAF50;
-  box-shadow: 0 0 12px #4CAF50;
-}
-
-/* External Network Connected - Green with glow + (x) */
-.wifi-status.sta-connected .wifi-status-circle {
-  background-color: #4CAF50;
-  color: #4CAF50;
-  box-shadow: 0 0 12px #4CAF50;
-}
-
-/* External Network Failed - Red hollow */
-.wifi-status.disconnected .wifi-status-circle {
-  background-color: transparent;
-  border: 2px solid #F44336;
-  color: #F44336;
-  box-shadow: 0 0 8px #F44336;
-}
-
-/* External Network Connected, No Clients - Orange */
-.wifi-status.sta-no-clients .wifi-status-circle {
-  background-color: #FF9800;
-  color: #FF9800;
-  box-shadow: 0 0 10px #FF9800;
-}
-
 .nav-links {
   display: flex;
   list-style: none;
@@ -999,167 +931,166 @@ footer {
   color: var(--text-color);
 }
 
-.modal-close-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background-color: transparent;
+/* Settings Modal - Overlay Popup */
+.settings-modal {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-modal.active {
+  display: flex;
+}
+
+.settings-modal-container {
+  display: flex;
+  width: 90%;
+  max-width: 1200px;
+  height: 85vh;
+  max-height: 800px;
+  background-color: var(--background-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.settings-sidebar {
+  width: 250px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.settings-sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-sidebar-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-color);
+}
+
+.settings-close-button {
+  background: transparent;
+  border: none;
   color: var(--secondary-color);
-  border: 2px solid var(--border-color);
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
   font-size: 24px;
-  line-height: 1;
   cursor: pointer;
   padding: 0;
   margin: 0;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.modal-close-btn:hover {
-  background-color: #e74c3c;
-  color: white;
-  border-color: #e74c3c;
-  transform: rotate(90deg);
-}
-
-/* Lap Editing Styles */
-.edit-laps-container {
-  max-height: 350px;
-  overflow-y: auto;
-  margin-bottom: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 8px;
-  background-color: var(--background-color);
-}
-
-.edit-laps-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.edit-laps-container::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
   border-radius: 4px;
+  transition: background-color 0.2s;
 }
 
-.edit-laps-container::-webkit-scrollbar-thumb {
-  background: var(--secondary-color);
-  border-radius: 4px;
+.settings-close-button:hover {
+  background-color: var(--border-color);
+  color: var(--text-color);
 }
 
-.edit-laps-container::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-color);
+.settings-nav {
+  padding: 8px 0;
 }
 
-.lap-edit-row {
+.settings-nav-item {
   display: flex;
   align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  color: var(--secondary-color);
+  transition: background-color 0.2s, color 0.2s;
+  border-left: 3px solid transparent;
+  font-size: 14px;
   gap: 12px;
-  margin-bottom: 8px;
-  padding: 12px;
-  background-color: var(--bg-secondary);
-  border-radius: 6px;
-  border-left: 3px solid var(--primary-color);
-  transition: all 0.2s ease;
 }
 
-.lap-edit-row:hover {
-  background-color: var(--tabcontent-bg);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transform: translateX(2px);
-}
-
-.lap-edit-row .lap-label {
-  min-width: 70px;
-  font-weight: bold;
+.settings-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-color);
-  font-size: 14px;
 }
 
-.lap-edit-row .lap-label.gate-1 {
+.settings-nav-item.active {
+  background-color: rgba(255, 255, 255, 0.1);
   color: var(--primary-color);
+  border-left-color: var(--primary-color);
+  font-weight: bold;
 }
 
-.lap-time-input {
+.settings-nav-icon {
+  display: none;
+}
+
+.settings-content-wrapper {
   flex: 1;
-  padding: 8px 12px;
-  border: 2px solid var(--border-color);
-  border-radius: 4px;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  font-size: 15px;
-  font-weight: 500;
-  transition: border-color 0.2s ease;
-}
-
-.lap-time-input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(0, 150, 136, 0.1);
-}
-
-.lap-time-input:hover {
-  border-color: var(--secondary-color);
-}
-
-.lap-unit {
-  color: var(--secondary-color);
-  font-weight: 500;
-  font-size: 14px;
-  min-width: 20px;
-}
-
-.delete-lap-btn {
-  padding: 6px 10px;
-  background-color: transparent;
-  color: var(--secondary-color);
-  border: 2px solid var(--border-color);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 18px;
-  font-weight: bold;
-  line-height: 1;
-  transition: all 0.2s ease;
-  min-width: 36px;
-  height: 36px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.delete-lap-btn:hover {
-  background-color: #e74c3c;
-  color: white;
-  border-color: #e74c3c;
-  transform: scale(1.05);
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
 }
 
-.add-lap-button {
-  width: 100%;
-  padding: 10px;
-  background-color: var(--secondary-color);
-  color: white;
-  border: 2px dashed var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  margin: 12px 0 16px 0;
-  transition: all 0.2s ease;
+.settings-section {
+  display: none;
+  max-width: 900px;
 }
 
-.add-lap-button:hover {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-  border-style: solid;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.settings-section.active {
+  display: block;
+}
+
+.settings-section h2 {
+  margin: 0 0 24px 0;
+  font-size: 28px;
+  color: var(--text-color);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 12px;
+}
+
+.settings-section h3 {
+  margin: 24px 0 16px 0;
+  font-size: 18px;
+  color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.settings-section h3:first-of-type {
+  margin-top: 0;
+}
+
+.settings-section .config-item {
+  margin-bottom: 16px;
+}
+
+.settings-footer {
+  padding: 16px 32px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 /* Calibration Wizard Styles */
@@ -1449,6 +1380,52 @@ footer {
     max-width: 95%;
     padding: 16px;
     margin: 12px;
+  }
+  
+  /* Settings Modal Mobile */
+  .settings-modal-container {
+    width: 95%;
+    height: 90vh;
+    flex-direction: column;
+  }
+  
+  .settings-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    max-height: 40%;
+  }
+  
+  .settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0;
+  }
+  
+  .settings-nav-item {
+    flex: 1 1 50%;
+    padding: 12px 8px;
+    justify-content: center;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    font-size: 12px;
+  }
+  
+  .settings-nav-item.active {
+    border-left: none;
+    border-bottom-color: var(--primary-color);
+  }
+  
+  .settings-content {
+    padding: 16px;
+  }
+  
+  .settings-footer {
+    padding: 12px 16px;
+  }
+  
+  .settings-section h2 {
+    font-size: 20px;
   }
 }
 

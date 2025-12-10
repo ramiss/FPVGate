@@ -108,6 +108,12 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
         rssiSentMs = currentTimeMs;
     }
 
+    // Send SSE keepalive ping to prevent connection timeout
+    if (servicesStarted && ((currentTimeMs - sseKeepaliveMs) > WEB_SSE_KEEPALIVE_MS)) {
+        events.send("ping", "keepalive", millis());
+        sseKeepaliveMs = currentTimeMs;
+    }
+
     wl_status_t status = WiFi.status();
 
     if (status != lastStatus && wifiMode == WIFI_STA) {

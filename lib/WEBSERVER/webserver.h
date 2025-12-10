@@ -11,6 +11,7 @@
 #define WIFI_CONNECTION_TIMEOUT_MS 30000
 #define WIFI_RECONNECT_TIMEOUT_MS 500
 #define WEB_RSSI_SEND_TIMEOUT_MS 200
+#define WEB_SSE_KEEPALIVE_MS 15000
 
 class Webserver : public TransportInterface {
    public:
@@ -48,4 +49,5 @@ class Webserver : public TransportInterface {
 
     bool sendRssi = false;
     uint32_t rssiSentMs = 0;
+    uint32_t sseKeepaliveMs = 0;
 };

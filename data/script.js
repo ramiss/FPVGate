@@ -18,6 +18,7 @@ const pilotNameInput = document.getElementById("pname");
 const ssidInput = document.getElementById("ssid");
 const pwdInput = document.getElementById("pwd");
 const minLapInput = document.getElementById("minLap");
+const alarmThreshold = document.getElementById("alarmThreshold");
 const maxLapsInput = document.getElementById("maxLaps");
 
 const freqLookup = [
@@ -49,6 +50,8 @@ const lapCounter = document.getElementById("lapCounter");
 const startRaceButton = document.getElementById("startRaceButton");
 const stopRaceButton = document.getElementById("stopRaceButton");
 const addLapButton = document.getElementById("addLapButton");
+
+const batteryVoltageDisplay = document.getElementById("bvolt");
 
 const rssiBuffer = [];
 var rssiValue = 0;
@@ -235,60 +238,6 @@ function updateConnectionStatus(mode, connected) {
   }
 }
 
-// WiFi Status Polling
-function updateWiFiStatus() {
-  fetch('/api/wifi')
-    .then(response => response.json())
-    .then(data => {
-      const wifiStatusEl = document.getElementById('wifiStatus');
-      if (!wifiStatusEl) return;
-      
-      const textEl = document.getElementById('wifiText');
-      
-      // Remove all mode classes
-      wifiStatusEl.classList.remove('ap-no-clients', 'ap-clients', 'sta-connected', 'sta-no-clients', 'disconnected');
-      
-      if (data.mode === 'AP') {
-        // Access Point mode
-        if (data.clients > 0) {
-          wifiStatusEl.classList.add('ap-clients');
-          textEl.textContent = `AP Mode (${data.clients} Connected Client${data.clients !== 1 ? 's' : ''})`;
-        } else {
-          wifiStatusEl.classList.add('ap-no-clients');
-          textEl.textContent = 'AP Mode (No Connected Devices)';
-        }
-      } else if (data.mode === 'STA' && data.connected) {
-        // Station mode - connected to external network
-        wifiStatusEl.classList.add('sta-connected');
-        // Show signal strength as percentage or bars
-        let strength = 'Strong';
-        if (data.rssi < -80) strength = 'Weak';
-        else if (data.rssi < -70) strength = 'Fair';
-        else if (data.rssi < -60) strength = 'Good';
-        
-        textEl.textContent = `External Network Connected (${data.clients > 0 ? data.clients + ' Client' + (data.clients !== 1 ? 's' : '') : 'Wifi Strength: ' + strength})`;
-      } else if (data.mode === 'STA' && !data.connected) {
-        // Station mode but not connected (connecting or failed)
-        wifiStatusEl.classList.add('disconnected');
-        textEl.textContent = 'External Network Failed - AP Mode Booting';
-      } else {
-        // Unknown/disconnected state
-        wifiStatusEl.classList.add('disconnected');
-        textEl.textContent = 'Disconnected';
-      }
-    })
-    .catch(error => {
-      console.error('Failed to fetch WiFi status:', error);
-    });
-}
-
-function startWiFiStatusPolling() {
-  // Update immediately
-  updateWiFiStatus();
-  // Then update every 5 seconds
-  setInterval(updateWiFiStatus, 5000);
-}
-
 async function changeConnectionMode() {
   const modeSelect = document.getElementById('connectionMode');
   currentConnectionMode = modeSelect.value;
@@ -368,7 +317,10 @@ onload = async function (e) {
         minLapInput.value = (parseFloat(configData.minLap) / 10).toFixed(1);
         updateMinLap(minLapInput, minLapInput.value);
       }
-      // Battery monitoring removed
+      if (configData.alarm !== undefined) {
+        alarmThreshold.value = (parseFloat(configData.alarm) / 10).toFixed(1);
+        updateAlarmThreshold(alarmThreshold, alarmThreshold.value);
+      }
       if (configData.anType !== undefined) announcerSelect.selectedIndex = configData.anType;
       if (configData.anRate !== undefined) {
         announcerRateInput.value = (parseFloat(configData.anRate) / 10).toFixed(1);
@@ -431,61 +383,79 @@ onload = async function (e) {
       // Load LED settings from config (if available)
       const ledPresetSelect = document.getElementById('ledPreset');
       const ledBrightnessInput = document.getElementById('ledBrightness');
-      const ledSolidColorInput = document.getElementById('ledSolidColor');
-      const ledFadeColorInput = document.getElementById('ledFadeColor');
-      const ledStrobeColorInput = document.getElementById('ledStrobeColor');
-      const ledSpeedInput = document.getElementById('ledSpeed');
+      const ledColorInput = document.getElementById('ledColor');
       const ledManualOverrideToggle = document.getElementById('ledManualOverride');
+      const customColorSection = document.getElementById('customColorSection');
       
-      // Load LED preset (defaults to Rainbow Wave if not set)
-      if (configData.ledPreset !== undefined && ledPresetSelect) {
-        ledPresetSelect.value = configData.ledPreset;
+      // Set defaults or load from backend config
+      if (configData.ledMode !== undefined) {
+        // Map ledMode to preset (0-3 are old modes, map to appropriate presets)
+        let preset = 1; // Default to Rainbow Wave
+        if (configData.ledMode === 0) preset = 0; // Off
+        else if (configData.ledMode === 1) preset = 3; // Green solid
+        else if (configData.ledMode === 2) preset = 2; // Red pulse
+        else if (configData.ledMode === 3) preset = 1; // Rainbow wave
+        if (ledPresetSelect) ledPresetSelect.value = preset;
       }
       
-      // Load LED brightness
       if (configData.ledBrightness !== undefined && ledBrightnessInput) {
         ledBrightnessInput.value = configData.ledBrightness;
         updateLedBrightness(ledBrightnessInput, configData.ledBrightness);
       }
       
-      // Load LED speed
-      if (configData.ledSpeed !== undefined && ledSpeedInput) {
-        ledSpeedInput.value = configData.ledSpeed;
-        updateLedSpeed(ledSpeedInput, configData.ledSpeed);
+      if (configData.ledColor !== undefined && ledColorInput) {
+        // Convert color integer to hex string
+        const hexColor = '#' + ('000000' + configData.ledColor.toString(16)).slice(-6).toUpperCase();
+        ledColorInput.value = hexColor;
       }
       
-      // Load LED colors
-      if (configData.ledColor !== undefined && ledSolidColorInput) {
-        const hexColor = '#' + ('000000' + configData.ledColor.toString(16)).slice(-6);
-        ledSolidColorInput.value = hexColor;
+      // Show custom color section if preset 9 is selected
+      if (ledPresetSelect && customColorSection) {
+        customColorSection.style.display = (parseInt(ledPresetSelect.value) === 9) ? 'flex' : 'none';
       }
       
-      if (configData.ledFadeColor !== undefined && ledFadeColorInput) {
-        const hexColor = '#' + ('000000' + configData.ledFadeColor.toString(16)).slice(-6);
-        ledFadeColorInput.value = hexColor;
-      }
-      
-      if (configData.ledStrobeColor !== undefined && ledStrobeColorInput) {
-        const hexColor = '#' + ('000000' + configData.ledStrobeColor.toString(16)).slice(-6);
-        ledStrobeColorInput.value = hexColor;
-      }
-      
-      // Load manual override setting
-      if (configData.ledManualOverride !== undefined && ledManualOverrideToggle) {
-        ledManualOverrideToggle.checked = configData.ledManualOverride === 1;
-      }
-      
-      // Initialize LED preset UI to show/hide appropriate sections
+      // Initialize LED preset UI on page load
       if (ledPresetSelect) {
         changeLedPreset();
       }
       
-      // Start WiFi status polling
-      startWiFiStatusPolling();
+      // Initialize battery monitoring UI on page load (default is disabled)
+      const batterySection = document.getElementById('batteryMonitoringSection');
+      const batteryToggle = document.getElementById('batteryMonitorToggle');
+      if (batterySection && batteryToggle) {
+        batterySection.style.display = batteryToggle.checked ? 'block' : 'none';
+      }
+      
+      // Load RSSI sensitivity setting
+      const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
+      if (rssiSensitivitySelect && configData.rssiSens !== undefined) {
+        rssiSensitivitySelect.value = configData.rssiSens;
+      }
   }
 };
 
-// Battery monitoring removed - getBatteryVoltage function and interval removed
+async function getBatteryVoltage() {
+  try {
+    let response;
+    if (usbConnected && transportManager) {
+      const data = await transportManager.sendCommand('status', 'GET');
+      response = JSON.stringify(data);
+    } else {
+      const resp = await fetch("/status");
+      response = await resp.text();
+    }
+    
+    const batteryVoltageMatch = response.match(/Battery Voltage:\s*([\d.]+v)/);
+    const batteryVoltage = batteryVoltageMatch ? batteryVoltageMatch[1] : null;
+    if (batteryVoltageDisplay) {
+      batteryVoltageDisplay.innerText = batteryVoltage;
+    }
+  } catch (err) {
+    console.error('Failed to get battery voltage:', err);
+  }
+}
+
+setInterval(getBatteryVoltage, 2000);
 
 function addRssiPoint() {
   if (!rssiChart) return; // Chart not initialized yet
@@ -670,15 +640,17 @@ async function saveConfig() {
   if (colorInput) localStorage.setItem('pilotColor', colorInput.value);
   
   // Save backend settings
+  const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
   const configData = {
     freq: frequency,
     minLap: parseInt(minLapInput.value * 10),
-    alarm: 0, // Battery monitoring removed
+    alarm: parseInt(alarmThreshold.value * 10),
     anType: announcerSelect.selectedIndex,
     anRate: parseInt(announcerRate * 10),
     enterRssi: enterRssi,
     exitRssi: exitRssi,
     maxLaps: maxLaps,
+    rssiSens: rssiSensitivitySelect ? parseInt(rssiSensitivitySelect.value) : 1,
     name: pilotNameInput.value,
     ssid: ssidInput.value,
     pwd: pwdInput.value,
@@ -698,52 +670,6 @@ async function saveConfig() {
     })
       .then((response) => response.json())
       .then((response) => console.log("/config:" + JSON.stringify(response)));
-  }
-}
-
-async function applyWiFiAndReboot() {
-  const ssid = ssidInput.value.trim();
-  const pwd = pwdInput.value;
-  
-  // Confirm with user
-  let confirmMsg;
-  if (ssid) {
-    confirmMsg = `Apply WiFi settings and reboot?\n\nSSID: ${ssid}\n\nThe device will restart and attempt to connect to this network. If connection fails after 30 seconds, it will fall back to AP mode with 3 orange LED flashes.`;
-  } else {
-    confirmMsg = `Apply WiFi settings and reboot?\n\nSSID is empty - device will use AP mode (broadcast its own network).`;
-  }
-  
-  if (!confirm(confirmMsg)) {
-    return;
-  }
-  
-  // Save config first
-  await saveConfig();
-  
-  // Wait a moment for save to complete
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  // Send reboot command
-  if (usbConnected && transportManager) {
-    await transportManager.sendCommand('reboot', 'POST');
-  } else {
-    fetch('/reboot', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    })
-      .then(() => {
-        alert('Device is rebooting. The page will reload in 10 seconds...');
-        setTimeout(() => {
-          window.location.reload();
-        }, 10000);
-      })
-      .catch(error => {
-        console.error('Reboot error:', error);
-        alert('Reboot command sent. Please wait 10 seconds and refresh the page manually.');
-      });
   }
 }
 
@@ -778,7 +704,10 @@ const colorInput = document.getElementById('pilotColor');
 if (colorInput) {
   colorInput.addEventListener('change', autoSaveConfig);
 }
-// Battery monitoring removed
+const batteryToggle = document.getElementById('batteryMonitorToggle');
+if (batteryToggle) {
+  batteryToggle.addEventListener('change', autoSaveConfig);
+}
 
 function updateAnnouncerRate(obj, value) {
   announcerRate = parseFloat(value);
@@ -797,7 +726,14 @@ function updateMinLap(obj, value) {
   autoSaveConfig();
 }
 
-// Battery monitoring removed - function updateAlarmThreshold removed
+function updateAlarmThreshold(obj, value) {
+  $(obj)
+    .parent()
+    .find("span")
+    .text(parseFloat(value).toFixed(1) + "v");
+  // Auto-save when changed
+  autoSaveConfig();
+}
 
 function updateMaxLaps(obj, value) {
   maxLaps = parseInt(value);
@@ -1086,7 +1022,13 @@ function updateColorPreview() {
   }
 }
 
-// Battery monitoring removed - function toggleBatteryMonitor removed
+// Battery monitoring toggle
+function toggleBatteryMonitor(enabled) {
+  const batterySection = document.getElementById('batteryMonitoringSection');
+  if (batterySection) {
+    batterySection.style.display = enabled ? 'block' : 'none';
+  }
+}
 
 // Generic fetch wrapper that works with both WiFi and USB
 async function transportFetch(url, options = {}) {
@@ -1142,7 +1084,8 @@ function changeLedPreset() {
   const solidColorSection = document.getElementById('solidColorSection');
   const fadeColorSection = document.getElementById('fadeColorSection');
   const strobeColorSection = document.getElementById('strobeColorSection');
-  const speedSection = document.getElementById('ledSpeed')?.closest('.config-item');
+  const speedSection = document.getElementById('ledSpeedSection');
+  const speedNote = document.getElementById('ledSpeedNote');
   const preset = parseInt(presetSelect.value);
   
   // Show/hide color pickers based on preset
@@ -1156,9 +1099,13 @@ function changeLedPreset() {
     strobeColorSection.style.display = (preset === 7) ? 'flex' : 'none';
   }
   
-  // Hide animation speed for Solid Colour (preset 1) and Off (preset 0)
+  // Hide animation speed for Solid Colour (preset 1), Off (preset 0), and Pilot Colour (preset 9)
+  const hideSpeed = (preset === 0 || preset === 1 || preset === 9);
   if (speedSection) {
-    speedSection.style.display = (preset === 0 || preset === 1) ? 'none' : 'block';
+    speedSection.style.display = hideSpeed ? 'none' : 'flex';
+  }
+  if (speedNote) {
+    speedNote.style.display = hideSpeed ? 'none' : 'block';
   }
   
   // If Pilot Colour preset (9) is selected, use pilot color
@@ -1512,20 +1459,9 @@ function switchAnalysisMode(mode) {
 }
 
 function updateAnalysisView() {
-  // Check lap count requirements based on mode
-  if (currentAnalysisMode === 'history' && lapTimes.length === 0) {
+  if (lapTimes.length === 0) {
     document.getElementById('analysisContent').innerHTML = 
       '<p class="no-data">Complete at least 1 lap to see analysis</p>';
-    // Still update stats boxes even if no history
-    updateStatsBoxes();
-    return;
-  }
-  
-  if (currentAnalysisMode === 'fastestRound' && lapTimes.length < 3) {
-    document.getElementById('analysisContent').innerHTML = 
-      '<p class="no-data">Complete at least 3 laps to see fastest round</p>';
-    // Still update stats boxes
-    updateStatsBoxes();
     return;
   }
   
@@ -1890,85 +1826,12 @@ function openEditModal(index) {
   
   document.getElementById('raceName').value = race.name || '';
   document.getElementById('raceTag').value = race.tag || '';
-  
-  // Populate lap times
-  renderEditLapsList(race.lapTimes);
-  
   document.getElementById('editRaceModal').style.display = 'flex';
-}
-
-function renderEditLapsList(lapTimes) {
-  const container = document.getElementById('editLapsList');
-  let html = '';
-  
-  lapTimes.forEach((lapTime, index) => {
-    const lapSeconds = (lapTime / 1000).toFixed(3);
-    const lapLabel = index === 0 ? 'Gate 1' : `Lap ${index}`;
-    const labelClass = index === 0 ? 'lap-label gate-1' : 'lap-label';
-    html += `
-      <div class="lap-edit-row">
-        <span class="${labelClass}">${lapLabel}</span>
-        <input type="number" step="0.001" min="0" value="${lapSeconds}" 
-               data-lap-index="${index}" 
-               class="lap-time-input" 
-               title="Edit lap time in seconds" />
-        <span class="lap-unit">s</span>
-        <button onclick="deleteLapFromEdit(${index})" 
-                class="delete-lap-btn" 
-                title="Delete this lap">&times;</button>
-      </div>
-    `;
-  });
-  
-  container.innerHTML = html;
-}
-
-function deleteLapFromEdit(index) {
-  if (editingRaceIndex === null) return;
-  const race = raceHistoryData[editingRaceIndex];
-  
-  if (race.lapTimes.length <= 1) {
-    alert('Cannot delete the last lap. Delete the entire race instead.');
-    return;
-  }
-  
-  if (confirm('Delete this lap?')) {
-    race.lapTimes.splice(index, 1);
-    renderEditLapsList(race.lapTimes);
-  }
-}
-
-function addNewLapToEdit() {
-  if (editingRaceIndex === null) return;
-  const race = raceHistoryData[editingRaceIndex];
-  
-  // Add a new lap with a default value (average of existing laps)
-  let defaultValue = 0;
-  if (race.lapTimes.length > 0) {
-    const sum = race.lapTimes.reduce((a, b) => a + b, 0);
-    defaultValue = Math.round(sum / race.lapTimes.length);
-  } else {
-    defaultValue = 10000; // 10 seconds default
-  }
-  
-  race.lapTimes.push(defaultValue);
-  renderEditLapsList(race.lapTimes);
-  
-  // Scroll to bottom to show the new lap
-  const container = document.getElementById('editLapsList');
-  container.scrollTop = container.scrollHeight;
 }
 
 function closeEditModal() {
   document.getElementById('editRaceModal').style.display = 'none';
   editingRaceIndex = null;
-}
-
-function closeEditModalOnBackdrop(event) {
-  // Only close if clicking the backdrop (not the modal content)
-  if (event.target.id === 'editRaceModal') {
-    closeEditModal();
-  }
 }
 
 function saveRaceEdit() {
@@ -1978,34 +1841,6 @@ function saveRaceEdit() {
   const name = document.getElementById('raceName').value;
   const tag = document.getElementById('raceTag').value;
   
-  // Collect updated lap times from inputs
-  const lapInputs = document.querySelectorAll('.lap-time-input');
-  const updatedLapTimes = [];
-  let hasError = false;
-  
-  lapInputs.forEach(input => {
-    const value = parseFloat(input.value);
-    if (isNaN(value) || value <= 0) {
-      hasError = true;
-      input.style.borderColor = '#e74c3c';
-    } else {
-      input.style.borderColor = '';
-      // Convert seconds to milliseconds
-      updatedLapTimes.push(Math.round(value * 1000));
-    }
-  });
-  
-  if (hasError) {
-    alert('Please enter valid lap times (positive numbers)');
-    return;
-  }
-  
-  if (updatedLapTimes.length === 0) {
-    alert('Cannot save race with no laps. Delete the race instead.');
-    return;
-  }
-  
-  // First update metadata (name/tag)
   const formData = new URLSearchParams();
   formData.append('timestamp', race.timestamp);
   formData.append('name', name);
@@ -2020,31 +1855,9 @@ function saveRaceEdit() {
   })
   .then(response => response.json())
   .then(data => {
-    console.log('Race metadata updated:', data);
-    
-    // Now update lap times
-    return fetch('/races/updateLaps', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        timestamp: race.timestamp,
-        lapTimes: updatedLapTimes
-      })
-    });
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log('Lap times updated:', data);
+    console.log('Race updated:', data);
     loadRaceHistory();
     closeEditModal();
-    
-    // If race details are open for this race, refresh them
-    if (currentDetailRace && currentDetailRace.timestamp === race.timestamp) {
-      setTimeout(() => viewRaceDetails(editingRaceIndex), 500);
-    }
   })
   .catch(error => {
     console.error('Error updating race:', error);
@@ -2184,7 +1997,8 @@ function downloadConfig() {
         ledStrobeColor: document.getElementById('ledStrobeColor')?.value || '#FFFFFF',
         ledSpeed: parseInt(document.getElementById('ledSpeed')?.value || 5),
         ledManualOverride: document.getElementById('ledManualOverride')?.checked || false,
-        // Battery monitoring removed
+        // Battery monitoring
+        batteryMonitoring: document.getElementById('batteryMonitorToggle')?.checked !== false,
         timestamp: new Date().toISOString()
       };
       
@@ -2224,7 +2038,7 @@ function importConfig(input) {
         body: JSON.stringify({
           freq: config.freq,
           minLap: config.minLap,
-          alarm: 0, // Battery monitoring removed
+          alarm: config.alarm,
           anType: config.anType,
           anRate: config.anRate,
           enterRssi: config.enterRssi,
@@ -2289,7 +2103,11 @@ function importConfig(input) {
           const ledManualOverride = document.getElementById('ledManualOverride');
           if (ledManualOverride) ledManualOverride.checked = config.ledManualOverride;
         }
-        // Battery monitoring removed
+        // Battery monitoring
+        if (config.batteryMonitoring !== undefined) {
+          const batteryToggle = document.getElementById('batteryMonitorToggle');
+          if (batteryToggle) batteryToggle.checked = config.batteryMonitoring;
+        }
         
         alert('Configuration imported successfully! Page will reload.');
         // Reload config to update UI
@@ -2656,6 +2474,134 @@ function closeCalibrationWizard() {
   document.getElementById('wizardMarking').style.display = 'none';
   document.getElementById('wizardResults').style.display = 'none';
 }
+
+// WiFi Settings Functions
+function applyWiFiSettings() {
+  const ssid = document.getElementById('ssid')?.value;
+  const pwd = document.getElementById('pwd')?.value;
+  
+  if (!ssid) {
+    alert('Please enter a WiFi SSID');
+    return;
+  }
+  
+  if (!pwd) {
+    if (!confirm('WiFi password is empty. Continue?')) {
+      return;
+    }
+  }
+  
+  if (!confirm('Apply WiFi settings? The device will restart.')) {
+    return;
+  }
+  
+  // Save configuration first
+  saveConfig();
+  
+  // Give a moment for save to complete
+  setTimeout(() => {
+    // Send restart command
+    if (usbConnected && transportManager) {
+      transportManager.sendCommand('restart', 'POST')
+        .then(() => {
+          alert('WiFi settings applied. Device is restarting...');
+        })
+        .catch(err => console.error('Failed to restart device:', err));
+    } else {
+      fetch('/restart', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+        .then(() => {
+          alert('WiFi settings applied. Device is restarting...');
+        })
+        .catch(err => console.error('Failed to restart device:', err));
+    }
+  }, 500);
+}
+
+function resetWiFiSettings() {
+  if (!confirm('Reset WiFi settings to current values?')) {
+    return;
+  }
+  
+  // Reload config from device
+  if (usbConnected && transportManager) {
+    transportManager.sendCommand('config', 'GET')
+      .then(configData => {
+        if (configData.ssid !== undefined) document.getElementById('ssid').value = configData.ssid;
+        if (configData.pwd !== undefined) document.getElementById('pwd').value = configData.pwd;
+      })
+      .catch(err => console.error('Failed to fetch config:', err));
+  } else {
+    fetch('/config')
+      .then(response => response.json())
+      .then(configData => {
+        if (configData.ssid !== undefined) document.getElementById('ssid').value = configData.ssid;
+        if (configData.pwd !== undefined) document.getElementById('pwd').value = configData.pwd;
+      })
+      .catch(err => console.error('Failed to fetch config:', err));
+  }
+}
+
+// Settings Modal Functions
+function openSettingsModal() {
+  const modal = document.getElementById('settingsModal');
+  if (modal) {
+    modal.classList.add('active');
+    // Switch to general section by default
+    switchSettingsSection('general');
+  }
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById('settingsModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+// Close modal when clicking on the overlay background
+document.addEventListener('click', function(event) {
+  const modal = document.getElementById('settingsModal');
+  if (modal && event.target === modal) {
+    closeSettingsModal();
+  }
+});
+
+function switchSettingsSection(sectionName) {
+  // Hide all sections
+  const sections = document.querySelectorAll('.settings-section');
+  sections.forEach(section => section.classList.remove('active'));
+  
+  // Show selected section
+  const targetSection = document.getElementById(`settings-${sectionName}`);
+  if (targetSection) {
+    targetSection.classList.add('active');
+  }
+  
+  // Update nav items
+  const navItems = document.querySelectorAll('.settings-nav-item');
+  navItems.forEach(item => {
+    item.classList.remove('active');
+  });
+  
+  // Add active class to clicked nav item
+  event?.target?.closest('.settings-nav-item')?.classList.add('active');
+}
+
+// Keyboard shortcut for closing modal (ESC key)
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') {
+    const modal = document.getElementById('settingsModal');
+    if (modal && modal.classList.contains('active')) {
+      closeSettingsModal();
+    }
+  }
+});
 
 // Self-Test Functions
 function runSelfTest() {

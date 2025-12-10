@@ -2,6 +2,47 @@
 
 All notable changes to FPVGate will be documented in this file.
 
+## [1.3.3] - 2024-12-10
+
+### Added
+- **Modern Configuration UI** - Complete redesign of configuration interface
+  - Full-screen overlay modal with sidebar navigation
+  - 6 organized sections: Lap & Announcer Settings, Pilot Info, LED Setup, WiFi & Connection, System Settings, Diagnostics
+  - Mobile-responsive design with horizontal tabs on small screens
+  - Click-outside-to-close and ESC key support
+  - Based on Mainsail Interface settings design
+  - Cleaner, more intuitive user experience
+- **WebSocket Stability** - SSE keepalive mechanism
+  - Automatic ping every 15 seconds to prevent connection timeout
+  - Fixes RSSI disconnection requiring page refresh
+  - Ensures stable long-running connections
+  - Added `WEB_SSE_KEEPALIVE_MS` constant (15000ms)
+
+### Changed
+- **Configuration Menu** - Transformed from tabbed interface to overlay modal
+  - Merged TTS settings into "Lap & Announcer Settings" section
+  - Separated WiFi configuration into dedicated section
+  - Improved visual hierarchy and organization
+  - Settings footer with Save, Download, and Import actions
+
+### Fixed
+- **Duplicate Element IDs** - Resolved JavaScript targeting issues
+  - Removed old config tab content causing duplicate IDs
+  - Fixed battery monitoring toggle not working correctly
+  - Fixed LED animation speed visibility for specific presets
+- **WiFi Configuration** - Fixed non-functional WiFi settings
+  - Properly wired Apply and Reset buttons
+  - Moved Connection Mode selector to WiFi section
+  - Added device restart warning for WiFi changes
+- **UI Rendering** - Removed stray backtick-n characters from HTML output
+
+### Technical
+- Updated `data/index.html` - New settings modal structure with sidebar navigation
+- Updated `data/style.css` - Complete modal styling system (lines 934-1418)
+- Updated `data/script.js` - Modal management functions (openSettingsModal, closeSettingsModal, switchSettingsSection)
+- Updated `lib/WEBSERVER/webserver.h` - Added sseKeepaliveMs timer and WEB_SSE_KEEPALIVE_MS constant
+- Updated `lib/WEBSERVER/webserver.cpp` - SSE keepalive ping implementation in handleWebUpdate()
+
 ## [1.3.2] - 2024-12-10
 
 ### Added
