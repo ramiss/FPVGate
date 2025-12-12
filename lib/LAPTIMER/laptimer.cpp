@@ -1,5 +1,6 @@
 #include "laptimer.h"
 #include "trackmanager.h"
+#include "webhook.h"
 
 #include "debug.h"
 
@@ -14,11 +15,12 @@ extern RgbLed* g_rgbLed;
 const uint16_t rssi_filter_q = 500;   // Light filtering with hardware cap
 const uint16_t rssi_filter_r = 50;    // Fast response
 
-void LapTimer::init(Config *config, RX5808 *rx5808, Buzzer *buzzer, Led *l) {
+void LapTimer::init(Config *config, RX5808 *rx5808, Buzzer *buzzer, Led *l, WebhookManager *webhook) {
     conf = config;
     rx = rx5808;
     buz = buzzer;
     led = l;
+    webhooks = webhook;
 
     filter.setMeasurementNoise(rssi_filter_q * 0.01f);
     filter.setProcessNoise(rssi_filter_r * 0.0001f);
@@ -61,6 +63,10 @@ void LapTimer::start() {
     // Flash green for race start
     if (g_rgbLed) g_rgbLed->flashGreen();
 #endif
+    // Trigger race start webhook if Gate LEDs enabled and Race Start enabled
+    if (webhooks && conf->getGateLEDsEnabled() && conf->getWebhookRaceStart()) {
+        webhooks->triggerRaceStart();
+    }
 }
 
 void LapTimer::stop() {
@@ -82,6 +88,10 @@ void LapTimer::stop() {
     // Flash red 3 times for race reset, then turn off
     if (g_rgbLed) g_rgbLed->flashReset();
 #endif
+    // Trigger race stop webhook if Gate LEDs enabled and Race Stop enabled
+    if (webhooks && conf->getGateLEDsEnabled() && conf->getWebhookRaceStop()) {
+        webhooks->triggerRaceStop();
+    }
 }
 
 void LapTimer::handleLapTimerUpdate(uint32_t currentTimeMs) {
@@ -249,6 +259,10 @@ void LapTimer::finishLap() {
 #ifdef ESP32S3
     if (g_rgbLed) g_rgbLed->flashLap();
 #endif
+    // Trigger lap webhook if Gate LEDs enabled and Lap enabled
+    if (webhooks && conf->getGateLEDsEnabled() && conf->getWebhookLap()) {
+        webhooks->triggerLap();
+    }
 }
 
 uint8_t LapTimer::getRssi() {

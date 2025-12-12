@@ -46,6 +46,9 @@ class SelfTest {
     TestResult testRaceHistory(RaceHistory* history);
     TestResult testWebServer();
     TestResult testOTA();
+    TestResult testTrackManager();
+    TestResult testWebhooks();
+    TestResult testTransport();
     
 #ifdef ESP32S3
     TestResult testRGBLED(RgbLed* rgbLed);

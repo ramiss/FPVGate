@@ -433,6 +433,32 @@ onload = async function (e) {
         changeLedPreset();
       }
       
+      // Load Gate LED settings from config
+      const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
+      const webhookRaceStartToggle = document.getElementById('webhookRaceStart');
+      const webhookRaceStopToggle = document.getElementById('webhookRaceStop');
+      const webhookLapToggle = document.getElementById('webhookLap');
+      const gateLEDOptions = document.getElementById('gateLEDOptions');
+      
+      if (gateLEDsEnabledToggle && configData.gateLEDsEnabled !== undefined) {
+        gateLEDsEnabledToggle.checked = configData.gateLEDsEnabled === 1;
+        if (gateLEDOptions) {
+          gateLEDOptions.style.display = configData.gateLEDsEnabled === 1 ? 'block' : 'none';
+        }
+      }
+      
+      if (webhookRaceStartToggle && configData.webhookRaceStart !== undefined) {
+        webhookRaceStartToggle.checked = configData.webhookRaceStart === 1;
+      }
+      
+      if (webhookRaceStopToggle && configData.webhookRaceStop !== undefined) {
+        webhookRaceStopToggle.checked = configData.webhookRaceStop === 1;
+      }
+      
+      if (webhookLapToggle && configData.webhookLap !== undefined) {
+        webhookLapToggle.checked = configData.webhookLap === 1;
+      }
+      
       // Initialize battery monitoring UI on page load (default is disabled)
       const batterySection = document.getElementById('batteryMonitoringSection');
       const batteryToggle = document.getElementById('batteryMonitorToggle');
@@ -1193,6 +1219,78 @@ function toggleLedManualOverride(enabled) {
     .then(data => console.log('LED manual override:', enabled ? 'enabled' : 'disabled', data))
     .catch(err => console.error('Failed to toggle LED manual override:', err));
 }
+
+function toggleGateLEDs(enabled) {
+  const enable = enabled ? 1 : 0;
+  
+  // Show/hide Gate LED options based on enabled state
+  const optionsDiv = document.getElementById('gateLEDOptions');
+  if (optionsDiv) {
+    optionsDiv.style.display = enabled ? 'block' : 'none';
+  }
+  
+  // Send the config update
+  fetch('/config', {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ gateLEDsEnabled: enable })
+  })
+    .then(response => response.json())
+    .then(data => console.log('Gate LEDs:', enabled ? 'enabled' : 'disabled', data))
+    .catch(err => console.error('Failed to toggle Gate LEDs:', err));
+}
+
+function toggleWebhookRaceStart(enabled) {
+  const enable = enabled ? 1 : 0;
+  
+  fetch('/config', {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ webhookRaceStart: enable })
+  })
+    .then(response => response.json())
+    .then(data => console.log('Webhook Race Start:', enabled ? 'enabled' : 'disabled', data))
+    .catch(err => console.error('Failed to toggle webhook race start:', err));
+}
+
+function toggleWebhookRaceStop(enabled) {
+  const enable = enabled ? 1 : 0;
+  
+  fetch('/config', {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ webhookRaceStop: enable })
+  })
+    .then(response => response.json())
+    .then(data => console.log('Webhook Race Stop:', enabled ? 'enabled' : 'disabled', data))
+    .catch(err => console.error('Failed to toggle webhook race stop:', err));
+}
+
+function toggleWebhookLap(enabled) {
+  const enable = enabled ? 1 : 0;
+  
+  fetch('/config', {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ webhookLap: enable })
+  })
+    .then(response => response.json())
+    .then(data => console.log('Webhook Lap:', enabled ? 'enabled' : 'disabled', data))
+    .catch(err => console.error('Failed to toggle webhook lap:', err));
+}
+
 function generateAudio() {
   if (!audioEnabled) {
     return;
@@ -2691,15 +2789,15 @@ function applyWiFiSettings() {
   
   // Give a moment for save to complete
   setTimeout(() => {
-    // Send restart command
+    // Send reboot command
     if (usbConnected && transportManager) {
-      transportManager.sendCommand('restart', 'POST')
+      transportManager.sendCommand('reboot', 'POST')
         .then(() => {
           alert('WiFi settings applied. Device is restarting...');
         })
         .catch(err => console.error('Failed to restart device:', err));
     } else {
-      fetch('/restart', {
+      fetch('/reboot', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -3237,16 +3335,170 @@ function selectTrack() {
   .catch(error => console.error('Error selecting track:', error));
 }
 
+// ===== WEBHOOK MANAGEMENT =====
+
+function toggleWebhooks(enabled) {
+  const webhooksContent = document.getElementById('webhooksContent');
+  if (webhooksContent) {
+    webhooksContent.style.display = enabled ? 'block' : 'none';
+  }
+  
+  // Enable/disable webhooks on backend
+  fetch('/webhooks/enable', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'enabled=' + (enabled ? '1' : '0')
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('Webhooks:', enabled ? 'enabled' : 'disabled', data);
+    if (enabled) {
+      loadWebhooks();
+    }
+  })
+  .catch(error => console.error('Error toggling webhooks:', error));
+}
+
+function loadWebhooks() {
+  fetch('/webhooks')
+    .then(response => response.json())
+    .then(data => {
+      displayWebhooks(data.webhooks || []);
+    })
+    .catch(error => console.error('Error loading webhooks:', error));
+}
+
+function displayWebhooks(webhooks) {
+  const webhooksListContent = document.getElementById('webhooksListContent');
+  if (!webhooksListContent) return;
+  
+  if (webhooks.length === 0) {
+    webhooksListContent.innerHTML = '<p style="color: var(--secondary-color); text-align: center; padding: 16px;">No webhooks configured yet</p>';
+    return;
+  }
+  
+  let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+  
+  webhooks.forEach(ip => {
+    html += `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; border-left: 4px solid var(--accent-color);">
+        <div>
+          <div style="font-weight: bold; font-size: 15px;">${ip}</div>
+          <div style="font-size: 13px; color: var(--secondary-color); margin-top: 2px;">http://${ip}/Lap, /RaceStart, /RaceStop</div>
+        </div>
+        <button onclick="removeWebhook('${ip}')" style="padding: 6px 12px; font-size: 14px; background-color: var(--danger-color);">Remove</button>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  webhooksListContent.innerHTML = html;
+}
+
+function addWebhook() {
+  const ipInput = document.getElementById('webhookIP');
+  const ip = ipInput.value.trim();
+  
+  if (!ip) {
+    alert('Please enter an IP address');
+    return;
+  }
+  
+  // Basic IP validation
+  const ipPattern = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+  if (!ipPattern.test(ip)) {
+    alert('Please enter a valid IP address (e.g., 192.168.0.75)');
+    return;
+  }
+  
+  fetch('/webhooks/add', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'ip=' + encodeURIComponent(ip)
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'OK') {
+      ipInput.value = ''; // Clear input
+      loadWebhooks(); // Reload list
+      console.log('Webhook added:', ip);
+    } else {
+      alert('Error adding webhook: ' + (data.message || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    console.error('Error adding webhook:', error);
+    alert('Error adding webhook');
+  });
+}
+
+function removeWebhook(ip) {
+  if (!confirm('Remove webhook for ' + ip + '?')) {
+    return;
+  }
+  
+  fetch('/webhooks/remove', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'ip=' + encodeURIComponent(ip)
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'OK') {
+      loadWebhooks(); // Reload list
+      console.log('Webhook removed:', ip);
+    } else {
+      alert('Error removing webhook');
+    }
+  })
+  .catch(error => {
+    console.error('Error removing webhook:', error);
+    alert('Error removing webhook');
+  });
+}
+
+function testWebhook() {
+  fetch('/webhooks/trigger/flash', {
+    method: 'POST'
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(data => {
+        throw new Error(data.message || 'Unknown error');
+      });
+    }
+    return response.json();
+  })
+  .then(data => {
+    if (data.status === 'OK') {
+      alert('Test flash sent to all configured webhooks!\n\nCheck your LED controller to verify.');
+    } else {
+      alert('Error: ' + (data.message || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    console.error('Error testing webhook:', error);
+    alert('Error sending test webhook: ' + error.message);
+  });
+}
+
 // Load tracks when settings modal opens
 function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
   if (modal) {
     modal.classList.add('active');
     
-    // Load config to check if tracks are enabled
+    // Load config to check if tracks and webhooks are enabled
     fetch('/config')
       .then(response => response.json())
       .then(config => {
+        // Tracks
         const tracksEnabled = config.tracksEnabled === 1;
         const tracksCheckbox = document.getElementById('tracksEnabled');
         if (tracksCheckbox) {
@@ -3260,6 +3512,14 @@ function openSettingsModal() {
           if (selectEl) {
             selectEl.value = config.selectedTrackId;
           }
+        }
+        
+        // Webhooks
+        const webhooksEnabled = config.webhooksEnabled === 1;
+        const webhooksCheckbox = document.getElementById('webhooksEnabled');
+        if (webhooksCheckbox) {
+          webhooksCheckbox.checked = webhooksEnabled;
+          toggleWebhooks(webhooksEnabled);
         }
       })
       .catch(error => console.error('Error loading config:', error));

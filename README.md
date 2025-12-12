@@ -71,8 +71,14 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Config backup/restore
 - Multi-voice audio library (4 voice packs)
 
+**Webhooks & Integration**
+- HTTP webhook support for external LED controllers
+- Configurable triggers (race start/stop, laps)
+- Gate LED control with granular event settings
+- Network-based device integration
+
 **Developer Friendly**
-- Self-test diagnostics
+- Comprehensive self-test diagnostics (19 tests)
 - OTA firmware updates
 - Transport abstraction layer
 - Open source (MIT License)
@@ -198,10 +204,13 @@ Exit  ├/──────────\─
 **v1.4.0 (Latest)**
 - Track Management System - Create, edit, and manage track profiles with images
 - Distance Tracking - Real-time distance display and statistics
+- Webhook System - HTTP webhooks for external LED controller integration
+- Gate LED Control - Granular control over webhook triggers (race start/stop, laps)
+- Enhanced Self-Tests - Comprehensive diagnostics for all device features (19 tests)
+- WiFi Reboot Fix - Apply WiFi settings button now properly reboots device
 - Enhanced Race Editing - Edit race metadata, lap times, and track associations
 - Track Selection - Choose active track before racing (persists to EEPROM)
-- Race Distance Stats - Total distance and per-lap calculations in history
-- Improved Race Edit UI - Tabbed interface for metadata and lap editing
+- Improved Configuration UI - Full-screen modal with organized sections
 
 **v1.3.3**
 - Modern Configuration UI with full-screen overlay modal

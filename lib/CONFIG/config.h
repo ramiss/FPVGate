@@ -78,10 +78,10 @@
 #define WIFI_MODE LOW          // GND on switch pin = WiFi/Standalone mode
 #define ROTORHAZARD_MODE HIGH  // HIGH (floating/pullup) = RotorHazard node mode
 
-#define EEPROM_RESERVED_SIZE 256
+#define EEPROM_RESERVED_SIZE 512
 #define CONFIG_MAGIC_MASK (0b11U << 30)
 #define CONFIG_MAGIC (0b01U << 30)
-#define CONFIG_VERSION 4U
+#define CONFIG_VERSION 5U
 
 #define EEPROM_CHECK_TIME_MS 1000
 
@@ -106,6 +106,13 @@ typedef struct {
     uint8_t operationMode;     // 0=WiFi, 1=RotorHazard (software switch)
     uint8_t tracksEnabled;     // Track feature enabled (0=disabled, 1=enabled)
     uint32_t selectedTrackId;  // Currently selected track (0=none)
+    uint8_t webhooksEnabled;   // Webhooks enabled (0=disabled, 1=enabled)
+    char webhookIPs[10][16];   // Up to 10 webhook IPs (xxx.xxx.xxx.xxx format)
+    uint8_t webhookCount;      // Number of configured webhooks
+    uint8_t gateLEDsEnabled;   // Gate LEDs feature enabled (0=disabled, 1=enabled)
+    uint8_t webhookRaceStart;  // Send /RaceStart webhook (0=disabled, 1=enabled)
+    uint8_t webhookRaceStop;   // Send /RaceStop webhook (0=disabled, 1=enabled)
+    uint8_t webhookLap;        // Send /Lap webhook (0=disabled, 1=enabled)
     char pilotName[21];
     char ssid[33];
     char password[33];
@@ -138,6 +145,13 @@ class Config {
     uint8_t getLedManualOverride();
     uint8_t getTracksEnabled();
     uint32_t getSelectedTrackId();
+    uint8_t getWebhooksEnabled();
+    uint8_t getWebhookCount();
+    const char* getWebhookIP(uint8_t index);
+    uint8_t getGateLEDsEnabled();
+    uint8_t getWebhookRaceStart();
+    uint8_t getWebhookRaceStop();
+    uint8_t getWebhookLap();
     char* getSsid();
     char* getPassword();
     uint8_t getOperationMode();
@@ -158,6 +172,14 @@ class Config {
     void setLedManualOverride(uint8_t override);
     void setTracksEnabled(uint8_t enabled);
     void setSelectedTrackId(uint32_t trackId);
+    void setWebhooksEnabled(uint8_t enabled);
+    bool addWebhookIP(const char* ip);
+    bool removeWebhookIP(const char* ip);
+    void clearWebhookIPs();
+    void setGateLEDsEnabled(uint8_t enabled);
+    void setWebhookRaceStart(uint8_t enabled);
+    void setWebhookRaceStop(uint8_t enabled);
+    void setWebhookLap(uint8_t enabled);
 
    private:
     laptimer_config_t conf;

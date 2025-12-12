@@ -7,8 +7,9 @@
 #include "kalman.h"
 #include "led.h"
 
-// Forward declaration to avoid circular dependency
+// Forward declarations to avoid circular dependency
 struct Track;
+class WebhookManager;
 
 typedef enum {
     STOPPED,
@@ -23,7 +24,7 @@ typedef enum {
 
 class LapTimer {
    public:
-    void init(Config *config, RX5808 *rx5808, Buzzer *buzzer, Led *l);
+    void init(Config *config, RX5808 *rx5808, Buzzer *buzzer, Led *l, WebhookManager *webhook = nullptr);
     void start();
     void stop();
     void handleLapTimerUpdate(uint32_t currentTimeMs);
@@ -50,6 +51,7 @@ class LapTimer {
     Config *conf;
     Buzzer *buz;
     Led *led;
+    WebhookManager *webhooks;
     KalmanFilter filter;
     boolean lapCountWraparound;
     uint32_t raceStartTimeMs;

@@ -7,6 +7,7 @@
 #include "transport.h"
 #include "trackmanager.h"
 #include "usb.h"
+#include "webhook.h"
 // DISABLED FOR NOW: #include "nodemode.h"  // Uncomment to re-enable RotorHazard support
 #include <ElegantOTA.h>
 #ifdef ESP32S3
@@ -54,6 +55,7 @@ static Buzzer buzzer;
 static Led led;
 static RaceHistory raceHistory;
 static TrackManager trackManager;
+static WebhookManager webhookManager;
 #ifdef ESP32S3
 static RgbLed rgbLed;
 RgbLed* g_rgbLed = &rgbLed;
@@ -162,7 +164,7 @@ void setup() {
     // Apply preset last so all colors are set
     rgbLed.setPreset((led_preset_e)config.getLedPreset());
 #endif
-    timer.init(&config, &rx, &buzzer, &led);
+    timer.init(&config, &rx, &buzzer, &led, &webhookManager);
     // Battery monitoring removed
     // monitor.init(PIN_VBAT, VBAT_SCALE, VBAT_ADD, &buzzer, &led);
     
@@ -193,7 +195,17 @@ void setup() {
         }
     }
     
-    ws.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx, &trackManager);
+    // Initialize webhook manager and load webhooks from config
+    webhookManager.setEnabled(config.getWebhooksEnabled());
+    for (uint8_t i = 0; i < config.getWebhookCount(); i++) {
+        const char* ip = config.getWebhookIP(i);
+        if (ip) {
+            webhookManager.addWebhook(ip);
+            DEBUG("Loaded webhook: %s\n", ip);
+        }
+    }
+    
+    ws.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx, &trackManager, &webhookManager);
     
     // Initialize USB transport
     usbTransport.init(&config, &timer, nullptr, &buzzer, &led, &raceHistory, &storage, &selfTest, &rx, &trackManager);

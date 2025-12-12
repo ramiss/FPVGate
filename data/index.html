@@ -281,6 +281,9 @@
             <div class="settings-nav-item" onclick="switchSettingsSection('wifi')">
               <span>WiFi & Connection</span>
             </div>
+            <div class="settings-nav-item" onclick="switchSettingsSection('webhooks')">
+              <span>Webhooks</span>
+            </div>
             <div class="settings-nav-item" onclick="switchSettingsSection('system')">
               <span>System Settings</span>
             </div>
@@ -556,6 +559,61 @@
               <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
                 When enabled, race events won't affect LED settings
               </div>
+
+              <h3 style="margin-top: 24px;">Gate LEDs (Webhooks)</h3>
+              <div class="config-item">
+                <label for="gateLEDsEnabled">Enable Gate LEDs:</label>
+                <div style="flex: 1;">
+                  <label class="switch">
+                    <input type="checkbox" id="gateLEDsEnabled" onchange="toggleGateLEDs(this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Send webhooks to external LED controllers during race events
+              </div>
+
+              <div id="gateLEDOptions" style="display: none; margin-left: 24px; margin-top: 12px;">
+                <div class="config-item">
+                  <label for="webhookRaceStart">Race Start Flash:</label>
+                  <div style="flex: 1;">
+                    <label class="switch">
+                      <input type="checkbox" id="webhookRaceStart" onchange="toggleWebhookRaceStart(this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                  Send /RaceStart webhook (2x Green flashes)
+                </div>
+
+                <div class="config-item" style="margin-top: 12px;">
+                  <label for="webhookRaceStop">Race Stop Flash:</label>
+                  <div style="flex: 1;">
+                    <label class="switch">
+                      <input type="checkbox" id="webhookRaceStop" onchange="toggleWebhookRaceStop(this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                  Send /RaceStop webhook (2x Red flashes)
+                </div>
+
+                <div class="config-item" style="margin-top: 12px;">
+                  <label for="webhookLap">Lap Flash:</label>
+                  <div style="flex: 1;">
+                    <label class="switch">
+                      <input type="checkbox" id="webhookLap" onchange="toggleWebhookLap(this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                  Send /Lap webhook (White flash)
+                </div>
+              </div>
             </div>
 
             <!-- WiFi & Connection Section -->
@@ -602,6 +660,66 @@
               </div>
               <div style="font-size: 12px; color: var(--secondary-color); margin-top: 8px;">
                 Note: Device will restart after applying WiFi settings
+              </div>
+            </div>
+
+            <!-- Webhooks Section -->
+            <div id="settings-webhooks" class="settings-section">
+              <h2>Webhooks</h2>
+              
+              <div style="margin-bottom: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
+                <p style="margin: 0 0 8px 0;"><strong>Send HTTP POST requests to external LED controllers during race events.</strong></p>
+                <p style="margin: 0; color: var(--secondary-color);">Configure IP addresses to trigger webhooks: /Lap, /RaceStart, /RaceStop, /GhostLap, /off, /flash</p>
+              </div>
+
+              <div class="config-item">
+                <label for="webhooksEnabled">Enable Webhooks:</label>
+                <div style="flex: 1;">
+                  <label class="switch">
+                    <input type="checkbox" id="webhooksEnabled" onchange="toggleWebhooks(this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+                Enable to send webhooks to configured devices
+              </div>
+
+              <div id="webhooksContent" style="display: none;">
+                <h3>Webhook Endpoints</h3>
+                
+                <div style="margin-bottom: 16px;">
+                  <div class="config-item">
+                    <label for="webhookIP">LED Controller IP:</label>
+                    <input type="text" id="webhookIP" placeholder="e.g. 192.168.0.75" maxlength="15" pattern="\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" style="flex: 1;" />
+                  </div>
+                  <button onclick="addWebhook()" style="width: 100%; margin-top: 8px;">Add Webhook</button>
+                </div>
+
+                <div id="webhooksList" style="margin-top: 16px;">
+                  <h4 style="margin-bottom: 12px;">Configured Webhooks</h4>
+                  <div id="webhooksListContent">
+                    <p style="color: var(--secondary-color); text-align: center; padding: 16px;">No webhooks configured yet</p>
+                  </div>
+                </div>
+
+                <div style="margin-top: 24px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px;">
+                  <h4 style="margin: 0 0 8px 0;">Test Webhook</h4>
+                  <p style="margin: 0 0 12px 0; font-size: 13px; color: var(--secondary-color);">Send a test flash to all configured webhooks</p>
+                  <button onclick="testWebhook()" style="width: 100%; background-color: var(--accent-color);">Send Test Flash</button>
+                </div>
+
+                <div style="margin-top: 16px; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; font-size: 13px;">
+                  <h4 style="margin: 0 0 8px 0;">Webhook Events:</h4>
+                  <ul style="margin: 0; padding-left: 20px; color: var(--secondary-color);">
+                    <li><strong>/Lap</strong> - White flash (0.5s) on lap completion</li>
+                    <li><strong>/RaceStart</strong> - 2x green flashes on race start</li>
+                    <li><strong>/RaceStop</strong> - 2x red flashes on race stop</li>
+                    <li><strong>/GhostLap</strong> - White flash on ghost lap (future)</li>
+                    <li><strong>/off</strong> - Turn off LEDs</li>
+                    <li><strong>/flash</strong> - Manual white flash</li>
+                  </ul>
+                </div>
               </div>
             </div>
 

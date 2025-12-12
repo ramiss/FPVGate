@@ -8,6 +8,7 @@
 #include "selftest.h"
 #include "transport.h"
 #include "trackmanager.h"
+#include "webhook.h"
 
 #define WIFI_CONNECTION_TIMEOUT_MS 30000
 #define WIFI_RECONNECT_TIMEOUT_MS 500
@@ -16,7 +17,7 @@
 
 class Webserver : public TransportInterface {
    public:
-    void init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr);
+    void init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr, WebhookManager *webhookMgr);
     void setTransportManager(TransportManager *tm);
     void handleWebUpdate(uint32_t currentTimeMs);
     
@@ -40,6 +41,7 @@ class Webserver : public TransportInterface {
     SelfTest *selftest;
     RX5808 *rx;
     TrackManager *trackManager;
+    WebhookManager *webhooks;
     TransportManager *transportMgr;
 
     wifi_mode_t wifiMode = WIFI_OFF;

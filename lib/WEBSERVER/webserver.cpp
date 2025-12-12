@@ -30,7 +30,7 @@ static const char *wifi_ap_password = "fpvgate1";
 static const char *wifi_ap_address = "192.168.4.1";
 String wifi_ap_ssid;
 
-void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr) {
+void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMonitor, Buzzer *buzzer, Led *l, RaceHistory *raceHist, Storage *stor, SelfTest *test, RX5808 *rx5808, TrackManager *trackMgr, WebhookManager *webhookMgr) {
 
     ipAddress.fromString(wifi_ap_address);
 
@@ -45,6 +45,7 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     selftest = test;
     rx = rx5808;
     trackManager = trackMgr;
+    webhooks = webhookMgr;
     transportMgr = nullptr;
 
     wifi_ap_ssid = String(wifi_ap_ssid_prefix) + "_" + WiFi.macAddress().substring(WiFi.macAddress().length() - 6);
@@ -436,6 +437,10 @@ EEPROM:\n\
                 g_rgbLed->flashLap();
             }
 #endif
+            // Trigger lap webhook if Gate LEDs enabled and Lap enabled
+            if (webhooks && conf->getGateLEDsEnabled() && conf->getWebhookLap()) {
+                webhooks->triggerLap();
+            }
         }
         request->send(200, "application/json", "{\"status\": \"OK\"}");
     });
@@ -1160,9 +1165,21 @@ EEPROM:\n\
         // Run Battery test
         TestResult batteryTest = selftest->testBattery();
         
+        // Run Track Manager test
+        TestResult trackTest = selftest->testTrackManager();
+        
+        // Run Webhooks test
+        TestResult webhookTest = selftest->testWebhooks();
+        
+        // Run Transport test
+        TestResult transportTest = selftest->testTransport();
+        
 #ifdef ESP32S3
         // Run RGB LED test
         TestResult ledTest = selftest->testRGBLED(g_rgbLed);
+        
+        // Run SD Card test
+        TestResult sdTest = selftest->testSDCard();
 #endif
         
         // Build JSON response
@@ -1186,14 +1203,118 @@ EEPROM:\n\
         addTest(eepromTest);
         addTest(wifiTest);
         addTest(batteryTest);
+        addTest(trackTest);
+        addTest(webhookTest);
+        addTest(transportTest);
 #ifdef ESP32S3
         addTest(ledTest);
+        addTest(sdTest);
 #endif
         
         json += "]}";
         
         request->send(200, "application/json", json);
         led->on(200);
+    });
+
+    // Webhook management endpoints
+    server.on("/webhooks", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        String json = "{\"enabled\":" + String(webhooks ? (webhooks->isEnabled() ? "true" : "false") : "false") + ",\"webhooks\":[";
+        if (webhooks) {
+            auto hooks = webhooks->getWebhooks();
+            for (size_t i = 0; i < hooks.size(); i++) {
+                if (i > 0) json += ",";
+                json += "\"" + hooks[i] + "\"";
+            }
+        }
+        json += "]}";
+        request->send(200, "application/json", json);
+        led->on(200);
+    });
+
+    server.on("/webhooks/add", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (request->hasParam("ip", true)) {
+            String ip = request->getParam("ip", true)->value();
+            if (webhooks && webhooks->addWebhook(ip)) {
+                conf->addWebhookIP(ip.c_str());
+                request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Webhook added\"}");
+            } else {
+                request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Failed to add webhook\"}");
+            }
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing ip\"}");
+        }
+        led->on(200);
+    });
+
+    server.on("/webhooks/remove", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (request->hasParam("ip", true)) {
+            String ip = request->getParam("ip", true)->value();
+            if (webhooks && webhooks->removeWebhook(ip)) {
+                conf->removeWebhookIP(ip.c_str());
+                request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Webhook removed\"}");
+            } else {
+                request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Webhook not found\"}");
+            }
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing ip\"}");
+        }
+        led->on(200);
+    });
+
+    server.on("/webhooks/clear", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (webhooks) {
+            webhooks->clearWebhooks();
+            conf->clearWebhookIPs();
+            request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"All webhooks cleared\"}");
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Webhooks not initialized\"}");
+        }
+        led->on(200);
+    });
+
+    server.on("/webhooks/enable", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (request->hasParam("enabled", true)) {
+            bool enabled = request->getParam("enabled", true)->value() == "1";
+            if (webhooks) {
+                webhooks->setEnabled(enabled);
+                conf->setWebhooksEnabled(enabled ? 1 : 0);
+                request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Webhooks " + String(enabled ? "enabled" : "disabled") + "\"}");
+            } else {
+                request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Webhooks not initialized\"}");
+            }
+        } else {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Missing enabled\"}");
+        }
+        led->on(200);
+    });
+
+    // Manual webhook triggers (for testing)
+    server.on("/webhooks/trigger/flash", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        if (!webhooks) {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Webhooks not initialized\"}");
+            return;
+        }
+        
+        if (!webhooks->isEnabled()) {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"Webhooks are disabled\"}");
+            return;
+        }
+        
+        auto hooks = webhooks->getWebhooks();
+        if (hooks.size() == 0) {
+            request->send(400, "application/json", "{\"status\": \"ERROR\", \"message\": \"No webhooks configured\"}");
+            return;
+        }
+        
+        DEBUG("Triggering flash webhook to %d endpoints\n", hooks.size());
+        
+        // Send response before triggering webhooks to avoid blocking
+        request->send(200, "application/json", "{\"status\": \"OK\", \"message\": \"Flash triggered\"}");
+        led->on(200);
+        
+        // Trigger webhooks after response sent
+        webhooks->triggerFlash();
     });
 
     ElegantOTA.setAutoReboot(true);

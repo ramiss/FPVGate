@@ -68,6 +68,16 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["opMode"] = conf.operationMode;
     config["tracksEnabled"] = conf.tracksEnabled;
     config["selectedTrackId"] = conf.selectedTrackId;
+    config["webhooksEnabled"] = conf.webhooksEnabled;
+    config["webhookCount"] = conf.webhookCount;
+    JsonArray webhooks = config.createNestedArray("webhookIPs");
+    for (uint8_t i = 0; i < conf.webhookCount; i++) {
+        webhooks.add(conf.webhookIPs[i]);
+    }
+    config["gateLEDsEnabled"] = conf.gateLEDsEnabled;
+    config["webhookRaceStart"] = conf.webhookRaceStart;
+    config["webhookRaceStop"] = conf.webhookRaceStop;
+    config["webhookLap"] = conf.webhookLap;
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
@@ -178,6 +188,22 @@ void Config::fromJson(JsonObject source) {
         conf.selectedTrackId = source["selectedTrackId"];
         modified = true;
     }
+    if (source.containsKey("gateLEDsEnabled") && source["gateLEDsEnabled"] != conf.gateLEDsEnabled) {
+        conf.gateLEDsEnabled = source["gateLEDsEnabled"];
+        modified = true;
+    }
+    if (source.containsKey("webhookRaceStart") && source["webhookRaceStart"] != conf.webhookRaceStart) {
+        conf.webhookRaceStart = source["webhookRaceStart"];
+        modified = true;
+    }
+    if (source.containsKey("webhookRaceStop") && source["webhookRaceStop"] != conf.webhookRaceStop) {
+        conf.webhookRaceStop = source["webhookRaceStop"];
+        modified = true;
+    }
+    if (source.containsKey("webhookLap") && source["webhookLap"] != conf.webhookLap) {
+        conf.webhookLap = source["webhookLap"];
+        modified = true;
+    }
     if (source["name"] != conf.pilotName) {
         strlcpy(conf.pilotName, source["name"] | "", sizeof(conf.pilotName));
         modified = true;
@@ -272,6 +298,37 @@ uint32_t Config::getSelectedTrackId() {
     return conf.selectedTrackId;
 }
 
+uint8_t Config::getWebhooksEnabled() {
+    return conf.webhooksEnabled;
+}
+
+uint8_t Config::getWebhookCount() {
+    return conf.webhookCount;
+}
+
+const char* Config::getWebhookIP(uint8_t index) {
+    if (index < conf.webhookCount) {
+        return conf.webhookIPs[index];
+    }
+    return nullptr;
+}
+
+uint8_t Config::getGateLEDsEnabled() {
+    return conf.gateLEDsEnabled;
+}
+
+uint8_t Config::getWebhookRaceStart() {
+    return conf.webhookRaceStart;
+}
+
+uint8_t Config::getWebhookRaceStop() {
+    return conf.webhookRaceStop;
+}
+
+uint8_t Config::getWebhookLap() {
+    return conf.webhookLap;
+}
+
 // Setters for RotorHazard node mode
 void Config::setFrequency(uint16_t freq) {
     if (conf.frequency != freq) {
@@ -364,6 +421,83 @@ void Config::setSelectedTrackId(uint32_t trackId) {
     }
 }
 
+void Config::setWebhooksEnabled(uint8_t enabled) {
+    if (conf.webhooksEnabled != enabled) {
+        conf.webhooksEnabled = enabled;
+        modified = true;
+    }
+}
+
+bool Config::addWebhookIP(const char* ip) {
+    if (conf.webhookCount >= 10) {
+        DEBUG("Max webhooks reached\n");
+        return false;
+    }
+    
+    // Check if IP already exists
+    for (uint8_t i = 0; i < conf.webhookCount; i++) {
+        if (strcmp(conf.webhookIPs[i], ip) == 0) {
+            DEBUG("Webhook IP already exists\n");
+            return false;
+        }
+    }
+    
+    strlcpy(conf.webhookIPs[conf.webhookCount], ip, 16);
+    conf.webhookCount++;
+    modified = true;
+    return true;
+}
+
+bool Config::removeWebhookIP(const char* ip) {
+    for (uint8_t i = 0; i < conf.webhookCount; i++) {
+        if (strcmp(conf.webhookIPs[i], ip) == 0) {
+            // Shift remaining IPs down
+            for (uint8_t j = i; j < conf.webhookCount - 1; j++) {
+                strlcpy(conf.webhookIPs[j], conf.webhookIPs[j + 1], 16);
+            }
+            conf.webhookCount--;
+            memset(conf.webhookIPs[conf.webhookCount], 0, 16);  // Clear last entry
+            modified = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+void Config::clearWebhookIPs() {
+    memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));
+    conf.webhookCount = 0;
+    modified = true;
+}
+
+void Config::setGateLEDsEnabled(uint8_t enabled) {
+    if (conf.gateLEDsEnabled != enabled) {
+        conf.gateLEDsEnabled = enabled;
+        modified = true;
+    }
+}
+
+void Config::setWebhookRaceStart(uint8_t enabled) {
+    if (conf.webhookRaceStart != enabled) {
+        conf.webhookRaceStart = enabled;
+        modified = true;
+    }
+}
+
+void Config::setWebhookRaceStop(uint8_t enabled) {
+    if (conf.webhookRaceStop != enabled) {
+        conf.webhookRaceStop = enabled;
+        modified = true;
+    }
+}
+
+void Config::setWebhookLap(uint8_t enabled) {
+    if (conf.webhookLap != enabled) {
+        conf.webhookLap = enabled;
+        modified = true;
+    }
+}
+
 void Config::setDefaults(void) {
     DEBUG("Setting EEPROM defaults\n");
     // Reset everything to 0/false and then just set anything that zero is not appropriate
@@ -388,6 +522,13 @@ void Config::setDefaults(void) {
     conf.operationMode = 0;  // WiFi mode by default
     conf.tracksEnabled = 0;  // Tracks disabled by default
     conf.selectedTrackId = 0;  // No track selected by default
+    conf.webhooksEnabled = 0;  // Webhooks disabled by default
+    conf.webhookCount = 0;  // No webhooks configured
+    memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));  // Clear all webhook IPs
+    conf.gateLEDsEnabled = 0;  // Gate LEDs disabled by default
+    conf.webhookRaceStart = 1;  // Race start enabled by default
+    conf.webhookRaceStop = 1;  // Race stop enabled by default
+    conf.webhookLap = 1;  // Lap enabled by default
     strlcpy(conf.ssid, "", sizeof(conf.ssid));
     strlcpy(conf.password, "", sizeof(conf.password));
     strlcpy(conf.pilotName, "", sizeof(conf.pilotName));

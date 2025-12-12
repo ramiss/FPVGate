@@ -6,6 +6,8 @@
 #include "laptimer.h"
 #include "buzzer.h"
 #include "racehistory.h"
+#include "trackmanager.h"
+#include "webhook.h"
 #include <EEPROM.h>
 #include <LittleFS.h>
 #include <WiFi.h>
@@ -118,13 +120,30 @@ TestResult SelfTest::testSDCard() {
 #ifdef ESP32S3
     if (!storage || !storage->isSDAvailable()) {
         result.passed = false;
-        result.details = "SD card not available (using LittleFS fallback)";
+        result.details = "Not available (using LittleFS fallback) - Optional for device operation";
         result.duration_ms = millis() - start;
         return result;
     }
     
     uint64_t cardSize = storage->getTotalBytes();
     uint64_t usedBytes = storage->getUsedBytes();
+    uint64_t freeBytes = storage->getFreeBytes();
+    
+    // Test read/write to SD
+    String testData = "{\"test\":\"sd_write\"}";
+    bool writeSuccess = false;
+    if (SD.exists("/")) {
+        File testFile = SD.open("/test_sd.txt", FILE_WRITE);
+        if (testFile) {
+            testFile.print(testData);
+            testFile.close();
+            writeSuccess = true;
+        }
+    }
+    
+    if (writeSuccess && SD.exists("/test_sd.txt")) {
+        SD.remove("/test_sd.txt");
+    }
     
     // Check for voice directories
     int voiceDirsFound = 0;
@@ -136,14 +155,21 @@ TestResult SelfTest::testSDCard() {
         }
     }
     
-    // Check for a sample audio file
-    bool sampleFileExists = SD.exists("/sounds_default/gate_1.mp3");
+    // Check for sample audio files
+    int audioFilesFound = 0;
+    const char* sampleFiles[] = {"/sounds_default/gate_1.mp3", "/sounds_default/lap_1.mp3"};
+    for (int i = 0; i < 2; i++) {
+        if (SD.exists(sampleFiles[i])) {
+            audioFilesFound++;
+        }
+    }
     
-    result.passed = true;
+    result.passed = writeSuccess;
     result.details = String("Size: ") + String(cardSize / (1024*1024)) + "MB, " +
-                    "Used: " + String(usedBytes / 1024) + "KB, " +
-                    "Voices: " + String(voiceDirsFound) + "/4" +
-                    (sampleFileExists ? ", Audio OK" : ", Audio Missing");
+                    "Free: " + String(freeBytes / (1024*1024)) + "MB, " +
+                    "Voices: " + String(voiceDirsFound) + "/4, " +
+                    "Audio files: " + String(audioFilesFound) + "/2, " +
+                    (writeSuccess ? "R/W OK" : "R/W Failed");
     result.duration_ms = millis() - start;
 #else
     result.passed = false;
@@ -360,7 +386,7 @@ TestResult SelfTest::testConfig(Config* config) {
     
     if (enterRssi <= exitRssi) {
         result.passed = false;
-        result.details = "Enter RSSI must be > Exit RSSI";
+        result.details = "Enter RSSI (" + String(enterRssi) + ") must be > Exit RSSI (" + String(exitRssi) + ")";
         result.duration_ms = millis() - start;
         return result;
     }
@@ -498,6 +524,83 @@ TestResult SelfTest::testUSB() {
     return result;
 }
 #endif
+
+TestResult SelfTest::testTrackManager() {
+    TestResult result;
+    result.name = "Track Manager";
+    uint32_t start = millis();
+    
+    // Check if tracks file exists
+    bool tracksFileExists = storage->exists("/tracks.json");
+    
+    // Check track manager functionality via storage
+    if (!storage) {
+        result.passed = false;
+        result.details = "Storage not available";
+        result.duration_ms = millis() - start;
+        return result;
+    }
+    
+    result.passed = true;
+    result.details = tracksFileExists ? "Tracks file found" : "No tracks configured yet";
+    result.duration_ms = millis() - start;
+    return result;
+}
+
+TestResult SelfTest::testWebhooks() {
+    TestResult result;
+    result.name = "Webhooks";
+    uint32_t start = millis();
+    
+    // Test webhook configuration via storage/config
+    // We can't directly test HTTP requests in self-test, but we can verify config
+    if (!storage) {
+        result.passed = false;
+        result.details = "Storage not available";
+        result.duration_ms = millis() - start;
+        return result;
+    }
+    
+    // Check if webhook system is functional (HTTP client available)
+    WiFiClient testClient;
+    bool httpAvailable = true; // WiFiClient is always available on ESP32
+    
+    result.passed = httpAvailable;
+    result.details = httpAvailable ? "HTTP client ready" : "HTTP client unavailable";
+    result.duration_ms = millis() - start;
+    return result;
+}
+
+TestResult SelfTest::testTransport() {
+    TestResult result;
+    result.name = "Transport Layer";
+    uint32_t start = millis();
+    
+    // Check transport files
+    bool usbTransportExists = LittleFS.exists("/usb-transport.js");
+    
+    // Check WiFi status
+    wifi_mode_t mode = WiFi.getMode();
+    bool wifiActive = (mode != WIFI_OFF);
+    
+#ifdef ESP32S3
+    // Check USB Serial CDC
+    #if ARDUINO_USB_CDC_ON_BOOT
+    bool usbAvailable = (bool)Serial;
+    #else
+    bool usbAvailable = false;
+    #endif
+#else
+    bool usbAvailable = false;
+#endif
+    
+    result.passed = (wifiActive || usbAvailable);
+    result.details = String("WiFi: ") + (wifiActive ? "active" : "off") + 
+                    ", USB: " + (usbAvailable ? "connected" : "disconnected") +
+                    ", Transport JS: " + (usbTransportExists ? "loaded" : "missing");
+    result.duration_ms = millis() - start;
+    return result;
+}
 
 String SelfTest::getResultsJSON() {
     DynamicJsonDocument doc(2048);

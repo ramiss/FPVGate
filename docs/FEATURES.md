@@ -13,11 +13,13 @@ In-depth documentation of all FPVGate capabilities and technical details.
 3. [Voice Announcements](#voice-announcements)
 4. [LED Visual Effects](#led-visual-effects)
 5. [Race Analysis](#race-analysis)
-6. [Race History & Data Management](#race-history--data-management)
-7. [Multi-Client Support](#multi-client-support)
-8. [Self-Test System](#self-test-system)
-9. [Configuration Management](#configuration-management)
-10. [Technical Architecture](#technical-architecture)
+6. [Track Management](#track-management)
+7. [Webhooks & Integration](#webhooks--integration)
+8. [Race History & Data Management](#race-history--data-management)
+9. [Multi-Client Support](#multi-client-support)
+10. [Self-Test System](#self-test-system)
+11. [Configuration Management](#configuration-management)
+12. [Technical Architecture](#technical-architecture)
 
 ---
 
@@ -688,6 +690,210 @@ for i in range(0, num_laps - 2):
 
 ---
 
+## Track Management
+
+### Overview
+
+FPVGate includes a comprehensive track management system for organizing and tracking your racing locations.
+
+**Features:**
+- Create and manage up to 50 tracks
+- Track metadata (name, location, notes)
+- Distance configuration for lap distance calculations
+- Track selection (persists to EEPROM)
+- Track association with race history
+
+### Creating Tracks
+
+**Access:** Configuration → Track Data → "Create New Track"
+
+**Required Fields:**
+- **Name:** Track identifier (e.g., "Backyard Track", "MultiGP Chapter")
+- **Distance:** Track length in meters (used for distance calculations)
+
+**Optional Fields:**
+- **Location:** Physical location or address
+- **Notes:** Track layout description, difficulty rating, etc.
+- **Image:** Track map or photo (base64 encoded)
+
+### Track Selection
+
+**How It Works:**
+1. Enable "Track Feature" toggle in Configuration
+2. Select active track from dropdown
+3. Selection persists to EEPROM (survives reboots)
+4. Distance calculations automatic during racing
+
+**Distance Display:**
+- **Total Distance:** Cumulative distance traveled
+- **Distance Remaining:** Calculated if Max Laps set
+- **Real-time Updates:** Distance shown on main race screen
+
+### Track Management UI
+
+**Features:**
+1. **Track List** - View all created tracks
+2. **Edit** - Modify track information
+3. **Delete** - Remove track (confirmation required)
+4. **Select** - Set as active racing track
+
+**Storage:**
+- Stored on SD card (`/tracks.json`) or LittleFS fallback
+- Includes all metadata and settings
+- Race history includes track association
+
+---
+
+## Webhooks & Integration
+
+### Overview
+
+FPVGate can send HTTP POST webhooks to external devices on your network, perfect for integrating with external LED controllers, displays, or automation systems.
+
+**Use Cases:**
+- Trigger gate LED flashes during race events
+- Sync external lighting with race timing
+- Integrate with home automation systems
+- Control multiple LED setups simultaneously
+
+### Webhook Configuration
+
+**Access:** Configuration → Webhooks
+
+**Setup Steps:**
+1. **Enable Webhooks:** Toggle webhook system on/off
+2. **Add IP Addresses:** Configure up to 10 webhook targets
+3. **Test:** Send test webhook to verify connectivity
+
+**IP Format:** Standard IPv4 (e.g., `192.168.0.75`)
+
+### Webhook Endpoints
+
+FPVGate sends HTTP POST requests to the following endpoints:
+
+| Endpoint | Trigger | Description |
+|----------|---------|-------------|
+| `/RaceStart` | Race starts | 2× Green flashes |
+| `/RaceStop` | Race stops | 2× Red flashes |
+| `/Lap` | Lap detected | White flash (0.5s) |
+| `/GhostLap` | Future feature | White flash (0.5s) |
+| `/off` | Manual | Turn off LEDs |
+| `/flash` | Manual test | White flash |
+
+**Request Format:**
+```http
+POST http://<IP>/<Endpoint>
+Content-Length: 0
+```
+
+**Example:**
+```
+POST http://192.168.0.75/RaceStart
+```
+
+### Gate LED Controls
+
+**Access:** Configuration → LED Setup → Gate LEDs (Webhooks)
+
+**Master Control:**
+- **Enable Gate LEDs:** Master on/off switch for webhook system
+- Must be enabled for any webhooks to fire
+
+**Granular Controls:**
+1. **Race Start Flash:** Enable/disable `/RaceStart` webhook
+2. **Race Stop Flash:** Enable/disable `/RaceStop` webhook  
+3. **Lap Flash:** Enable/disable `/Lap` webhook
+
+**Behavior:**
+- Webhooks only fire if both master switch AND individual toggle enabled
+- Settings persist to EEPROM
+- Manual lap additions also trigger `/Lap` webhook when enabled
+
+**Configuration Flow:**
+```
+Enable Gate LEDs (Master) → ON
+   ↓
+Race Start Flash → ON
+Race Stop Flash → ON  
+Lap Flash → ON
+   ↓
+Webhooks fire during race events
+```
+
+### Webhook Manager API
+
+**GET /webhooks**  
+List configured webhooks and enabled status
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "webhooks": ["192.168.0.75", "192.168.0.80"]
+}
+```
+
+**POST /webhooks/add**  
+Add webhook IP address
+
+**Body:**
+```json
+{"ip": "192.168.0.75"}
+```
+
+**POST /webhooks/remove**  
+Remove webhook IP address
+
+**Body:**
+```json
+{"ip": "192.168.0.75"}
+```
+
+**POST /webhooks/clear**  
+Clear all configured webhooks
+
+**POST /webhooks/enable**  
+Enable/disable webhook system
+
+**Body:**
+```json
+{"enabled": "1"}
+```
+
+**POST /webhooks/trigger/flash**  
+Manually trigger test flash to all webhooks
+
+### Implementation Details
+
+**Technical Specifications:**
+- **Protocol:** HTTP/1.1 POST requests
+- **Timeout:** 500ms per webhook
+- **Max Webhooks:** 10 simultaneous targets
+- **Retry Logic:** None (fire-and-forget)
+- **Thread Safety:** Non-blocking execution
+
+**Network Requirements:**
+- All devices must be on same network as FPVGate
+- Standard ports (80 for HTTP)
+- No authentication required
+
+**Example LED Controller Setup:**
+
+ESP8266/ESP32 LED controller:
+```cpp
+server.on("/RaceStart", HTTP_POST, []() {
+  flashGreen(2);  // 2× green flashes
+  server.send(200, "text/plain", "OK");
+});
+
+server.on("/Lap", HTTP_POST, []() {
+  flashWhite(500);  // 0.5s white flash
+  server.send(200, "text/plain", "OK");
+});
+```
+
+---
+
 ## Race History & Data Management
 
 ### Automatic Race Saving
@@ -903,30 +1109,44 @@ class TransportManager {
 
 ### Overview
 
-Built-in diagnostic system validates all hardware components.
+Comprehensive diagnostic system validates all hardware components and software features.
 
-**Access:** Configuration → System Diagnostics → "Run Self-Test"
+**Access:** Configuration → System Settings → Diagnostics → "Run All Tests"
 
-**Duration:** ~10 seconds
+**Duration:** ~10-15 seconds  
+**Total Tests:** 19 comprehensive checks
 
-### Test Sequence
+### Test Categories
 
-#### 1. WiFi Test
+#### Hardware Tests
+1. **RX5808 Module** - SPI communication, RSSI readings
+2. **RGB LED** - All color channels (R,G,B flash test)
+3. **Battery Monitor** - Voltage reading functionality
+4. **Audio/Buzzer** - Beep test and audio file verification
 
-**Checks:**
-- WiFi hardware initialized
-- Access Point started
-- IP address assigned
-- SSID broadcasting
+#### Storage Tests  
+5. **EEPROM** - Read/write test with verification
+6. **LittleFS** - File system mount and capacity
+7. **SD Card** - Detection, R/W test, voice files, free space
+8. **Storage Manager** - Unified storage abstraction
 
-**Pass Criteria:** AP mode active, clients can connect
+#### Connectivity Tests
+9. **WiFi** - AP mode, MAC address, connection status
+10. **USB Serial CDC** - USB connection and transport
+11. **Transport Layer** - USB/WiFi availability and transport JS
 
-**Failure Modes:**
-- WiFi hardware fault
-- Antenna disconnected
-- Software configuration error
+#### Software Tests
+12. **Configuration** - Valid settings, RSSI threshold validation
+13. **Lap Timer** - Timer functionality and RSSI communication
+14. **Race History** - Storage capacity and race count
+15. **Track Manager** - Track file existence and functionality
+16. **Webhooks** - HTTP client availability
+17. **Web Server** - Required files (index.html, script.js, style.css)
+18. **OTA Updates** - Partition space and update capability
 
-#### 2. RX5808 Test
+### Detailed Test Descriptions
+
+#### RX5808 Module Test
 
 **Checks:**
 - SPI communication working
@@ -949,56 +1169,117 @@ Built-in diagnostic system validates all hardware components.
 - Module damaged
 - Wrong pin assignments
 
-#### 3. LED Test
+#### RGB LED Test (ESP32-S3)
 
 **Checks:**
 - FastLED library initialized
-- Data pin functional
-- LEDs responsive
+- All color channels functional
+- Animation system working
 
 **Procedure:**
-1. Set all LEDs to red
-2. Delay 500ms
-3. Set all LEDs to green
-4. Delay 500ms
-5. Set all LEDs to blue
-6. Delay 500ms
-7. Turn off
+1. Flash red (200ms)
+2. Flash green (200ms)
+3. Flash blue (200ms)
+4. Return to rainbow wave
 
-**Pass Criteria:** User observes color changes
+**Pass Criteria:** All three color channels visible
+
+**Details Shown:** "All channels tested (R,G,B)"
 
 **Failure Modes:**
 - Data pin not connected
 - Power supply insufficient
-- First LED damaged (breaks data chain)
+- Individual color channel failure
 
-#### 4. SD Card Test
+#### SD Card Test (ESP32-S3)
 
 **Checks:**
-- SPI communication
-- Card detected
-- FAT32 file system
-- Read/write functional
+- Card detection and initialization
+- Read/write operations
+- Voice directory presence
+- Audio file availability
+- Free space
 
 **Procedure:**
-1. Initialize SD library
-2. Check card presence
-3. Verify FAT32 format
-4. Create test file
-5. Write data
-6. Read data back
-7. Verify data matches
-8. Delete test file
+1. Check SD card availability
+2. Test file creation and write
+3. Read back and verify data
+4. Delete test file
+5. Scan for voice directories (sounds_*)
+6. Check sample audio files
 
-**Pass Criteria:** All operations successful
+**Pass Criteria:** R/W successful
+
+**Details Shown:**
+- Card size (MB)
+- Free space (MB)
+- Voice directories found (0-4)
+- Audio files found (0-2)
+- R/W status
 
 **Failure Modes:**
 - Card not inserted
 - Wrong format (not FAT32)
-- Card write-protected
-- Module connections loose
+- Write-protected
+- Corrupted file system
 
-#### 5. Buzzer Test
+#### Configuration Test
+
+**Checks:**
+- Config loading successful
+- Valid frequency range (5600-5950 MHz)
+- RSSI threshold validation (Enter > Exit)
+
+**Pass Criteria:**
+- Frequency in valid range
+- Enter RSSI > Exit RSSI
+
+**Details Shown:**
+- Current frequency
+- Enter RSSI value
+- Exit RSSI value
+
+**Failure Modes:**
+- Invalid frequency
+- Enter RSSI ≤ Exit RSSI
+- Corrupt configuration
+
+#### Track Manager Test
+
+**Checks:**
+- Storage availability
+- Track file existence
+
+**Pass Criteria:** Storage accessible
+
+**Details Shown:**
+- "Tracks file found" or "No tracks configured yet"
+
+#### Webhooks Test
+
+**Checks:**
+- HTTP client availability
+- Network stack functional
+
+**Pass Criteria:** HTTP client ready
+
+**Details Shown:** "HTTP client ready"
+
+#### Transport Layer Test
+
+**Checks:**
+- WiFi status
+- USB CDC availability
+- Transport JavaScript loaded
+
+**Pass Criteria:** At least one transport active (WiFi or USB)
+
+**Details Shown:**
+- WiFi active/off
+- USB connected/disconnected
+- Transport JS loaded/missing
+
+#### Buzzer Test
 
 **Checks:**
 - GPIO pin functional
@@ -1015,25 +1296,6 @@ Built-in diagnostic system validates all hardware components.
 - Wrong buzzer type (active vs passive)
 - Polarity reversed
 - Damaged buzzer
-
-#### 6. USB Test (ESP32-S3 Only)
-
-**Checks:**
-- USB CDC functional
-- Serial port accessible
-- JSON command parsing
-
-**Procedure:**
-1. Check USB CDC initialized
-2. Send test command
-3. Verify response
-
-**Pass Criteria:** USB communication working
-
-**Failure Modes:**
-- Drivers not installed
-- USB cable data lines broken
-- Firmware USB disabled
 
 ### Test Results Display
 

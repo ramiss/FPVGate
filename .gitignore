@@ -76,3 +76,6 @@ flash_with_sd.ps1
 flashing_defaults.json
 laptimer_v*.cpp
 tools/apply_frontend_defaults.html
+
+# Desktop app builds (too large for git, use GitHub releases)
+*.zip
