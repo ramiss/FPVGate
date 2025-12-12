@@ -103,6 +103,8 @@ A real-time status indicator at the top of the Configuration page shows your cur
 - No page refresh needed
 - Instant feedback on connection changes
 
+![WiFi & Connection Settings](../screenshots/12-12-2025/Config%20Screen%20-%20Wifi%20&%20Connections%2012-12-2025.png)
+
 **Station Mode Setup:**
 1. Go to Configuration -> Network Settings
 2. Enter WiFi SSID (your network name)
@@ -125,7 +127,7 @@ A real-time status indicator at the top of the Configuration page shows your cur
 
 The web interface has four main tabs:
 
-![Race Screen](../screenshots/Race%20Screen%2005-12-2025.png)
+![Race Screen](../screenshots/12-12-2025/Race%20-%2012-12-2025.png)
 
 ### Race Tab
 
@@ -145,7 +147,7 @@ The web interface has four main tabs:
 
 ### Configuration Tab
 
-![Configuration Menu](../screenshots/Config%20Menu%2005-12-2025.png)
+![Configuration Menu](../screenshots/12-12-2025/Config%20Screen%20-%20Pilot%20Info%2012-12-2025.png)
 
 **All settings and diagnostics** - Organized into sections:
 
@@ -158,7 +160,7 @@ The web interface has four main tabs:
 
 ### Calibration Tab
 
-![Calibration Screen](../screenshots/Calibration%20Screen%2005-12-2025.png)
+![Calibration Screen](../screenshots/12-12-2025/Calibration%20Screen%2012-12-2025.png)
 
 **RSSI threshold setup** - Critical for accurate timing.
 
@@ -171,7 +173,7 @@ The web interface has four main tabs:
 
 ### Race History Tab
 
-![Race History](../screenshots/Race%20History%2005-12-2025.png)
+![Race History](../screenshots/12-12-2025/Race%20History%20-%2012-12-2025.png)
 
 **Saved races archive** - View, edit, export past races.
 
@@ -221,6 +223,8 @@ Prevents false lap detection from crashes or lingering in gate.
 - System ignores lap triggers within minimum time
 - Prevents double-counting if you crash near gate
 - Prevents re-triggering during slow fly-throughs
+
+![Lap & Announcer Settings](../screenshots/12-12-2025/Config%20Screen%20-%20Lap%20&%20Announcer%20Settings%2012-12-2025.png)
 
 ### TTS Settings Section
 
@@ -735,6 +739,8 @@ All races are automatically saved when you stop or clear laps.
 
 Configure RGB LED behavior and visual effects.
 
+![LED Setup](../screenshots/12-12-2025/Config%20Screen%20-%20LED%20Setup%2012-12-2025.png)
+
 ** Settings Persist:** All LED configuration (preset, colors, brightness, speed, manual override) automatically saves to EEPROM and survives page refreshes and device reboots.
 
 ### LED Presets
@@ -906,6 +912,8 @@ Display race information on live video stream.
 5. Set width: 1920, height: 1080
 6. Check "Shutdown source when not visible"
 7. Position overlay on stream
+
+![System Settings](../screenshots/12-12-2025/Config%20Screen%20System%20Settings%2012-12-2025.png)
 
 ### Battery Monitoring
 

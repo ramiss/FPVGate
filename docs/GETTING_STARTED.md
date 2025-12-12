@@ -1,4 +1,4 @@
-﻿# Getting Started with FPVGate
+# Getting Started with FPVGate
 
 Complete guide to building, flashing, and configuring your FPVGate lap timer.
 
@@ -71,13 +71,13 @@ The RX5808 must be modified for SPI control. Follow this guide:
 
 ```
 ESP32-S3        RX5808 Module
-─────────────────────────────
-GPIO4    ────── RSSI (analog output)
-GPIO10   ────── CH1 / DATA
-GPIO11   ────── CH2 / SELECT
-GPIO12   ────── CH3 / CLOCK
-GND      ────── GND
-5V (VBUS)────── +5V
+-----------------------------
+GPIO4    ------ RSSI (analog output)
+GPIO10   ------ CH1 / DATA
+GPIO11   ------ CH2 / SELECT
+GPIO12   ------ CH3 / CLOCK
+GND      ------ GND
+5V (VBUS)------ +5V
 ```
 
 ** Important Notes:**
@@ -89,13 +89,13 @@ GND      ────── GND
 
 ```
 ESP32-S3        SD Card Module
-─────────────────────────────
-GPIO39   ────── CS (Chip Select)
-GPIO36   ────── SCK (Clock)
-GPIO35   ────── MOSI (Data In)
-GPIO37   ────── MISO (Data Out)
-GND      ────── GND
-3.3V     ────── VCC
+-----------------------------
+GPIO39   ------ CS (Chip Select)
+GPIO36   ------ SCK (Clock)
+GPIO35   ------ MOSI (Data In)
+GPIO37   ------ MISO (Data Out)
+GND      ------ GND
+3.3V     ------ VCC
 ```
 
 ** SD Card Notes:**
@@ -108,10 +108,10 @@ GND      ────── GND
 
 ```
 ESP32-S3        WS2812 Strip
-─────────────────────────────
-VBUS (5V)────── +5V
-GND      ────── GND
-GPIO18   ────── Data In
+-----------------------------
+VBUS (5V)------ +5V
+GND      ------ GND
+GPIO18   ------ Data In
 ```
 
 **LED Configuration:**
@@ -119,16 +119,16 @@ GPIO18   ────── Data In
   ```cpp
   #define NUM_LEDS 2  // Change to 1 or 2
   ```
-- Add 330Ω resistor on data line for stability
+- Add 330O resistor on data line for stability
 - Keep strip short (1-2 LEDs max)
 
 #### Buzzer (Optional)
 
 ```
 ESP32-S3        Active Buzzer
-─────────────────────────────
-GPIO5    ────── Positive (+)
-GND      ────── Negative (-)
+-----------------------------
+GPIO5    ------ Positive (+)
+GND      ------ Negative (-)
 ```
 
 **Buzzer Notes:**
@@ -146,9 +146,9 @@ GND      ────── Negative (-)
 **Option B: Battery Power (Portable)**
 ```
 18650 Battery (3.7V nominal)
-    ↓
+    ?
 5V Boost Converter (USB output)
-    ↓
+    ?
 ESP32-S3 VBUS pin (USB-C or 5V pin)
 ```
 
@@ -223,7 +223,7 @@ Go to [Releases](https://github.com/LouisHitchcock/FPVGate/releases) and downloa
 
 - Use data-capable USB-C cable
 - Connect to computer
-- Note the COM port (Windows: Device Manager → Ports)
+- Note the COM port (Windows: Device Manager ? Ports)
 
 **3. Flash Firmware**
 
@@ -276,10 +276,10 @@ Edit `lib/RGBLED/rgbled.h`:
 **Using VS Code:**
 1. Open FPVGate folder in VS Code
 2. PlatformIO icon (left sidebar)
-3. Project Tasks → ESP32S3 → General → Build
+3. Project Tasks ? ESP32S3 ? General ? Build
 4. Wait for "SUCCESS"
-5. Project Tasks → ESP32S3 → General → Upload
-6. Project Tasks → ESP32S3 → Platform → Upload Filesystem Image
+5. Project Tasks ? ESP32S3 ? General ? Upload
+6. Project Tasks ? ESP32S3 ? Platform ? Upload Filesystem Image
 
 **Using Command Line:**
 ```bash
@@ -313,7 +313,7 @@ pio run -e ESP32S3 -t uploadfs
 
 ## Initial Configuration
 
-![Calibration Wizard](../screenshots/Calibration%20Wizard%2005-12-2025.png)
+![Calibration Wizard](../screenshots/12-12-2025/Calibration%20Wizard%20Recording%20-%2012-12-2025.png)
 
 ### Step 1: Connect to FPVGate
 
@@ -356,8 +356,8 @@ pio run -e ESP32S3 -t uploadfs
 1. **Pilot Name**: Full name (used in voice callouts)
 2. **Pilot Callsign**: Short name (max 10 chars, for UI)
 3. **Phonetic Name**: How TTS pronounces your name
-   - Example: "Louis" → "Louie"
-   - Example: "Xavier" → "Zavier"
+   - Example: "Louis" ? "Louie"
+   - Example: "Xavier" ? "Zavier"
 4. **Pilot Color**: Choose your racing color
 
 **TTS Settings Section:**
@@ -416,7 +416,7 @@ Enter RSSI: 145 (5 below peak)
 Exit RSSI: 135 (10 below enter)
 ```
 
-**[Detailed calibration guide →](USER_GUIDE.md#calibration)**
+**[Detailed calibration guide ?](USER_GUIDE.md#calibration)**
 
 ### Step 2: Test Detection
 
@@ -438,7 +438,7 @@ Exit RSSI: 135 (10 below enter)
 5. Watch lap times appear in table
 6. Click **"Stop Race"** when finished
 
-**[Complete user guide →](USER_GUIDE.md)**
+**[Complete user guide ?](USER_GUIDE.md)**
 
 ---
 
@@ -507,12 +507,14 @@ Exit RSSI: 135 (10 below enter)
 ### Getting Help
 
 1. **Check documentation**: [User Guide](USER_GUIDE.md) | [Hardware Guide](HARDWARE_GUIDE.md)
-2. **Run self-test**: Configuration → System Diagnostics
+2. **Run self-test**: Configuration ? System Diagnostics
 3. **Check Serial Monitor**: For debug messages
 4. **GitHub Issues**: [Report bugs](https://github.com/LouisHitchcock/FPVGate/issues)
 5. **Community**: [GitHub Discussions](https://github.com/LouisHitchcock/FPVGate/discussions)
 
 ---
+
+![Calibration Wizard Completed](../screenshots/12-12-2025/Calibration%20Wizard%20Completed%20-%2012-12-2025.png)
 
 ## Next Steps
 

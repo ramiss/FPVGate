@@ -1,4 +1,4 @@
-﻿# FPVGate Features Guide
+# FPVGate Features Guide
 
 In-depth documentation of all FPVGate capabilities and technical details.
 
@@ -75,15 +75,15 @@ Direct USB connection for zero-latency control.
 **Architecture:**
 
 ```
-┌──────────────┐         USB Cable        ┌──────────────┐
-│   Computer   │ ←──────────────────────→ │  ESP32-S3    │
-│              │                           │              │
-│  Electron    │   JSON Command Protocol   │  Transport   │
-│  Browser     │   {"method":"POST"...}    │  Manager     │
-│              │                           │              │
-│ USB-Transport│                           │  Webserver   │
-│    .js       │                           │  Handlers    │
-└──────────────┘                           └──────────────┘
++--------------+         USB Cable        +--------------+
+�   Computer   � ?----------------------? �  ESP32-S3    �
+�              �                           �              �
+�  Electron    �   JSON Command Protocol   �  Transport   �
+�  Browser     �   {"method":"POST"...}    �  Manager     �
+�              �                           �              �
+� USB-Transport�                           �  Webserver   �
+�    .js       �                           �  Handlers    �
++--------------+                           +--------------+
 ```
 
 **Command Protocol:**
@@ -151,13 +151,13 @@ USB and WiFi can operate simultaneously!
 **Example Scenario:**
 ```
      Race Director (USB)
-            ↓ Commands
-       ┌─────────┐
-       │ ESP32-S3│
-       └─────────┘
-         ↓     ↓
+            ? Commands
+       +---------+
+       � ESP32-S3�
+       +---------+
+         ?     ?
     WiFi  WiFi  WiFi
-     ↓     ↓     ↓
+     ?     ?     ?
   Phone Laptop  OSD
 ```
 
@@ -175,23 +175,23 @@ Drone VTx signal strength (RSSI) peaks when passing through gate.
 1. **Tuning:** RX5808 tuned to pilot's frequency via SPI
 2. **Monitoring:** RSSI sampled at ~100Hz (every 10ms)
 3. **Detection Logic:**
-   - RSSI rises above **Enter Threshold** → Start watching
-   - RSSI peaks → Record timestamp
-   - RSSI falls below **Exit Threshold** → Lap confirmed
+   - RSSI rises above **Enter Threshold** ? Start watching
+   - RSSI peaks ? Record timestamp
+   - RSSI falls below **Exit Threshold** ? Lap confirmed
 
 **State Machine:**
 
 ```
      IDLE
-      ↓ (RSSI > Enter)
+      ? (RSSI > Enter)
    CROSSING
-      ↓ (RSSI peaks)
+      ? (RSSI peaks)
    RECORD_TIME
-      ↓ (RSSI < Exit)
-   LAP_CONFIRMED → Broadcast event
-      ↓
+      ? (RSSI < Exit)
+   LAP_CONFIRMED ? Broadcast event
+      ?
    COOLDOWN (minimum lap time)
-      ↓
+      ?
      IDLE
 ```
 
@@ -242,15 +242,15 @@ Drone VTx signal strength (RSSI) peaks when passing through gate.
 
 | Factor | Impact | Mitigation |
 |--------|--------|------------|
-| **RSSI Sampling Rate** | ±5ms | 100Hz sampling |
-| **Peak Detection** | ±10ms | 3-point average |
-| **System Timer** | ±1ms | millis() function |
+| **RSSI Sampling Rate** | �5ms | 100Hz sampling |
+| **Peak Detection** | �10ms | 3-point average |
+| **System Timer** | �1ms | millis() function |
 | **WiFi Latency** | 20-30ms | Use USB mode |
 
 **Expected Accuracy:**
-- **Best Case (USB):** ±10-15ms
-- **WiFi Mode:** ±30-40ms
-- **For Comparison:** MultiGP standard is ±50ms
+- **Best Case (USB):** �10-15ms
+- **WiFi Mode:** �30-40ms
+- **For Comparison:** MultiGP standard is �50ms
 
 ### Gate Pass Classification
 
@@ -298,12 +298,12 @@ High-quality neural TTS, pre-generated MP3 files.
 **File Structure:**
 ```
 /audio/elevenlabs/sarah/
-  ├── arm.mp3
-  ├── gate1.mp3
-  ├── lap1.mp3 ... lap50.mp3
-  ├── 0.mp3 ... 99.mp3 (numbers)
-  ├── fastest.mp3
-  └── racecomplete.mp3
+  +-- arm.mp3
+  +-- gate1.mp3
+  +-- lap1.mp3 ... lap50.mp3
+  +-- 0.mp3 ... 99.mp3 (numbers)
+  +-- fastest.mp3
+  +-- racecomplete.mp3
 ```
 
 **Generation:**
@@ -341,7 +341,7 @@ Fast, lightweight neural TTS with real-time synthesis.
 - Lower latency requirements
 
 **Fallback Behavior:**
-- ElevenLabs voice selected but files missing → Auto-switches to PiperTTS
+- ElevenLabs voice selected but files missing ? Auto-switches to PiperTTS
 - Seamless degradation
 
 ### Announcement Formats
@@ -452,7 +452,7 @@ Ensure correct pronunciation of pilot names.
 **Implementation:**
 - I2S audio playback with adjustable sample rate
 - 1.0 = 44100 Hz
-- 1.5 = 66150 Hz (1.5× faster)
+- 1.5 = 66150 Hz (1.5� faster)
 
 ---
 
@@ -466,7 +466,7 @@ Individually addressable RGB LEDs using single-wire protocol.
 **Technical Details:**
 - **Protocol:** WS2812B (NeoPixel)
 - **Data Rate:** 800 kHz
-- **Color Depth:** 24-bit (8 bits per channel × RGB)
+- **Color Depth:** 24-bit (8 bits per channel � RGB)
 - **Update Rate:** ~60 FPS
 - **Max LEDs:** 256 (practical limit ~100 for smooth animation)
 
@@ -541,9 +541,9 @@ Each LED receives 24 bits: `GRB` (Green-Red-Blue order)
 
 | Event | LED Behavior |
 |-------|--------------|
-| **Race Start** | Flash green (3×, 200ms each) |
-| **Lap Detected** | Flash white (1×, 150ms) |
-| **Race Stop** | Flash red (3×, 200ms each) |
+| **Race Start** | Flash green (3�, 200ms each) |
+| **Lap Detected** | Flash white (1�, 150ms) |
+| **Race Stop** | Flash red (3�, 200ms each) |
 | **Between Events** | Resume selected preset |
 
 **Implementation:**
@@ -673,7 +673,7 @@ for i in range(0, num_laps - 2):
 **Columns:**
 1. **Lap #** - "Gate 1", "Lap 1", "Lap 2"...
 2. **Lap Time** - MM:SS.ss format
-3. **Delta** - Difference from previous lap (±)
+3. **Delta** - Difference from previous lap (�)
 
 **Fastest Lap Highlight:**
 - Gold background (#FFD700)
@@ -694,6 +694,8 @@ for i in range(0, num_laps - 2):
 
 ### Overview
 
+![Track Management](../screenshots/12-12-2025/Config%20Screen%20-%20Track%20Info%2012-12-2025.png)
+
 FPVGate includes a comprehensive track management system for organizing and tracking your racing locations.
 
 **Features:**
@@ -705,7 +707,7 @@ FPVGate includes a comprehensive track management system for organizing and trac
 
 ### Creating Tracks
 
-**Access:** Configuration → Track Data → "Create New Track"
+**Access:** Configuration ? Track Data ? "Create New Track"
 
 **Required Fields:**
 - **Name:** Track identifier (e.g., "Backyard Track", "MultiGP Chapter")
@@ -748,6 +750,8 @@ FPVGate includes a comprehensive track management system for organizing and trac
 
 ### Overview
 
+![Webhooks Configuration](../screenshots/12-12-2025/Config%20Screen%20-%20Webhooks%2012-12-2025.png)
+
 FPVGate can send HTTP POST webhooks to external devices on your network, perfect for integrating with external LED controllers, displays, or automation systems.
 
 **Use Cases:**
@@ -758,7 +762,7 @@ FPVGate can send HTTP POST webhooks to external devices on your network, perfect
 
 ### Webhook Configuration
 
-**Access:** Configuration → Webhooks
+**Access:** Configuration ? Webhooks
 
 **Setup Steps:**
 1. **Enable Webhooks:** Toggle webhook system on/off
@@ -773,8 +777,8 @@ FPVGate sends HTTP POST requests to the following endpoints:
 
 | Endpoint | Trigger | Description |
 |----------|---------|-------------|
-| `/RaceStart` | Race starts | 2× Green flashes |
-| `/RaceStop` | Race stops | 2× Red flashes |
+| `/RaceStart` | Race starts | 2� Green flashes |
+| `/RaceStop` | Race stops | 2� Red flashes |
 | `/Lap` | Lap detected | White flash (0.5s) |
 | `/GhostLap` | Future feature | White flash (0.5s) |
 | `/off` | Manual | Turn off LEDs |
@@ -793,7 +797,7 @@ POST http://192.168.0.75/RaceStart
 
 ### Gate LED Controls
 
-**Access:** Configuration → LED Setup → Gate LEDs (Webhooks)
+**Access:** Configuration ? LED Setup ? Gate LEDs (Webhooks)
 
 **Master Control:**
 - **Enable Gate LEDs:** Master on/off switch for webhook system
@@ -811,12 +815,12 @@ POST http://192.168.0.75/RaceStart
 
 **Configuration Flow:**
 ```
-Enable Gate LEDs (Master) → ON
-   ↓
-Race Start Flash → ON
-Race Stop Flash → ON  
-Lap Flash → ON
-   ↓
+Enable Gate LEDs (Master) ? ON
+   ?
+Race Start Flash ? ON
+Race Stop Flash ? ON  
+Lap Flash ? ON
+   ?
 Webhooks fire during race events
 ```
 
@@ -882,7 +886,7 @@ Manually trigger test flash to all webhooks
 ESP8266/ESP32 LED controller:
 ```cpp
 server.on("/RaceStart", HTTP_POST, []() {
-  flashGreen(2);  // 2× green flashes
+  flashGreen(2);  // 2� green flashes
   server.send(200, "text/plain", "OK");
 });
 
@@ -1016,8 +1020,8 @@ server.on("/Lap", HTTP_POST, []() {
 
 **Connection Flow:**
 ```
-Client → ws://192.168.4.1:81 → ESP32 WebSocket Server
-ESP32 → Broadcast event → All connected clients
+Client ? ws://192.168.4.1:81 ? ESP32 WebSocket Server
+ESP32 ? Broadcast event ? All connected clients
 ```
 
 **Event Types:**
@@ -1109,9 +1113,11 @@ class TransportManager {
 
 ### Overview
 
+![System Diagnostics](../screenshots/12-12-2025/Config%20Screen%20Diagnostics%2012-12-2025.png)
+
 Comprehensive diagnostic system validates all hardware components and software features.
 
-**Access:** Configuration → System Settings → Diagnostics → "Run All Tests"
+**Access:** Configuration ? System Settings ? Diagnostics ? "Run All Tests"
 
 **Duration:** ~10-15 seconds  
 **Total Tests:** 19 comprehensive checks
@@ -1241,7 +1247,7 @@ Comprehensive diagnostic system validates all hardware components and software f
 
 **Failure Modes:**
 - Invalid frequency
-- Enter RSSI ≤ Exit RSSI
+- Enter RSSI = Exit RSSI
 - Corrupt configuration
 
 #### Track Manager Test
@@ -1408,32 +1414,32 @@ Modify TTS options
 
 ```
 src/
-├── main.cpp              # Entry point, setup/loop
-├── lib/
-│   ├── CALIBRATION/      # RSSI calibration logic
-│   ├── CONFIG/           # Configuration management
-│   ├── FASTLED/          # LED control
-│   ├── FREQUENCY/        # Band/channel/frequency
-│   ├── RACEHISTORY/      # Race data storage
-│   ├── RACELOGIC/        # Timing state machine
-│   ├── RX5808/           # RX5808 SPI driver
-│   ├── SELFTEST/         # Diagnostic system
-│   ├── TRANSPORT/        # Transport abstraction
-│   ├── TTS/              # Text-to-speech
-│   ├── USB/              # USB Serial CDC transport
-│   ├── WEBSERVER/        # HTTP + WebSocket server
-│   └── WIFIMAN/          # WiFi management
++-- main.cpp              # Entry point, setup/loop
++-- lib/
+�   +-- CALIBRATION/      # RSSI calibration logic
+�   +-- CONFIG/           # Configuration management
+�   +-- FASTLED/          # LED control
+�   +-- FREQUENCY/        # Band/channel/frequency
+�   +-- RACEHISTORY/      # Race data storage
+�   +-- RACELOGIC/        # Timing state machine
+�   +-- RX5808/           # RX5808 SPI driver
+�   +-- SELFTEST/         # Diagnostic system
+�   +-- TRANSPORT/        # Transport abstraction
+�   +-- TTS/              # Text-to-speech
+�   +-- USB/              # USB Serial CDC transport
+�   +-- WEBSERVER/        # HTTP + WebSocket server
+�   +-- WIFIMAN/          # WiFi management
 ```
 
 ### Web Interface Structure
 
 ```
 data/
-├── index.html            # Single-page app structure
-├── style.css             # Responsive styles, themes
-├── script.js             # Main UI logic, race control
-├── usb-transport.js      # USB Serial CDC communication
-└── themes.css            # 23 color themes
++-- index.html            # Single-page app structure
++-- style.css             # Responsive styles, themes
++-- script.js             # Main UI logic, race control
++-- usb-transport.js      # USB Serial CDC communication
++-- themes.css            # 23 color themes
 ```
 
 ### Memory Layout
