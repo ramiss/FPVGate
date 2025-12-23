@@ -1,5 +1,7 @@
 #include "usb.h"
 #include "debug.h"
+#include <Arduino.h>
+#include <WiFi.h>
 
 #ifdef ESP32S3
 extern RgbLed* g_rgbLed;

@@ -57,6 +57,21 @@
 #define PIN_SD_MOSI 35
 #define PIN_SD_MISO 37
 
+// FPV Scanner Hardware (XIAO ESP32C6)
+#elif defined(APP_BOARD_XIAO_C6)
+
+#define PIN_LED LED_BUILTIN
+//#define PIN_VBAT 35
+//#define VBAT_SCALE 2
+//#define VBAT_ADD 2
+#define PIN_RX5808_RSSI A2
+#define PIN_RX5808_DATA D10  // CH1
+#define PIN_RX5808_SELECT A1  // CH2
+#define PIN_RX5808_CLOCK D8  // CH3
+//#define PIN_BUZZER 27
+//#define BUZZER_INVERTED false
+//#define PIN_MODE_SWITCH 33   // Mode selection: LOW=WiFi, HIGH=RotorHazard
+
 //ESP32
 #else
 

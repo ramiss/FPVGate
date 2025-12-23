@@ -154,7 +154,9 @@ void setup() {
     
     // Note: config.init() already called above
     rx.init();
+#ifdef PIN_BUZZER
     buzzer.init(PIN_BUZZER, BUZZER_INVERTED);
+#endif
     led.init(PIN_LED, false);
 #ifdef ESP32S3
     rgbLed.init();
