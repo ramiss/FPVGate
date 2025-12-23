@@ -263,6 +263,14 @@ static void handleRoot(AsyncWebServerRequest *request) {
     extern RgbLed* g_rgbLed;
     if (g_rgbLed) g_rgbLed->flashGreen();
 #endif
+
+    if (!LittleFS.begin(false) || !LittleFS.exists("/index.html")) {
+        request->send(500, "text/plain",
+            "Web UI not found. LittleFS not mounted or /index.html missing.\n"
+            "Did you add a LittleFS partition + run uploadfs?");
+        return;
+    }
+
     request->send(LittleFS, "/index.html", "text/html");
 }
 

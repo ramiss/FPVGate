@@ -294,8 +294,9 @@ uint16_t Config::getFrequency() {
     // === TEMPORARY HARDCODE FOR RX5808 CH1 PIN ISSUE ===
     // Hardcoded to R1 (5658 MHz) - Raceband Channel 1
     // TODO: Remove this once CH1 pin is fixed and revert to: return conf.frequency;
-    return 5658;
+    // return 5658;
     // === END TEMPORARY HARDCODE ===
+    return conf.frequency;
 }
 
 uint32_t Config::getMinLapMs() {

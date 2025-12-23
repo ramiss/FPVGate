@@ -266,11 +266,13 @@ TestResult SelfTest::testBattery() {
     #ifdef PIN_VBAT
     // Read battery voltage
     int rawValue = analogRead(PIN_VBAT);
+    result.passed = true;
     #else
     int rawValue = -1; // Not supported
+    result.passed = false;
     #endif
     
-    result.passed = true;
+    
     result.details = String("Raw: ") + String(rawValue);
     result.duration_ms = millis() - start;
     return result;
