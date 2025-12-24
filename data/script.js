@@ -27,12 +27,28 @@ const alarmThreshold = document.getElementById("alarmThreshold");
 const maxLapsInput = document.getElementById("maxLaps");
 
 const freqLookup = [
-  [5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725],
-  [5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866],
-  [5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945],
-  [5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880],
-  [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917],
-  [5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621],
+  [5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725], // A
+  [5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866], // B
+  [5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945], // E
+  [5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880], // F
+  [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917], // R (RaceBand)
+  [5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621], // L (LowBand)
+  [5660, 5695, 5735, 5770, 5805, 5878, 5914, 5839], // DJIv1-25
+  [5735, 5770, 5805, 0, 0, 0, 0, 5839],             // DJIv1-25CE
+  [5695, 5770, 5878, 0, 0, 0, 0, 5839],             // DJIv1_50
+  [5669, 5705, 5768, 5804, 5839, 5876, 5912, 0],    // DJI03/04-20
+  [5768, 5804, 5839, 0, 0, 0, 0, 0],                // DJI03/04-20CE
+  [5677, 5794, 5902, 0, 0, 0, 0, 0],                // DJI03/04-40
+  [5794, 0, 0, 0, 0, 0, 0, 0],                      // DJI03/04-40CE
+  [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917], // DJI04-R
+  [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917], // HDZero-R
+  [5707, 0, 0, 0, 0, 0, 0, 0],                      // HDZero-E
+  [5740, 5760, 0, 5800, 0, 0, 0, 0],                // HDZero-F
+  [5732, 5769, 5806, 5843, 0, 0, 0, 0],             // HDZero-CE
+  [5658, 5659, 5732, 5769, 5806, 5843, 5880, 5917], // WLKSnail-R
+  [5660, 5695, 5735, 5770, 5805, 5878, 5914, 5839], // WLKSnail-25
+  [5735, 5770, 5805, 0, 0, 0, 0, 5839],             // WLKSnail-25CE
+  [5695, 5770, 5878, 0, 0, 0, 0, 5839],             // WLKSnail-50
 ];
 
 const config = document.getElementById("config");
@@ -488,6 +504,7 @@ onload = async function (e) {
       updateColorPreview();
     }
 
+    updateChannelOptionsForBand();
     populateFreqOutput();
 
     stopRaceButton.disabled = true;
@@ -896,17 +913,77 @@ async function saveConfig() {
   }
 }
 
-function populateFreqOutput() {
-  let band = bandSelect.options[bandSelect.selectedIndex].value;
-  let chan = channelSelect.options[channelSelect.selectedIndex].value;
-  frequency = freqLookup[bandSelect.selectedIndex][channelSelect.selectedIndex];
-  freqOutput.textContent = band + chan + " " + frequency;
+function updateChannelOptionsForBand(bandIndex = bandSelect.selectedIndex) {
+  if (!bandSelect || !channelSelect) return;
+
+  const freqs = freqLookup[bandIndex] || [];
+  const prevValue = channelSelect.value; // "1".."8"
+
+  // Rebuild channel options, skipping any freq === 0
+  channelSelect.innerHTML = "";
+
+  let firstEnabledValue = null;
+
+  for (let i = 0; i < 8; i++) {
+    const freq = freqs[i] ?? 0;
+    if (freq === 0) continue;
+
+    const opt = document.createElement("option");
+    opt.value = String(i + 1);
+    opt.textContent = String(i + 1);
+    channelSelect.appendChild(opt);
+
+    if (firstEnabledValue === null) firstEnabledValue = opt.value;
+  }
+
+  // Restore previous selection if still valid, otherwise pick first available
+  const stillExists = Array.from(channelSelect.options).some(o => o.value === prevValue);
+  if (stillExists) {
+    channelSelect.value = prevValue;
+  } else if (firstEnabledValue !== null) {
+    channelSelect.value = firstEnabledValue;
+  }
 }
+
+function populateFreqOutput() {
+  if (!bandSelect || !channelSelect) return;
+
+  const band = bandSelect.options[bandSelect.selectedIndex]?.value ?? "";
+  const chIndex = channelSelect.selectedIndex;
+
+  // If no channels are available for this band (all 0s), show N/A safely
+  if (chIndex < 0) {
+    frequency = 0;
+    freqOutput.textContent = `${band}  N/A`;
+    return;
+  }
+
+  const chan = channelSelect.options[chIndex].value;
+  frequency = freqLookup[bandSelect.selectedIndex][chIndex] ?? 0;
+
+  freqOutput.textContent = `${frequency}`;
+}
+
 
 bcf.addEventListener("change", function handleChange(event) {
   populateFreqOutput();
   autoSaveConfig();
 });
+
+// channel / band listeners
+if (bandSelect) {
+  bandSelect.addEventListener("change", function () {
+    updateChannelOptionsForBand();
+    populateFreqOutput();
+  });
+}
+
+if (channelSelect) {
+  channelSelect.addEventListener("change", function () {
+    populateFreqOutput();
+  });
+}
+
 
 // Add auto-save listeners for other inputs
 if (announcerSelect) {

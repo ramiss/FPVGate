@@ -251,6 +251,15 @@ void setup() {
 
 void loop() {
     uint32_t currentTimeMs = millis();
+
+    // LED Flashing
+    static bool led_on = false;
+    static uint32_t t = 0;
+    if (currentTimeMs - t > 500) {
+        t = millis();
+        led_on = !led_on;
+        digitalWrite(LED_BUILTIN, led_on ? HIGH : LOW);
+    }
     
     // Timing always runs
     timer.handleLapTimerUpdate(currentTimeMs);

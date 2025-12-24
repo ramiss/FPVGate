@@ -1,8 +1,7 @@
 #include "RX5808.h"
-
 #include <Arduino.h>
-
 #include "debug.h"
+#include "config.h"
 
 RX5808::RX5808(uint8_t _rssiInputPin, uint8_t _rx5808DataPin, uint8_t _rx5808SelPin, uint8_t _rx5808ClkPin) {
     rssiInputPin = _rssiInputPin;
@@ -20,6 +19,18 @@ void RX5808::init() {
     digitalWrite(rx5808SelPin, HIGH);
     digitalWrite(rx5808ClkPin, LOW);
     digitalWrite(rx5808DataPin, LOW);
+
+    // set antenna option
+    #ifdef USE_EXT_ANTENNA
+        pinMode(WIFI_ENABLE, OUTPUT); // pinMode(3, OUTPUT);
+        digitalWrite(WIFI_ENABLE, LOW); // digitalWrite(3, LOW); // Activate RF switch control
+
+        delay(100);
+
+        pinMode(WIFI_ANT_CONFIG, OUTPUT); // pinMode(14, OUTPUT);
+        digitalWrite(WIFI_ANT_CONFIG, HIGH); // digitalWrite(14, HIGH); // Use external antenna
+    #endif
+
     resetRxModule();
     // Don't power down on init - leave module powered up and ready
     // Set currentFrequency to 0 to force initial frequency programming

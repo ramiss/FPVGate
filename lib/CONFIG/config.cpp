@@ -47,6 +47,13 @@ void Config::load(void) {
             setDefaults();
         }
     }
+
+    // Sanity: announcerRate stored as x10 (1–20). If invalid, reset to default (10).
+    if (conf.announcerRate < 1 || conf.announcerRate > 20) {
+        DEBUG("Invalid announcerRate=%u; resetting to default 10\n", conf.announcerRate);
+        conf.announcerRate = 10;
+        modified = true;
+    }
 }
 
 void Config::write(void) {
@@ -181,9 +188,17 @@ void Config::fromJson(JsonObject source) {
         conf.announcerType = source["anType"];
         modified = true;
     }
-    if (source["anRate"] != conf.announcerRate) {
-        conf.announcerRate = source["anRate"];
-        modified = true;
+    if (source.containsKey("anRate")) {
+        int r = source["anRate"].as<int>();
+
+        // UI range is 0.1–2.0, stored as x10 => 1–20
+        if (r < 1) r = 10;     // fall back to default 1.0
+        if (r > 20) r = 20;
+
+        if ((uint8_t)r != conf.announcerRate) {
+            conf.announcerRate = (uint8_t)r;
+            modified = true;
+        }
     }
     if (source["enterRssi"] != conf.enterRssi) {
         conf.enterRssi = source["enterRssi"];
@@ -263,24 +278,47 @@ void Config::fromJson(JsonObject source) {
         modified = true;
     }
     if (source.containsKey("webhookIPs")) {
-        // Clear existing webhooks
-        memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));
-        conf.webhookCount = 0;
-        
-        // Add new webhooks from import
         JsonArray webhookArray = source["webhookIPs"].as<JsonArray>();
-        for (JsonVariant ip : webhookArray) {
-            if (conf.webhookCount < 10) {
-                const char* ipStr = ip.as<const char*>();
-                strlcpy(conf.webhookIPs[conf.webhookCount], ipStr, 16);
-                conf.webhookCount++;
+
+        bool changed = false;
+
+        // Compare count
+        if (webhookArray.size() != conf.webhookCount) {
+            changed = true;
+        } else {
+            // Compare entries
+            uint8_t i = 0;
+            for (JsonVariant ip : webhookArray) {
+                const char* ipStr = ip.as<const char*>() ? ip.as<const char*>() : "";
+                if (strcmp(conf.webhookIPs[i], ipStr) != 0) {
+                    changed = true;
+                    break;
+                }
+                i++;
             }
         }
-        modified = true;
+
+        if (changed) {
+            memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));
+            conf.webhookCount = 0;
+
+            for (JsonVariant ip : webhookArray) {
+                if (conf.webhookCount < 10) {
+                    const char* ipStr = ip.as<const char*>() ? ip.as<const char*>() : "";
+                    strlcpy(conf.webhookIPs[conf.webhookCount], ipStr, 16);
+                    conf.webhookCount++;
+                }
+            }
+            modified = true;
+        }
     }
-    if (source["name"] != conf.pilotName) {
-        strlcpy(conf.pilotName, source["name"] | "", sizeof(conf.pilotName));
-        modified = true;
+
+    if (source.containsKey("name")) {
+        const char* v = source["name"] | "";
+        if (strcmp(v, conf.pilotName) != 0) {
+            strlcpy(conf.pilotName, v, sizeof(conf.pilotName));
+            modified = true;
+        }
     }
     if (source.containsKey("pilotCallsign") && source["pilotCallsign"] != conf.pilotCallsign) {
         strlcpy(conf.pilotCallsign, source["pilotCallsign"] | "", sizeof(conf.pilotCallsign));
@@ -306,13 +344,19 @@ void Config::fromJson(JsonObject source) {
         strlcpy(conf.lapFormat, source["lapFormat"] | "full", sizeof(conf.lapFormat));
         modified = true;
     }
-    if (source["ssid"] != conf.ssid) {
-        strlcpy(conf.ssid, source["ssid"] | "", sizeof(conf.ssid));
-        modified = true;
+    if (source.containsKey("ssid")) {
+        const char* v = source["ssid"] | "";
+        if (strcmp(v, conf.ssid) != 0) {
+            strlcpy(conf.ssid, v, sizeof(conf.ssid));
+            modified = true;
+        }
     }
-    if (source["pwd"] != conf.password) {
-        strlcpy(conf.password, source["pwd"] | "", sizeof(conf.password));
-        modified = true;
+    if (source.containsKey("pwd")) {
+        const char* v = source["pwd"] | "";
+        if (strcmp(v, conf.password) != 0) {
+            strlcpy(conf.password, v, sizeof(conf.password));
+            modified = true;
+        }
     }
 }
 

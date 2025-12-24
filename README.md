@@ -67,6 +67,13 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Transport abstraction layer
 - Open source (MIT License)
 
+**Supported Bands:**
+- **A (Boscam A)** - 5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725
+- **B (Boscam B)** - 5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866
+- **E (Boscam E)** - 5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945
+- **F (Fatshark)** - 5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880
+- **R (RaceBand)** - 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
+- **L (LowBand)** -  5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621
 ---
 
 ## Quick Start
