@@ -6,8 +6,23 @@
 RaceHistory::RaceHistory() : storage(nullptr) {
 }
 
+bool RaceHistory::isPersistenceEnabled() const {
+    #ifdef PIN_SD_CS
+        return true;
+    #else
+        return false;
+    #endif
+}
+
 bool RaceHistory::init(Storage* storageBackend) {
     storage = storageBackend;
+
+    #ifndef PIN_SD_CS
+        // No SD support on this build: keep only the current race in RAM and do not persist to flash.
+        races.clear();
+        return true;
+    #endif
+
     if (!storage) {
         DEBUG("RaceHistory: Storage backend is null!\n");
         return false;
@@ -20,6 +35,14 @@ bool RaceHistory::init(Storage* storageBackend) {
 }
 
 bool RaceHistory::saveRace(const RaceSession& race) {
+    #ifndef PIN_SD_CS
+        // RAM-only mode: keep just the most recent race in memory.
+        races.clear();
+        races.push_back(race);
+        return true;
+    #endif
+    
+    
     // Generate filename from timestamp: DDMMYY-HrMinSec.json
     time_t timestamp = race.timestamp;
     struct tm timeinfo;
@@ -75,6 +98,12 @@ bool RaceHistory::saveRace(const RaceSession& race) {
 }
 
 bool RaceHistory::loadRaces() {
+    #ifndef PIN_SD_CS
+        // RAM-only mode: nothing to load from storage.
+        races.clear();
+        return true;
+    #endif
+    
     if (!storage) {
         DEBUG("RaceHistory: Storage backend is null!\n");
         return false;
@@ -147,6 +176,16 @@ bool RaceHistory::loadRaces() {
 }
 
 bool RaceHistory::deleteRace(uint32_t timestamp) {
+    #ifndef PIN_SD_CS
+        auto ramIt = std::find_if(races.begin(), races.end(),
+            [timestamp](const RaceSession& r) { return r.timestamp == timestamp; });
+        if (ramIt != races.end()) {
+            races.erase(ramIt);
+            return true;
+        }
+        return false;
+    #endif    
+    
     // Find and delete the file
     time_t ts = timestamp;
     struct tm timeinfo;
@@ -171,6 +210,21 @@ bool RaceHistory::deleteRace(uint32_t timestamp) {
 }
 
 bool RaceHistory::updateRace(uint32_t timestamp, const String& name, const String& tag, float totalDistance) {
+    #ifndef PIN_SD_CS
+        // RAM-only mode: update in-memory entry only.
+        for (auto& race : races) {
+            if (race.timestamp == timestamp) {
+                race.name = name;
+                race.tag = tag;
+                if (totalDistance >= 0.0f) {
+                    race.totalDistance = totalDistance;
+                }
+                return true;
+            }
+        }
+        return false;
+    #endif
+    
     // Update in-memory race
     RaceSession* targetRace = nullptr;
     for (auto& race : races) {
@@ -228,6 +282,18 @@ bool RaceHistory::updateRace(uint32_t timestamp, const String& name, const Strin
 }
 
 bool RaceHistory::updateLaps(uint32_t timestamp, const std::vector<uint32_t>& newLapTimes) {
+    #ifndef PIN_SD_CS
+        // RAM-only mode: update in-memory entry only.
+        for (auto& race : races) {
+            if (race.timestamp == timestamp) {
+                race.lapTimes = newLapTimes;
+                // (Optional) recompute fastest/median/best3 here if you want.
+                return true;
+            }
+        }
+        return false;
+    #endif
+    
     // Validate lap times
     if (newLapTimes.empty()) {
         DEBUG("Cannot update race with empty lap times\n");
@@ -318,6 +384,12 @@ bool RaceHistory::updateLaps(uint32_t timestamp, const std::vector<uint32_t>& ne
 }
 
 bool RaceHistory::clearAll() {
+    #ifndef PIN_SD_CS
+        // RAM-only mode: just clear memory.
+        races.clear();
+        return true;
+    #endif
+    
     // Delete all race files
     std::vector<String> files;
     if (storage->listDir(RACES_DIR, files)) {
@@ -337,6 +409,9 @@ String RaceHistory::toJsonString() {
     DynamicJsonDocument doc(32768);
     JsonArray racesArray = doc.createNestedArray("races");
     
+    doc["persistent"] = isPersistenceEnabled();
+    doc["storage"] = isPersistenceEnabled() ? "sd" : "ram";
+
     for (const auto& race : races) {
         JsonObject raceObj = racesArray.createNestedObject();
         raceObj["timestamp"] = race.timestamp;
@@ -377,6 +452,43 @@ bool RaceHistory::fromJsonString(const String& json) {
     // Import races from JSON array
     JsonArray racesArray = doc["races"];
     int importedCount = 0;
+
+    #ifndef PIN_SD_CS
+        // RAM-only mode: load just the first race into memory ("current race").
+        if (racesArray.isNull() || racesArray.size() == 0) {
+            races.clear();
+            return true;
+        }
+        {
+            JsonObject raceObj = racesArray[0];
+            RaceSession race;
+            race.timestamp = raceObj["timestamp"] | 0;
+            race.fastestLap = raceObj["fastestLap"] | 0;
+            race.medianLap = raceObj["medianLap"] | 0;
+            race.best3LapsTotal = raceObj["best3LapsTotal"] | 0;
+            race.name = (const char*)(raceObj["name"] | "");
+            race.tag = (const char*)(raceObj["tag"] | "");
+            race.pilotName = (const char*)(raceObj["pilotName"] | "");
+            race.pilotCallsign = (const char*)(raceObj["pilotCallsign"] | "");
+            race.frequency = raceObj["frequency"] | 0;
+            race.band = (const char*)(raceObj["band"] | "");
+            race.channel = raceObj["channel"] | 0;
+            race.trackId = raceObj["trackId"] | 0;
+            race.trackName = (const char*)(raceObj["trackName"] | "");
+            race.totalDistance = raceObj["totalDistance"] | 0.0f;
+
+            race.lapTimes.clear();
+            if (raceObj.containsKey("lapTimes")) {
+                for (JsonVariant lap : raceObj["lapTimes"].as<JsonArray>()) {
+                    race.lapTimes.push_back(lap.as<uint32_t>());
+                }
+            }
+
+            races.clear();
+            races.push_back(race);
+        }
+        return true;
+    #endif
     
     for (JsonObject raceObj : racesArray) {
         RaceSession race;

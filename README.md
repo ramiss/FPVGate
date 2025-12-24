@@ -1,6 +1,6 @@
 # FPVGate
 
-**Personal FPV Lap Timer for ESP32-S3**
+**Personal FPV Lap Timer for ESP32-C6 Hardware coming soon!**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32--S3-orange.svg)](https://platformio.org/)
@@ -30,11 +30,11 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 
 **Dual Connectivity**
 - WiFi Access Point (works with any device)
+- Configured to allow Wifi connection, and simultaneously allow your device to connect to cellular internet 
 - USB Serial CDC (zero-latency local connection)
 - Electron desktop app for Windows/Mac/Linux
 
 **Visual Feedback**
-- RGB LED indicators with 10 customizable presets (settings persist to EEPROM)
 - Real-time WiFi status display with connection monitoring
 - Real-time RSSI visualization
 - OSD overlay for live streaming (transparent, multi-monitor support)
@@ -50,26 +50,10 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Real-time lap tracking with gap analysis
 - Fastest lap highlighting
 - Fastest 3 consecutive laps (RaceGOW format)
-- Race history with export/import (cross-device SD card storage)
-- Race tagging and naming
+- Save your race history to your client device and re-import later
 - Marshalling mode for post-race lap editing (add/remove/edit laps)
 - Detailed race analysis view
-
-**Track Management**
-- Create and manage track profiles with metadata
-- Track distance tracking (real-time distance display)
-- Track images and custom notes
-- Total distance and distance remaining calculations
-- Track association with races
-- Up to 50 tracks stored on SD card
-
-**Smart Storage**
-- SD card support for audio files and race data
-- Individual race files with index for better performance
-- Auto-migration from flash to SD
-- Cross-device race history (accessible from all connected devices)
 - Config backup/restore
-- Multi-voice audio library (4 voice packs)
 
 **Webhooks & Integration**
 - HTTP webhook support for external LED controllers
@@ -89,84 +73,36 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 
 ### 1. Hardware You'll Need
 
-| Component | Required | Notes |
-|-----------|----------|-------|
-| **ESP32-S3-DevKitC-1** | Yes | Main controller |
-| **RX5808 Module** | Yes | 5.8GHz receiver ([SPI mod required](https://sheaivey.github.io/rx5808-pro-diversity/docs/rx5808-spi-mod.html)) |
-| **MicroSD Card** | Yes | FAT32, 1GB+ for audio storage |
-| **5V Power Supply** | Yes | 18650 battery + regulator |
-| **WS2812 RGB LEDs** | Optional | 1-2 LEDs for visual feedback |
-| **Active Buzzer** | Optional | 3.3V-5V for beeps |
-
-### 2. Basic Wiring
-
-```
-ESP32-S3        RX5808
-GPIO4    ────── RSSI
-GPIO10   ────── CH1 (DATA)
-GPIO11   ────── CH2 (SELECT)
-GPIO12   ────── CH3 (CLOCK)
-GND      ────── GND
-5V       ────── +5V
-```
-
-**[See complete wiring guide →](docs/HARDWARE_GUIDE.md)**
-
-### 3. Flash Firmware
-
-**Option A: Prebuilt Binaries (Recommended)**
-```bash
-# Download from releases page, then flash:
-esptool.py --chip esp32s3 --port COM3 write_flash -z \
-  0x0 bootloader.bin \
-  0x8000 partitions.bin \
-  0x10000 firmware.bin \
-  0x410000 littlefs.bin
-```
-
-**Option B: Build from Source**
-```bash
-git clone https://github.com/LouisHitchcock/FPVGate.git
-cd FPVGate
-pio run -e ESP32S3 -t upload
-pio run -e ESP32S3 -t uploadfs
-```
+Pre-made and flashed hardware link coming soon!
 
 **[Detailed setup guide →](docs/GETTING_STARTED.md)**
 
-### 4. Connect and Configure
+### 2. Connect and Configure
 
 **WiFi (Default):**
 1. Connect to `FPVGate_XXXX` network (password: `fpvgate1`)
-2. Open `http://www.fpvgate.xyz` or `http://192.168.4.1`
+2. Open `http://192.168.4.1` in your browser. 
 3. Go to Configuration → Set your VTx frequency
 4. Go to Calibration → Set RSSI thresholds
 5. Start racing!
 
-**USB (Electron App):**
+**USB (Electron App - and Android and Windows apps in development):**
 1. Download [Electron app from releases](https://github.com/LouisHitchcock/FPVGate/releases)
-2. Connect ESP32-S3 via USB
+2. Connect via USB
 3. Launch app and select COM port
 4. All features work identically to WiFi mode
 
 **[Complete user guide →](docs/USER_GUIDE.md)**
-
 ---
 
 ## Documentation
 
 **[Getting Started](docs/GETTING_STARTED.md)** - Hardware setup, wiring, flashing, initial config  
 **[User Guide](docs/USER_GUIDE.md)** - How to connect, calibrate, race, and use features  
-**[Hardware Guide](docs/HARDWARE_GUIDE.md)** - Components, wiring diagrams, troubleshooting  
-**[Features Guide](docs/FEATURES.md)** - In-depth feature documentation  
-**[Development Guide](docs/DEVELOPMENT.md)** - Building from source, contributing  
+**[Features Guide](docs/FEATURES.md)** - In-depth feature documentation   
 
 **Additional Docs:**
 - [Quick Start](QUICKSTART.md) - Fast track for experienced users
-- [Voice Generation](docs/VOICE_GENERATION_README.md) - Generate custom voices
-- [Multi-Voice Setup](docs/MULTI_VOICE_SETUP.md) - Configure multiple voices
-- [SD Card Migration](docs/SD_CARD_MIGRATION_GUIDE.md) - SD card setup
-- [Changelog](CHANGELOG.md) - Version history
 
 ---
 
@@ -194,14 +130,23 @@ Exit  ├/──────────\─
 
 ## Project Status
 
-**Current Version:** v1.4.1  
-**Platform:** ESP32-S3 (ESP32-C3 support legacy)  
+**Current Version:** v1.0.0 - forked and ported from LouisHitchcock FPVGate v1.4.0  
+**Platform:** Seeduino XIAO ESP32-C6
 **License:** MIT  
-**Status:** Stable - actively maintained
+**Status:** Stable Beta - actively maintained
 
 ### Recent Updates
 
-**v1.4.0 (Latest)**
+**v0.9.0 (Latest - Beta)**
+- Forked and ported to Seediuno ESP32-C6 for specific hardware available for purchase.
+- Removed Track Management and auto race saving because we don't use an SD Card.
+- Added the ability to export/import the current race in memory.
+- Cleanly hides the SDCard Tracks, VBat and LED functionality if those pins aren't defined.
+- Removed captive DNS so the mobile device simultaneously connects to the cellular network at the same time.
+- Fixed a bug where we were stuck on RaceBand Ch 1.
+- 
+
+**v1.4.0 (forked from LouisHitchcock)**
 - Track Management System - Create, edit, and manage track profiles with images
 - Distance Tracking - Real-time distance display and statistics
 - Webhook System - HTTP webhooks for external LED controller integration

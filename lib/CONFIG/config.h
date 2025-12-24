@@ -60,7 +60,7 @@
 // FPV Scanner Hardware (XIAO ESP32C6)
 #elif defined(APP_BOARD_XIAO_C6)
 
-#define PIN_LED LED_BUILTIN
+//#define PIN_LED LED_BUILTIN
 //#define PIN_VBAT 35
 //#define VBAT_SCALE 2
 //#define VBAT_ADD 2
@@ -71,6 +71,11 @@
 //#define PIN_BUZZER 27
 //#define BUZZER_INVERTED false
 //#define PIN_MODE_SWITCH 33   // Mode selection: LOW=WiFi, HIGH=RotorHazard
+// SD Card SPI pins (tested and working configuration)
+//#define PIN_SD_CS 39
+//#define PIN_SD_SCK 36
+//#define PIN_SD_MOSI 35
+//#define PIN_SD_MISO 37
 
 //ESP32
 #else

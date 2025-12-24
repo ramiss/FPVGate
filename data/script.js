@@ -97,6 +97,9 @@ async function initializeTransport() {
   console.log('[Init] USB available:', hasUSB, 'Mode:', currentConnectionMode);
   console.log('[Init] electronAPI:', typeof window.electronAPI);
   
+  // run this to force the banner on the Race tab if no SD Card exists.
+  loadRaceHistory();
+
   if (!hasUSB || currentConnectionMode === 'wifi') {
     // WiFi-only mode
     console.log('[Init] Initializing WiFi-only mode');
@@ -389,14 +392,30 @@ async function selectComPort() {
 onload = async function (e) {
   // Load dark mode preference
   loadDarkMode();
-  
+
   config.style.display = "none";
   race.style.display = "block";
   calib.style.display = "none";
-  
+
   // Initialize transport (USB/WiFi)
   await initializeTransport();
-  
+
+  // IMPORTANT: Load race history immediately so the Race tab banner + History tab label
+  // can reflect SD vs RAM-only mode on first landing.
+  try {
+    // If loadRaceHistory already uses transportFetch internally, this will work in USB + WiFi.
+    // If it still uses fetch('/races'), update loadRaceHistory accordingly (we discussed earlier).
+    await loadRaceHistory();
+
+    // Some codebases only call applyRaceHistoryModeUI inside renderRaceHistory()
+    // so call it here too (harmless if redundant).
+    if (typeof applyRaceHistoryModeUI === 'function') {
+      applyRaceHistoryModeUI();
+    }
+  } catch (err) {
+    console.error('[Script] Failed to load race history on startup:', err);
+  }
+
   // Fetch config using appropriate transport
   let configData;
   try {
@@ -407,156 +426,224 @@ onload = async function (e) {
       configData = await response.json();
     }
     console.log(configData);
+    ledConnected = (configData.hasLed !== undefined) ? !!configData.hasLed : false;
+    applyRaceHistoryModeUI(); // this will call setLEDSettingsVisible(ledConnected)
   } catch (err) {
     console.error('[Script] Failed to fetch config:', err);
     // Set defaults if config fetch fails
     configData = {};
   }
+
   {
-      if (configData.freq !== undefined) setBandChannelIndex(configData.freq);
-      if (configData.minLap !== undefined) {
-        minLapInput.value = (parseFloat(configData.minLap) / 10).toFixed(1);
-        updateMinLap(minLapInput, minLapInput.value);
+    if (configData.freq !== undefined) setBandChannelIndex(configData.freq);
+
+    if (configData.minLap !== undefined) {
+      minLapInput.value = (parseFloat(configData.minLap) / 10).toFixed(1);
+      updateMinLap(minLapInput, minLapInput.value);
+    }
+
+    if (configData.alarm !== undefined) {
+      alarmThreshold.value = (parseFloat(configData.alarm) / 10).toFixed(1);
+      updateAlarmThreshold(alarmThreshold, alarmThreshold.value);
+    }
+
+    if (configData.anType !== undefined) announcerSelect.selectedIndex = configData.anType;
+
+    if (configData.anRate !== undefined) {
+      announcerRateInput.value = (parseFloat(configData.anRate) / 10).toFixed(1);
+      updateAnnouncerRate(announcerRateInput, announcerRateInput.value);
+    }
+
+    if (configData.enterRssi !== undefined) {
+      enterRssiInput.value = configData.enterRssi;
+      updateEnterRssi(enterRssiInput, enterRssiInput.value);
+    }
+
+    if (configData.exitRssi !== undefined) {
+      exitRssiInput.value = configData.exitRssi;
+      updateExitRssi(exitRssiInput, exitRssiInput.value);
+    }
+
+    if (configData.name !== undefined) pilotNameInput.value = configData.name;
+    if (configData.ssid !== undefined) ssidInput.value = configData.ssid;
+    if (configData.pwd !== undefined) pwdInput.value = configData.pwd;
+
+    maxLapsInput.value = (configData.maxLaps !== undefined) ? configData.maxLaps : 0;
+    updateMaxLaps(maxLapsInput, maxLapsInput.value);
+
+    // Load pilot callsign, phonetic name, and color from device config
+    const callsignInput = document.getElementById('pcallsign');
+    const phoneticInput = document.getElementById('pphonetic');
+    const colorInput = document.getElementById('pilotColor');
+
+    if (callsignInput && configData.pilotCallsign !== undefined) {
+      callsignInput.value = configData.pilotCallsign;
+    }
+    if (phoneticInput && configData.pilotPhonetic !== undefined) {
+      phoneticInput.value = configData.pilotPhonetic;
+    }
+    if (colorInput && configData.pilotColor !== undefined) {
+      const hexColor = '#' + ('000000' + configData.pilotColor.toString(16)).slice(-6).toUpperCase();
+      colorInput.value = hexColor;
+      updateColorPreview();
+    }
+
+    populateFreqOutput();
+
+    stopRaceButton.disabled = true;
+    startRaceButton.disabled = false;
+    addLapButton.disabled = true;
+
+    clearInterval(timerInterval);
+    timer.innerHTML = "00:00:00s";
+    clearLaps();
+
+    createRssiChart();
+
+    // Auto-enable voice on load
+    enableAudioLoop();
+
+    // Setup pilot color preview
+    const colorSelect = document.getElementById('pilotColor');
+    if (colorSelect) {
+      colorSelect.addEventListener('change', updateColorPreview);
+      updateColorPreview();
+    }
+
+    // Load lap format and voice selection from device config
+    lapFormat = configData.lapFormat || 'full';
+    selectedVoice = configData.selectedVoice || 'default';
+
+    const lapFormatSelect = document.getElementById('lapFormatSelect');
+    const voiceSelect = document.getElementById('voiceSelect');
+    if (lapFormatSelect) lapFormatSelect.value = lapFormat;
+    if (voiceSelect) voiceSelect.value = selectedVoice;
+
+    // Load and apply theme from device config
+    if (configData.theme) {
+      const savedTheme = configData.theme;
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      const themeSelect = document.getElementById('themeSelect');
+      if (themeSelect) themeSelect.value = savedTheme;
+    }
+
+    // Load LED settings from config (if available)
+    const ledPresetSelect = document.getElementById('ledPreset');
+    const ledBrightnessInput = document.getElementById('ledBrightness');
+    const ledColorInput = document.getElementById('ledColor');
+    const ledManualOverrideToggle = document.getElementById('ledManualOverride');
+    const customColorSection = document.getElementById('customColorSection');
+
+    // Load ledPreset from backend config
+    if (configData.ledPreset !== undefined && ledPresetSelect) {
+      ledPresetSelect.value = configData.ledPreset;
+    }
+
+    if (configData.ledBrightness !== undefined && ledBrightnessInput) {
+      ledBrightnessInput.value = configData.ledBrightness;
+      updateLedBrightness(ledBrightnessInput, configData.ledBrightness);
+    }
+
+    if (configData.ledColor !== undefined && ledColorInput) {
+      // Convert color integer to hex string
+      const hexColor = '#' + ('000000' + configData.ledColor.toString(16)).slice(-6).toUpperCase();
+      ledColorInput.value = hexColor;
+    }
+
+    // Initialize LED preset UI on page load (UI only, no command sent)
+    if (ledPresetSelect) {
+      updateLedPresetUI();
+    }
+
+    // Load Gate LED settings from config
+    const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
+    const webhookRaceStartToggle = document.getElementById('webhookRaceStart');
+    const webhookRaceStopToggle = document.getElementById('webhookRaceStop');
+    const webhookLapToggle = document.getElementById('webhookLap');
+    const gateLEDOptions = document.getElementById('gateLEDOptions');
+
+    if (gateLEDsEnabledToggle && configData.gateLEDsEnabled !== undefined) {
+      gateLEDsEnabledToggle.checked = configData.gateLEDsEnabled === 1;
+      if (gateLEDOptions) {
+        gateLEDOptions.style.display = configData.gateLEDsEnabled === 1 ? 'block' : 'none';
       }
-      if (configData.alarm !== undefined) {
-        alarmThreshold.value = (parseFloat(configData.alarm) / 10).toFixed(1);
-        updateAlarmThreshold(alarmThreshold, alarmThreshold.value);
+    }
+
+    if (webhookRaceStartToggle && configData.webhookRaceStart !== undefined) {
+      webhookRaceStartToggle.checked = configData.webhookRaceStart === 1;
+    }
+
+    if (webhookRaceStopToggle && configData.webhookRaceStop !== undefined) {
+      webhookRaceStopToggle.checked = configData.webhookRaceStop === 1;
+    }
+
+    if (webhookLapToggle && configData.webhookLap !== undefined) {
+      webhookLapToggle.checked = configData.webhookLap === 1;
+    }
+
+    // Battery monitoring capability (hardware dependent)
+    const batterySection = document.getElementById('batteryMonitoringSection');
+    const batteryToggle = document.getElementById('batteryMonitorToggle');
+    const batteryNote = document.getElementById('batteryMonitoringUnavailableNote');
+
+    // Default to true for older firmware that doesn't provide hasVbat yet
+    const hasVbat = (configData.hasVbat !== undefined) ? !!configData.hasVbat : true;
+
+    if (!hasVbat) {
+      if (batterySection) batterySection.style.display = 'none';
+      if (batteryNote) batteryNote.style.display = 'block';
+      if (batteryToggle) {
+        batteryToggle.checked = false;
+        batteryToggle.disabled = true;
       }
-      if (configData.anType !== undefined) announcerSelect.selectedIndex = configData.anType;
-      if (configData.anRate !== undefined) {
-        announcerRateInput.value = (parseFloat(configData.anRate) / 10).toFixed(1);
-        updateAnnouncerRate(announcerRateInput, announcerRateInput.value);
-      }
-      if (configData.enterRssi !== undefined) {
-        enterRssiInput.value = configData.enterRssi;
-        updateEnterRssi(enterRssiInput, enterRssiInput.value);
-      }
-      if (configData.exitRssi !== undefined) {
-        exitRssiInput.value = configData.exitRssi;
-        updateExitRssi(exitRssiInput, exitRssiInput.value);
-      }
-      if (configData.name !== undefined) pilotNameInput.value = configData.name;
-      if (configData.ssid !== undefined) ssidInput.value = configData.ssid;
-      if (configData.pwd !== undefined) pwdInput.value = configData.pwd;
-      maxLapsInput.value = (configData.maxLaps !== undefined) ? configData.maxLaps : 0;
-      updateMaxLaps(maxLapsInput, maxLapsInput.value);
-      
-      // Load pilot callsign, phonetic name, and color from device config
-      const callsignInput = document.getElementById('pcallsign');
-      const phoneticInput = document.getElementById('pphonetic');
-      const colorInput = document.getElementById('pilotColor');
-      if (callsignInput && configData.pilotCallsign !== undefined) {
-        callsignInput.value = configData.pilotCallsign;
-      }
-      if (phoneticInput && configData.pilotPhonetic !== undefined) {
-        phoneticInput.value = configData.pilotPhonetic;
-      }
-      if (colorInput && configData.pilotColor !== undefined) {
-        const hexColor = '#' + ('000000' + configData.pilotColor.toString(16)).slice(-6).toUpperCase();
-        colorInput.value = hexColor;
-        updateColorPreview();
-      }
-      populateFreqOutput();
-      stopRaceButton.disabled = true;
-      startRaceButton.disabled = false;
-      addLapButton.disabled = true;
-      clearInterval(timerInterval);
-      timer.innerHTML = "00:00:00s";
-      clearLaps();
-      createRssiChart();
-      // Auto-enable voice on load
-      enableAudioLoop();
-      // Setup pilot color preview
-      const colorSelect = document.getElementById('pilotColor');
-      if (colorSelect) {
-        colorSelect.addEventListener('change', updateColorPreview);
-        updateColorPreview();
-      }
-      
-      // Load lap format and voice selection from device config
-      lapFormat = configData.lapFormat || 'full';
-      selectedVoice = configData.selectedVoice || 'default';
-      const lapFormatSelect = document.getElementById('lapFormatSelect');
-      const voiceSelect = document.getElementById('voiceSelect');
-      if (lapFormatSelect) lapFormatSelect.value = lapFormat;
-      if (voiceSelect) voiceSelect.value = selectedVoice;
-      
-      // Load and apply theme from device config
-      if (configData.theme) {
-        const savedTheme = configData.theme;
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        const themeSelect = document.getElementById('themeSelect');
-        if (themeSelect) themeSelect.value = savedTheme;
-      }
-      
-      // Load LED settings from config (if available)
-      const ledPresetSelect = document.getElementById('ledPreset');
-      const ledBrightnessInput = document.getElementById('ledBrightness');
-      const ledColorInput = document.getElementById('ledColor');
-      const ledManualOverrideToggle = document.getElementById('ledManualOverride');
-      const customColorSection = document.getElementById('customColorSection');
-      
-      // Load ledPreset from backend config
-      if (configData.ledPreset !== undefined && ledPresetSelect) {
-        ledPresetSelect.value = configData.ledPreset;
-      }
-      
-      if (configData.ledBrightness !== undefined && ledBrightnessInput) {
-        ledBrightnessInput.value = configData.ledBrightness;
-        updateLedBrightness(ledBrightnessInput, configData.ledBrightness);
-      }
-      
-      if (configData.ledColor !== undefined && ledColorInput) {
-        // Convert color integer to hex string
-        const hexColor = '#' + ('000000' + configData.ledColor.toString(16)).slice(-6).toUpperCase();
-        ledColorInput.value = hexColor;
-      }
-      
-      // Initialize LED preset UI on page load (UI only, no command sent)
-      if (ledPresetSelect) {
-        updateLedPresetUI();
-      }
-      
-      // Load Gate LED settings from config
-      const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
-      const webhookRaceStartToggle = document.getElementById('webhookRaceStart');
-      const webhookRaceStopToggle = document.getElementById('webhookRaceStop');
-      const webhookLapToggle = document.getElementById('webhookLap');
-      const gateLEDOptions = document.getElementById('gateLEDOptions');
-      
-      if (gateLEDsEnabledToggle && configData.gateLEDsEnabled !== undefined) {
-        gateLEDsEnabledToggle.checked = configData.gateLEDsEnabled === 1;
-        if (gateLEDOptions) {
-          gateLEDOptions.style.display = configData.gateLEDsEnabled === 1 ? 'block' : 'none';
-        }
-      }
-      
-      if (webhookRaceStartToggle && configData.webhookRaceStart !== undefined) {
-        webhookRaceStartToggle.checked = configData.webhookRaceStart === 1;
-      }
-      
-      if (webhookRaceStopToggle && configData.webhookRaceStop !== undefined) {
-        webhookRaceStopToggle.checked = configData.webhookRaceStop === 1;
-      }
-      
-      if (webhookLapToggle && configData.webhookLap !== undefined) {
-        webhookLapToggle.checked = configData.webhookLap === 1;
-      }
-      
-      // Initialize battery monitoring UI on page load (default is disabled)
-      const batterySection = document.getElementById('batteryMonitoringSection');
-      const batteryToggle = document.getElementById('batteryMonitorToggle');
+    } else {
+      if (batteryNote) batteryNote.style.display = 'none';
+      if (batteryToggle) batteryToggle.disabled = false;
       if (batterySection && batteryToggle) {
         batterySection.style.display = batteryToggle.checked ? 'block' : 'none';
       }
-      
-      // Load RSSI sensitivity setting
-      const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
-      if (rssiSensitivitySelect && configData.rssiSens !== undefined) {
-        rssiSensitivitySelect.value = configData.rssiSens;
-      }
+    }
+
+    // Load RSSI sensitivity setting
+    const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
+    if (rssiSensitivitySelect && configData.rssiSens !== undefined) {
+      rssiSensitivitySelect.value = configData.rssiSens;
+    }
   }
 };
+
+function setTrackDataSettingsVisible(visible) {
+  const navItems = document.querySelectorAll('.settings-nav-item');
+
+  navItems.forEach(item => {
+    const onclick = item.getAttribute('onclick') || '';
+    if (onclick.includes("switchSettingsSection('tracks')")) {
+      item.style.display = visible ? '' : 'none';
+    }
+  });
+
+  // If Track Data is currently selected and we hide it, switch away
+  if (!visible && typeof switchSettingsSection === 'function') {
+    switchSettingsSection('system');
+  }
+}
+
+function setLEDSettingsVisible(visible) {
+  const navItems = document.querySelectorAll('.settings-nav-item');
+
+  navItems.forEach(item => {
+    const onclick = item.getAttribute('onclick') || '';
+    if (onclick.includes("switchSettingsSection('led')")) {
+      item.style.display = visible ? '' : 'none';
+    }
+  });
+
+  // If LED is currently selected and we hide it, switch away
+  if (!visible && typeof switchSettingsSection === 'function') {
+    switchSettingsSection('system');
+  }
+}
+
 
 async function getBatteryVoltage() {
   try {
@@ -1866,6 +1953,8 @@ function createBarItemWithColor(label, time, maxTime, displayTime, colorIndex) {
 
 // Race History Functions
 let raceHistoryData = [];
+let raceHistoryPersistent = true; // false when SD-less RAM-only mode
+let ledConnected = false;
 let currentDetailRace = null;
 
 function saveCurrentRace() {
@@ -1932,14 +2021,81 @@ function saveCurrentRace() {
   .catch(error => console.error('Error saving race:', error));
 }
 
-function loadRaceHistory() {
-  fetch('/races')
-    .then(response => response.json())
-    .then(data => {
-      raceHistoryData = data.races || [];
-      renderRaceHistory();
-    })
-    .catch(error => console.error('Error loading races:', error));
+function setButtonLabel(el, label) {
+  if (!el) return;
+  // <button> uses textContent; <input type="button|submit"> uses value
+  if ('value' in el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+    el.value = label;
+  }
+  el.textContent = label; // safe for <button>
+  el.setAttribute('aria-label', label);
+}
+
+function applyRaceHistoryModeUI() {
+  const downloadBtn = document.getElementById('downloadRacesBtn');
+  const importBtn = document.getElementById('importRacesBtn');
+  const clearBtn = document.getElementById('clearAllRacesBtn');
+
+  const storageLabel = document.getElementById('raceHistoryStorageLabel');
+  const raceTabBanner = document.getElementById('raceTabDownloadReminder');
+
+  setTrackDataSettingsVisible(raceHistoryPersistent);
+  setLEDSettingsVisible(ledConnected);
+
+  setButtonLabel(
+    importBtn,
+    raceHistoryPersistent ? 'Import Races' : 'Import Race (overrides current data)'
+  );
+
+  setButtonLabel(
+    downloadBtn,
+    raceHistoryPersistent ? 'Download Races' : 'Download Current Race'
+  );
+
+  if (clearBtn) {
+    clearBtn.style.display = raceHistoryPersistent ? '' : 'none';
+  }
+
+  if (storageLabel) {
+    if (raceHistoryPersistent) {
+      storageLabel.textContent = 'Storage: SD card (race history is saved on the device).';
+      storageLabel.style.opacity = '0.9';
+    } else {
+      storageLabel.textContent = 'Storage: RAM-only (no SD). Race history is NOT saved on the device.';
+      storageLabel.style.opacity = '1.0';
+    }
+  }
+
+  if (raceTabBanner) {
+    if (raceHistoryPersistent) {
+      raceTabBanner.style.display = 'none';
+    } else {
+      raceTabBanner.style.display = '';
+      raceTabBanner.style.border = '1px solid rgba(255, 200, 0, 0.6)';
+      raceTabBanner.style.background = 'rgba(255, 200, 0, 0.12)';
+    }
+  }
+}
+
+
+
+async function loadRaceHistory() {
+  try {
+    // IMPORTANT: use transportFetch so USB mode works too
+    const data = await transportFetch('/races', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    raceHistoryData = data.races || [];
+    raceHistoryPersistent = (data.persistent !== false);
+
+    
+    applyRaceHistoryModeUI();
+    renderRaceHistory();
+  } catch (error) {
+    console.error('Error loading races:', error);
+  }
 }
 
 function renderRaceHistory() {
@@ -1969,9 +2125,9 @@ function renderRaceHistory() {
     html += `
       <div class="race-item" data-race-index="${index}" onclick="viewRaceDetails(${index})">
         <div class="race-item-buttons">
-          <button class="race-item-button" onclick="event.stopPropagation(); openEditModal(${index})">Edit</button>
+          ${raceHistoryPersistent ? `<button class="race-item-button" onclick="event.stopPropagation(); openEditModal(${index})">Edit</button>` : ''}
           <button class="race-item-button" onclick="event.stopPropagation(); downloadSingleRace(${race.timestamp})">Download</button>
-          <button class="race-item-button" style="border-color: #e74c3c; color: #e74c3c;" onclick="event.stopPropagation(); deleteRace(${race.timestamp})">Delete</button>
+          ${raceHistoryPersistent ? `<button class="race-item-button" style="border-color: #e74c3c; color: #e74c3c;" onclick="event.stopPropagation(); deleteRace(${race.timestamp})">Delete</button>` : ''}
         </div>
         <div class="race-item-header">
           <div>

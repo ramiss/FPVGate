@@ -108,6 +108,19 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["lapFormat"] = conf.lapFormat;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
+    
+    #ifdef PIN_VBAT
+        config["hasVbat"] = true;
+    #else
+        config["hasVbat"] = false;
+    #endif
+
+    #ifdef PIN_LED
+        config["hasLed"] = true;
+    #else
+        config["hasLed"] = false;
+    #endif
+
     serializeJson(config, destination);
 }
 
@@ -135,7 +148,20 @@ void Config::toJsonString(char* buf) {
     config["name"] = conf.pilotName;
     config["ssid"] = conf.ssid;
     config["pwd"] = conf.password;
-    serializeJsonPretty(config, buf, 256);
+
+    #ifdef PIN_VBAT
+        config["hasVbat"] = true;
+    #else
+        config["hasVbat"] = false;
+    #endif
+
+    #ifdef PIN_LED
+        config["hasLed"] = true;
+    #else
+        config["hasLed"] = false;
+    #endif
+
+    serializeJsonPretty(config, buf, 312);
 }
 
 void Config::fromJson(JsonObject source) {

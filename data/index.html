@@ -27,6 +27,9 @@
           </div>
         </div>
       </nav>
+      <div id="raceTabDownloadReminder" class="banner-warning" style="display:none; margin: 10px 0; padding: 2px; border-radius: 8px;">
+          Download the race before unplugging power if you want to save it.
+      </div>
       <ul class="nav-links">
         <li><a id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
         <li><a id="nav-link-history" class="tablinks" onclick="openTab(event, 'history')">Race History</a></li>
@@ -97,11 +100,12 @@
 
       <div id="history" class="tabcontent">
         <h2>Race History</h2>
+        <!--<div id="raceHistoryStorageLabel" class="info-label" style="margin: 8px 0; font-size: 0.95em;"></div>-->
         <div class="history-controls">
-          <button onclick="downloadRaces()">Download Races</button>
-          <button onclick="document.getElementById('importFile').click()">Import Races</button>
+          <button id="downloadRacesBtn" onclick="downloadRaces()">Download Races</button>
+          <button id="importRacesBtn" onclick="document.getElementById('importFile').click()">Import Races</button>
           <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importRaces(this)" />
-          <button onclick="clearAllRaces()" class="danger-button">Clear All</button>
+          <button id="clearAllRacesBtn" onclick="clearAllRaces()" class="danger-button">Clear All</button>
         </div>
         <div id="raceHistoryList" class="history-list">
           <p class="no-data">No races saved yet</p>
@@ -375,16 +379,16 @@
               <div class="config-item">
                 <label for="voiceSelect">Voice:</label>
                 <select id="voiceSelect" onchange="saveVoiceSelection()">
-                  <option value="default" selected>ElevenLabs (Sarah - Energetic)</option>
+                  <!--<option value="default" selected>ElevenLabs (Sarah - Energetic)</option>
                   <option value="rachel">ElevenLabs (Rachel - Calm)</option>
                   <option value="adam">ElevenLabs (Adam - Deep Male)</option>
-                  <option value="antoni">ElevenLabs (Antoni - Male)</option>
-                  <option value="piper">PiperTTS (Lower Latency)</option>
+                  <option value="antoni">ElevenLabs (Antoni - Male)</option>-->
+                  <option value="piper" selected>PiperTTS (Lower Latency)</option>
                 </select>
               </div>
-              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+              <!--<div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
                 Note: ElevenLabs voices require pre-generated audio files
-              </div>
+              </div>-->
 
               <div class="config-item">
                 <label for="rate">Announcer Rate:</label>
@@ -407,7 +411,6 @@
             <!-- Pilot Section -->
             <div id="settings-pilot" class="settings-section">
               <h2>Pilot Info</h2>
-              
               <div id="bandChannelFreq">
                 <div class="config-item">
                   <label for="bandSelect">Band:</label>
@@ -420,7 +423,7 @@
                     <option value="L">L</option>
                   </select>
                 </div>
-
+                
                 <div class="config-item">
                   <label for="channelSelect">Channel:</label>
                   <select id="channelSelect">
@@ -439,6 +442,9 @@
                   <span id="freqOutput"></span>
                 </div>
               </div>
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left:0px; margin-top: -12px; margin-bottom: 10px;">
+                  Wait approx. 30 seconds after changing band/channel for frequency to update
+              </div>
 
               <div class="config-item">
                 <label for="pname">Pilot Name:</label>
@@ -454,7 +460,7 @@
                 <label for="pphonetic">Phonetic Name:</label>
                 <input type="text" id="pphonetic" maxlength="30" placeholder="How TTS pronounces your name" />
               </div>
-              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
+              <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -12px; margin-bottom: 10px;">
                 Tip: Use phonetic spelling (e.g., "Louie" instead of "Louis")
               </div>
 
@@ -755,8 +761,10 @@
             <!-- System Section -->
             <div id="settings-system" class="settings-section">
               <h2>System Settings</h2>
-              
               <h3 style="margin-top: 0;">Battery Monitoring</h3>
+              <div id="batteryMonitoringUnavailableNote" style="display:none; margin-top:8px; opacity:0.85;">
+                Battery monitoring is not available on this hardware build.
+              </div>
               <div class="config-item">
                 <label for="batteryMonitorToggle">Battery Monitoring:</label>
                 <div style="flex: 1;">

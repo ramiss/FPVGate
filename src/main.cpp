@@ -157,7 +157,9 @@ void setup() {
 #ifdef PIN_BUZZER
     buzzer.init(PIN_BUZZER, BUZZER_INVERTED);
 #endif
+#ifdef PIN_LED
     led.init(PIN_LED, false);
+#endif
 #ifdef ESP32S3
     rgbLed.init();
     // Apply saved LED configuration from config

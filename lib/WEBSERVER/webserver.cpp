@@ -5,6 +5,11 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <esp_wifi.h>
+extern "C" {
+  #include "lwip/dhcp.h"
+  #include "lwip/netif.h"
+}
+#include "esp_netif.h"
 
 #include "debug.h"
 
@@ -13,6 +18,8 @@
 extern RgbLed* g_rgbLed;
 #include <SD.h>
 #endif
+
+static bool captiveDnsEnabled = false; // default OFF to preserve Android cellular internet
 
 // Global storage pointer for static functions
 static Storage* g_storage = nullptr;
@@ -48,7 +55,11 @@ void Webserver::init(Config *config, LapTimer *lapTimer, BatteryMonitor *batMoni
     webhooks = webhookMgr;
     transportMgr = nullptr;
 
-    wifi_ap_ssid = String(wifi_ap_ssid_prefix) + "_" + WiFi.macAddress().substring(WiFi.macAddress().length() - 6);
+    uint64_t mac = ESP.getEfuseMac();  // unique, always valid
+    char macStr[7];
+    snprintf(macStr, sizeof(macStr), "%06llX", mac & 0xFFFFFF);
+    wifi_ap_ssid = String(wifi_ap_ssid_prefix) + "_" + macStr;
+
     wifi_ap_ssid.replace(":", "");
     DEBUG("WiFi AP SSID configured: %s\n", wifi_ap_ssid.c_str());
 
@@ -181,7 +192,10 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
                 // Reduce TX power specifically for AP mode (already set globally but ensure it's applied)
                 WiFi.setTxPower(WIFI_POWER_11dBm);
                 
-                WiFi.softAPConfig(ipAddress, ipAddress, netMsk);
+                //WiFi.softAPConfig(ipAddress, ipAddress, netMsk);
+                // Advertise NO default gateway. Helps Android keep cellular data for internet.
+                WiFi.softAPConfig(ipAddress, IPAddress(0, 0, 0, 0), netMsk);
+
                 DEBUG("Starting WiFi AP: %s with password: %s\n", wifi_ap_ssid.c_str(), wifi_ap_password);
                 
                 // Start AP with max 4 connections to limit power draw
@@ -213,7 +227,7 @@ void Webserver::handleWebUpdate(uint32_t currentTimeMs) {
         changeMode = WIFI_OFF;
     }
 
-    if (servicesStarted) {
+    if (servicesStarted && captiveDnsEnabled) {
         dnsServer.processNextRequest();
     }
 }
@@ -1404,8 +1418,12 @@ EEPROM:\n\
 
     server.begin();
 
-    dnsServer.start(DNS_PORT, "*", ipAddress);
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+    if (captiveDnsEnabled) {
+        dnsServer.start(DNS_PORT, "*", ipAddress);
+        dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+    } else {
+        DEBUG("[DNS] Captive DNS disabled (use http://192.168.4.1)\n");
+    }
 
     startMDNS();
 

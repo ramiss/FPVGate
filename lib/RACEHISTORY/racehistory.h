@@ -41,6 +41,7 @@ class RaceHistory {
     bool fromJsonString(const String& json);
     const std::vector<RaceSession>& getRaces() const { return races; }
     size_t getRaceCount() const { return races.size(); }
+    bool isPersistenceEnabled() const;
 
    private:
     std::vector<RaceSession> races;
