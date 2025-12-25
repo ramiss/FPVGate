@@ -2,7 +2,7 @@
 
 Complete guide to using all features of your FPVGate lap timer.
 
-** Navigation:** [Home](../README.md) | [Getting Started](GETTING_STARTED.md) | [Hardware Guide](HARDWARE_GUIDE.md) | [Features](FEATURES.md)
+** Navigation:** [Home](../README.md) | [Getting Started](GETTING_STARTED.md) | [Features](FEATURES.md)
 
 ---
 
@@ -424,11 +424,11 @@ FPVGate detects laps by monitoring RSSI (signal strength) changes:
 
 ** Good Calibration:**
 ```
-RSSI  ¦     /\
-      ¦    /  \
-      ¦   /    \     ? Single clean peak
+RSSI  ï¿½     /\
+      ï¿½    /  \
+      ï¿½   /    \     ? Single clean peak
 Enter +--/------\---
-      ¦ /        \
+      ï¿½ /        \
 Exit  +/----------\-
       +--------------- Time
 Result: 1 lap counted 
@@ -436,10 +436,10 @@ Result: 1 lap counted
 
 ** Bad Calibration (Thresholds too low):**
 ```
-RSSI  ¦   /\/\        ? Multiple peaks!
-      ¦  /    \
+RSSI  ï¿½   /\/\        ? Multiple peaks!
+      ï¿½  /    \
 Enter +-/------\---
-      ¦/        \
+      ï¿½/        \
 Exit  /----------\-
       +--------------- Time
 Result: 3 laps counted 

@@ -172,6 +172,169 @@ void Config::toJsonString(char* buf) {
 }
 
 void Config::fromJson(JsonObject source) {
+    // Helpers to avoid "missing key reads as 0/empty" and to prevent false modified=true.
+    auto setU8 = [&](const char* key, uint8_t& dst, uint8_t minV, uint8_t maxV) {
+        if (!source.containsKey(key)) return;
+        int v = source[key].as<int>();
+        if (v < (int)minV) v = minV;
+        if (v > (int)maxV) v = maxV;
+        uint8_t nv = (uint8_t)v;
+        if (dst != nv) { dst = nv; modified = true; }
+    };
+
+    auto setU16 = [&](const char* key, uint16_t& dst, uint16_t minV, uint16_t maxV) {
+        if (!source.containsKey(key)) return;
+        int v = source[key].as<int>();
+        if (v < (int)minV) v = minV;
+        if (v > (int)maxV) v = maxV;
+        uint16_t nv = (uint16_t)v;
+        if (dst != nv) { dst = nv; modified = true; }
+    };
+
+    auto setU32 = [&](const char* key, uint32_t& dst) {
+        if (!source.containsKey(key)) return;
+        uint32_t nv = source[key].as<uint32_t>();
+        if (dst != nv) { dst = nv; modified = true; }
+    };
+
+    auto setBool01 = [&](const char* key, uint8_t& dst) {
+        if (!source.containsKey(key)) return;
+        int v = source[key].as<int>();
+        uint8_t nv = (v != 0) ? 1 : 0;
+        if (dst != nv) { dst = nv; modified = true; }
+    };
+
+    auto setStr = [&](const char* key, char* dst, size_t dstSize) {
+        if (!source.containsKey(key)) return;
+        const char* v = source[key] | "";
+        if (strcmp(v, dst) != 0) {
+            strlcpy(dst, v, dstSize);
+            modified = true;
+        }
+    };
+
+    // ===== Core timing / RF =====
+    // Frequency (MHz). Allow 0 only if you really use it; otherwise clamp to plausible band.
+    if (source.containsKey("freq")) {
+        int f = source["freq"].as<int>();
+        if (f < 0) f = 0;
+        if (f > 7000) f = 7000;
+        uint16_t nf = (uint16_t)f;
+        if (conf.frequency != nf) { conf.frequency = nf; modified = true; }
+    }
+
+    // Units: stored x10 (0.1s steps) per your UI, but kept as uint8
+    setU8("minLap",   conf.minLap,        0, 255);
+    setU8("alarm",    conf.alarm,         0, 255);
+
+    // Announcer
+    setU8("anType",   conf.announcerType, 0, 20);
+
+    // IMPORTANT: rate is x10 (0.1–2.0 => 1–20); default 10
+    if (source.containsKey("anRate")) {
+        int r = source["anRate"].as<int>();
+        if (r < 1) r = 10;     // fall back to default 1.0 if invalid
+        if (r > 20) r = 20;
+        uint8_t nr = (uint8_t)r;
+        if (conf.announcerRate != nr) { conf.announcerRate = nr; modified = true; }
+    }
+
+    // RSSI + race settings
+    setU8("enterRssi", conf.enterRssi,    0, 255);
+    setU8("exitRssi",  conf.exitRssi,     0, 255);
+    setU8("maxLaps",   conf.maxLaps,      0, 255);
+
+    // ===== LED settings =====
+    if (source.containsKey("ledMode"))           setU8("ledMode",           conf.ledMode,           0, 10);
+    if (source.containsKey("ledBrightness"))     setU8("ledBrightness",     conf.ledBrightness,     0, 255);
+    if (source.containsKey("ledColor"))          setU32("ledColor",         conf.ledColor);
+    if (source.containsKey("ledPreset"))         setU8("ledPreset",         conf.ledPreset,         0, 50);
+    if (source.containsKey("ledSpeed"))          setU8("ledSpeed",          conf.ledSpeed,          1, 20);
+    if (source.containsKey("ledFadeColor"))      setU32("ledFadeColor",     conf.ledFadeColor);
+    if (source.containsKey("ledStrobeColor"))    setU32("ledStrobeColor",   conf.ledStrobeColor);
+    if (source.containsKey("ledManualOverride")) setBool01("ledManualOverride", conf.ledManualOverride);
+
+    // ===== System =====
+    if (source.containsKey("opMode")) setU8("opMode", conf.operationMode, 0, 1);
+
+    // ===== Tracks =====
+    if (source.containsKey("tracksEnabled")) setBool01("tracksEnabled", conf.tracksEnabled);
+    if (source.containsKey("selectedTrackId")) setU32("selectedTrackId", conf.selectedTrackId);
+
+    // ===== Gate LED options + webhook event toggles =====
+    if (source.containsKey("gateLEDsEnabled"))  setBool01("gateLEDsEnabled", conf.gateLEDsEnabled);
+    if (source.containsKey("webhookRaceStart")) setBool01("webhookRaceStart", conf.webhookRaceStart);
+    if (source.containsKey("webhookRaceStop"))  setBool01("webhookRaceStop", conf.webhookRaceStop);
+    if (source.containsKey("webhookLap"))       setBool01("webhookLap", conf.webhookLap);
+
+    // ===== Webhooks master enable =====
+    if (source.containsKey("webhooksEnabled")) setBool01("webhooksEnabled", conf.webhooksEnabled);
+
+    // ===== Webhook IP list (only mark modified if list actually changed) =====
+    if (source.containsKey("webhookIPs")) {
+        JsonArray arr = source["webhookIPs"].as<JsonArray>();
+
+        // Compare current list vs incoming
+        bool changed = false;
+
+        uint8_t incomingCount = 0;
+        for (JsonVariant ipV : arr) {
+            if (incomingCount >= 10) break;
+            incomingCount++;
+        }
+
+        if (incomingCount != conf.webhookCount) {
+            changed = true;
+        } else {
+            uint8_t i = 0;
+            for (JsonVariant ipV : arr) {
+                if (i >= 10) break;
+                const char* ipStr = ipV.as<const char*>() ? ipV.as<const char*>() : "";
+                if (strcmp(conf.webhookIPs[i], ipStr) != 0) {
+                    changed = true;
+                    break;
+                }
+                i++;
+            }
+        }
+
+        if (changed) {
+            memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));
+            conf.webhookCount = 0;
+
+            for (JsonVariant ipV : arr) {
+                if (conf.webhookCount >= 10) break;
+                const char* ipStr = ipV.as<const char*>() ? ipV.as<const char*>() : "";
+                strlcpy(conf.webhookIPs[conf.webhookCount], ipStr, 16);
+                conf.webhookCount++;
+            }
+
+            modified = true;
+        }
+    }
+
+    // ===== Pilot/UI strings =====
+    setStr("name",          conf.pilotName,     sizeof(conf.pilotName));
+    if (source.containsKey("pilotCallsign")) setStr("pilotCallsign", conf.pilotCallsign, sizeof(conf.pilotCallsign));
+    if (source.containsKey("pilotPhonetic")) setStr("pilotPhonetic", conf.pilotPhonetic, sizeof(conf.pilotPhonetic));
+
+    if (source.containsKey("pilotColor")) {
+        uint32_t c = source["pilotColor"].as<uint32_t>();
+        if (conf.pilotColor != c) { conf.pilotColor = c; modified = true; }
+    }
+
+    if (source.containsKey("theme"))        setStr("theme",        conf.theme,        sizeof(conf.theme));
+    if (source.containsKey("selectedVoice"))setStr("selectedVoice",conf.selectedVoice,sizeof(conf.selectedVoice));
+    if (source.containsKey("lapFormat"))    setStr("lapFormat",    conf.lapFormat,    sizeof(conf.lapFormat));
+
+    // ===== WiFi credentials (CRITICAL: must be guarded) =====
+    if (source.containsKey("ssid")) setStr("ssid", conf.ssid, sizeof(conf.ssid));
+    if (source.containsKey("pwd"))  setStr("pwd",  conf.password, sizeof(conf.password));
+}
+
+
+/*  - old version with unnecessary eeprom saves
+void Config::fromJson(JsonObject source) {
     if (source["freq"] != conf.frequency) {
         conf.frequency = source["freq"];
         modified = true;
@@ -359,6 +522,7 @@ void Config::fromJson(JsonObject source) {
         }
     }
 }
+    */
 
 uint16_t Config::getFrequency() {
     // === TEMPORARY HARDCODE FOR RX5808 CH1 PIN ISSUE ===

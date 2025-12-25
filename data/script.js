@@ -8,6 +8,10 @@ let eventSourceReconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 2000;
 let connectionStatusUpdateInterval = null;
+let stagedConfig = {};      
+let stagedDirty = false;    
+let settingsLoading = false;         // true while we are populating UI from device config
+let baselineConfig = {};             // last config loaded from device (for "same value" comparisons)
 
 const bcf = document.getElementById("bandChannelFreq");
 const bandSelect = document.getElementById("bandSelect");
@@ -629,6 +633,17 @@ onload = async function (e) {
   }
 };
 
+function confirmDiscardUnsavedChanges() {
+  // If nothing staged, do not prompt
+  if (!stagedDirty || !stagedConfig || Object.keys(stagedConfig).length === 0) {
+    return true;
+  }
+
+  return window.confirm(
+    'You have unsaved changes.\n\nClose settings without saving?'
+  );
+}
+
 function setTrackDataSettingsVisible(visible) {
   const navItems = document.querySelectorAll('.settings-nav-item');
 
@@ -659,6 +674,35 @@ function setLEDSettingsVisible(visible) {
   if (!visible && typeof switchSettingsSection === 'function') {
     switchSettingsSection('system');
   }
+}
+
+function stageConfig(key, value) {
+  // Do not mark dirty while we are simply populating the UI during modal open.
+  if (settingsLoading) return;
+
+  // If value is unchanged from what we loaded, do not mark dirty.
+  // (This prevents "false dirty" from UI toggles calling stageConfig redundantly.)
+  if (baselineConfig && Object.prototype.hasOwnProperty.call(baselineConfig, key)) {
+    const base = baselineConfig[key];
+
+    // Normalize booleans/0/1 commonly used in your config
+    const norm = (v) => (v === true ? 1 : v === false ? 0 : v);
+    if (norm(base) === norm(value)) return;
+  }
+
+  stagedConfig[key] = value;
+  stagedDirty = true;
+
+  const d = document.getElementById('configDirtyIndicator');
+  if (d) d.style.display = 'inline';
+}
+
+
+function clearStagedConfig() {
+  stagedConfig = {};
+  stagedDirty = false;
+  const d = document.getElementById('configDirtyIndicator');
+  if (d) d.style.display = 'none';
 }
 
 
@@ -849,6 +893,141 @@ function updateExitRssi(obj, value) {
   }
 }
 
+function buildConfigSnapshotFromUI() {
+  // Read UI into one config object (same shape your backend expects)
+
+  // Pilot settings
+  const callsignInput = document.getElementById('pcallsign');
+  const phoneticInput = document.getElementById('pphonetic');
+  const colorInput = document.getElementById('pilotColor');
+
+  // Convert hex color to integer
+  let pilotColorInt = 0x0080FF; // default
+  if (colorInput && colorInput.value) {
+    pilotColorInt = parseInt(colorInput.value.replace('#', ''), 16);
+  }
+
+  // RSSI sensitivity
+  const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
+
+  // Theme / voice / lap format
+  const themeSelect = document.getElementById('themeSelect');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const lapFormatSelect = document.getElementById('lapFormatSelect');
+
+  // LED settings UI
+  const ledPresetSelect = document.getElementById('ledPreset');
+  const ledBrightnessInput = document.getElementById('ledBrightness');
+  const ledColorInput = document.getElementById('ledColor');
+
+  // Gate LED + webhooks UI
+  const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
+  const webhookRaceStartToggle = document.getElementById('webhookRaceStart');
+  const webhookRaceStopToggle = document.getElementById('webhookRaceStop');
+  const webhookLapToggle = document.getElementById('webhookLap');
+
+  // Battery monitoring UI
+  const batteryToggle = document.getElementById('batteryMonitorToggle');
+
+  // External antenna UI (if present)
+  const externalAntennaToggle = document.getElementById('externalAntennaToggle');
+
+  // Build payload (match backend keys)
+  const cfg = {
+    // Core timing + RSSI
+    freq: typeof frequency !== 'undefined' ? frequency : 0,
+    minLap: parseInt(parseFloat(minLapInput?.value || 0) * 10),
+    alarm: parseInt(parseFloat(alarmThreshold?.value || 0) * 10),
+    anType: announcerSelect ? announcerSelect.selectedIndex : 0,
+    anRate: parseInt(parseFloat((typeof announcerRate !== 'undefined' ? announcerRate : 1)) * 10),
+    enterRssi: typeof enterRssi !== 'undefined' ? parseInt(enterRssi) : 0,
+    exitRssi: typeof exitRssi !== 'undefined' ? parseInt(exitRssi) : 0,
+    maxLaps: typeof maxLaps !== 'undefined' ? parseInt(maxLaps) : 0,
+    rssiSens: rssiSensitivitySelect ? parseInt(rssiSensitivitySelect.value) : 1,
+
+    // Pilot + WiFi credentials
+    name: pilotNameInput ? pilotNameInput.value : '',
+    pilotCallsign: callsignInput ? callsignInput.value : '',
+    pilotPhonetic: phoneticInput ? phoneticInput.value : '',
+    pilotColor: pilotColorInt,
+    ssid: ssidInput ? ssidInput.value : '',
+    pwd: pwdInput ? pwdInput.value : '',
+
+    // UI-driven persistent settings
+    theme: themeSelect ? themeSelect.value : (localStorage.getItem('theme') || 'oceanic'),
+    selectedVoice: voiceSelect ? voiceSelect.value : (localStorage.getItem('selectedVoice') || 'default'),
+    lapFormat: lapFormatSelect ? lapFormatSelect.value : (localStorage.getItem('lapFormat') || 'full'),
+
+    // LED persisted config
+    ledPreset: ledPresetSelect ? parseInt(ledPresetSelect.value) : 0,
+    ledBrightness: ledBrightnessInput ? parseInt(ledBrightnessInput.value) : 0,
+    ledColor: ledColorInput && ledColorInput.value
+      ? parseInt(ledColorInput.value.replace('#', ''), 16)
+      : 0,
+
+    // Gate LED + webhooks persisted config
+    gateLEDsEnabled: gateLEDsEnabledToggle && gateLEDsEnabledToggle.checked ? 1 : 0,
+    webhookRaceStart: webhookRaceStartToggle && webhookRaceStartToggle.checked ? 1 : 0,
+    webhookRaceStop: webhookRaceStopToggle && webhookRaceStopToggle.checked ? 1 : 0,
+    webhookLap: webhookLapToggle && webhookLapToggle.checked ? 1 : 0,
+
+    // Battery persisted config (only if UI exists)
+    batteryMonitor: batteryToggle && batteryToggle.checked ? 1 : 0,
+
+    // External antenna persisted config (only if UI exists)
+    extAntenna: externalAntennaToggle && externalAntennaToggle.checked ? 1 : 0,
+  };
+
+  return cfg;
+}
+
+function autoSaveConfig() {
+  // In "Save button only" mode, this means: STAGE ONLY (no flash writes).
+  stagedConfig = buildConfigSnapshotFromUI();
+  stagedDirty = true;
+
+  const d = document.getElementById('configDirtyIndicator');
+  if (d) d.style.display = 'inline';
+}
+
+async function saveConfig() {
+  // Commit staged config to device (single write)
+  if (!stagedDirty) {
+    console.log('[Config] No staged changes to save.');
+    return;
+  }
+
+  const payload = stagedConfig && Object.keys(stagedConfig).length ? stagedConfig : buildConfigSnapshotFromUI();
+
+  try {
+    if (usbConnected && transportManager) {
+      const response = await transportManager.sendCommand('config', 'POST', payload);
+      console.log('/config (USB):', response);
+    } else {
+      const resp = await fetch('/config', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = await resp.json().catch(() => ({}));
+      console.log('/config (WiFi):', json);
+    }
+
+    // Clear staged/dirty state ONLY after successful commit
+    stagedConfig = {};
+    stagedDirty = false;
+    const d = document.getElementById('configDirtyIndicator');
+    if (d) d.style.display = 'none';
+  } catch (err) {
+    console.error('[Config] Save failed:', err);
+    // Keep stagedDirty=true so user can try saving again
+  }
+}
+
+/* Don't use this one because it saves to flash immediately on every change.
 // Debounced auto-save to prevent excessive API calls
 let saveTimeout = null;
 function autoSaveConfig() {
@@ -857,6 +1036,7 @@ function autoSaveConfig() {
     saveConfig();
   }, 1000); // Wait 1 second after last change before saving
 }
+
 
 async function saveConfig() {
   // Get pilot settings
@@ -912,14 +1092,17 @@ async function saveConfig() {
       .then((response) => console.log("/config:" + JSON.stringify(response)));
   }
 }
+*/
 
 function updateChannelOptionsForBand(bandIndex = bandSelect.selectedIndex) {
   if (!bandSelect || !channelSelect) return;
 
   const freqs = freqLookup[bandIndex] || [];
-  const prevValue = channelSelect.value; // "1".."8"
 
-  // Rebuild channel options, skipping any freq === 0
+  // Preserve previous channel number ("1".."8") if possible
+  const prevValue = channelSelect.value;
+
+  // Rebuild channel options, skipping any frequency === 0
   channelSelect.innerHTML = "";
 
   let firstEnabledValue = null;
@@ -929,8 +1112,8 @@ function updateChannelOptionsForBand(bandIndex = bandSelect.selectedIndex) {
     if (freq === 0) continue;
 
     const opt = document.createElement("option");
-    opt.value = String(i + 1);
-    opt.textContent = String(i + 1);
+    opt.value = String(i + 1);            // IMPORTANT: 1-based channel number
+    opt.textContent = `Ch ${i + 1}`;      // label (can be just `${i+1}` if you prefer)
     channelSelect.appendChild(opt);
 
     if (firstEnabledValue === null) firstEnabledValue = opt.value;
@@ -943,26 +1126,48 @@ function updateChannelOptionsForBand(bandIndex = bandSelect.selectedIndex) {
   } else if (firstEnabledValue !== null) {
     channelSelect.value = firstEnabledValue;
   }
+
+  // Some browsers can leave selectedIndex = -1 after rebuild; force a valid selection
+  if (channelSelect.selectedIndex < 0 && channelSelect.options.length > 0) {
+    channelSelect.selectedIndex = 0;
+  }
 }
+
+
 
 function populateFreqOutput() {
   if (!bandSelect || !channelSelect) return;
 
-  const band = bandSelect.options[bandSelect.selectedIndex]?.value ?? "";
-  const chIndex = channelSelect.selectedIndex;
+  const bandIndex = bandSelect.selectedIndex;
+  const freqs = freqLookup[bandIndex] || [];
 
   // If no channels are available for this band (all 0s), show N/A safely
-  if (chIndex < 0) {
+  if (channelSelect.options.length === 0 || channelSelect.selectedIndex < 0) {
     frequency = 0;
-    freqOutput.textContent = `${band}  N/A`;
+    freqOutput.textContent = `N/A`;
     return;
   }
 
-  const chan = channelSelect.options[chIndex].value;
-  frequency = freqLookup[bandSelect.selectedIndex][chIndex] ?? 0;
+  // IMPORTANT: channelSelect.value is the actual channel number "1".."8"
+  const chanNum = parseInt(channelSelect.value, 10);   // 1..8
+  if (!Number.isFinite(chanNum) || chanNum < 1 || chanNum > 8) {
+    frequency = 0;
+    freqOutput.textContent = `N/A`;
+    return;
+  }
+
+  const chanIndex = chanNum - 1;                       // 0..7
+  frequency = freqs[chanIndex] ?? 0;
+
+  if (frequency === 0) {
+    freqOutput.textContent = `N/A`;
+    return;
+  }
 
   freqOutput.textContent = `${frequency}`;
 }
+
+
 
 
 bcf.addEventListener("change", function handleChange(event) {
@@ -1330,10 +1535,14 @@ function updateColorPreview() {
 // Battery monitoring toggle
 function toggleBatteryMonitor(enabled) {
   const batterySection = document.getElementById('batteryMonitoringSection');
-  if (batterySection) {
-    batterySection.style.display = enabled ? 'block' : 'none';
-  }
+  const batteryToggle = document.getElementById('batteryMonitorToggle');
+
+  if (batteryToggle) batteryToggle.checked = !!enabled;
+  if (batterySection) batterySection.style.display = enabled ? 'block' : 'none';
+
+  autoSaveConfig();
 }
+
 
 // Generic fetch wrapper that works with both WiFi and USB
 async function transportFetch(url, options = {}) {
@@ -1491,74 +1700,36 @@ function toggleLedManualOverride(enabled) {
 }
 
 function toggleGateLEDs(enabled) {
-  const enable = enabled ? 1 : 0;
-  
-  // Show/hide Gate LED options based on enabled state
   const optionsDiv = document.getElementById('gateLEDOptions');
   if (optionsDiv) {
     optionsDiv.style.display = enabled ? 'block' : 'none';
   }
-  
-  // Send the config update
-  fetch('/config', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ gateLEDsEnabled: enable })
-  })
-    .then(response => response.json())
-    .then(data => console.log('Gate LEDs:', enabled ? 'enabled' : 'disabled', data))
-    .catch(err => console.error('Failed to toggle Gate LEDs:', err));
+
+  // Stage-only (no POST here)
+  const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
+  if (gateLEDsEnabledToggle) gateLEDsEnabledToggle.checked = !!enabled;
+
+  autoSaveConfig();
 }
+
 
 function toggleWebhookRaceStart(enabled) {
-  const enable = enabled ? 1 : 0;
-  
-  fetch('/config', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ webhookRaceStart: enable })
-  })
-    .then(response => response.json())
-    .then(data => console.log('Webhook Race Start:', enabled ? 'enabled' : 'disabled', data))
-    .catch(err => console.error('Failed to toggle webhook race start:', err));
+  const el = document.getElementById('webhookRaceStart');
+  if (el) el.checked = !!enabled;
+  autoSaveConfig();
 }
 
+
 function toggleWebhookRaceStop(enabled) {
-  const enable = enabled ? 1 : 0;
-  
-  fetch('/config', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ webhookRaceStop: enable })
-  })
-    .then(response => response.json())
-    .then(data => console.log('Webhook Race Stop:', enabled ? 'enabled' : 'disabled', data))
-    .catch(err => console.error('Failed to toggle webhook race stop:', err));
+  const el = document.getElementById('webhookRaceStop');
+  if (el) el.checked = !!enabled;
+  autoSaveConfig();
 }
 
 function toggleWebhookLap(enabled) {
-  const enable = enabled ? 1 : 0;
-  
-  fetch('/config', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ webhookLap: enable })
-  })
-    .then(response => response.json())
-    .then(data => console.log('Webhook Lap:', enabled ? 'enabled' : 'disabled', data))
-    .catch(err => console.error('Failed to toggle webhook lap:', err));
+  const el = document.getElementById('webhookLap');
+  if (el) el.checked = !!enabled;
+  autoSaveConfig();
 }
 
 function generateAudio() {
@@ -1749,15 +1920,31 @@ function clearLaps() {
 // EventSource initialization moved to setupWiFiEvents() function above
 
 function setBandChannelIndex(freq) {
-  for (var i = 0; i < freqLookup.length; i++) {
-    for (var j = 0; j < freqLookup[i].length; j++) {
+  for (let i = 0; i < freqLookup.length; i++) {
+    for (let j = 0; j < freqLookup[i].length; j++) {
       if (freqLookup[i][j] == freq) {
         bandSelect.selectedIndex = i;
-        channelSelect.selectedIndex = j;
+
+        // Rebuild channel dropdown for this band (hides 0-freq channels)
+        updateChannelOptionsForBand(i);
+
+        // Select channel by 1-based VALUE ("1".."8"), not by selectedIndex
+        const desired = String(j + 1);
+        const exists = Array.from(channelSelect.options).some(o => o.value === desired);
+        if (exists) {
+          channelSelect.value = desired;
+        } else if (channelSelect.options.length > 0) {
+          channelSelect.selectedIndex = 0;
+        }
+
+        populateFreqOutput();
+        return;
       }
     }
   }
 }
+
+
 
 // Theme functionality
 function changeTheme() {
@@ -3496,20 +3683,41 @@ function resetWiFiSettings() {
 }
 
 // Settings Modal Functions
+// Settings Modal Functions
 // (openSettingsModal is defined later with full config loading)
 
-function closeSettingsModal() {
-  const modal = document.getElementById('settingsModal');
-  if (modal) {
-    modal.classList.remove('active');
+function closeSettingsModal(force = false) {
+  // Only prompt if we're dirty and not forcing close
+  if (!force && !confirmDiscardUnsavedChanges()) {
+    return; // user cancelled
   }
+
+  // Safe to close → clear staged state
+  stagedDirty = false;
+  stagedConfig = {};
+
+  const d = document.getElementById('configDirtyIndicator');
+  if (d) d.style.display = 'none';
+
+  const modal = document.getElementById('settingsModal');
+  if (modal) modal.classList.remove('active');
 }
 
 // Close modal when clicking on the overlay background
 document.addEventListener('click', function(event) {
   const modal = document.getElementById('settingsModal');
-  if (modal && event.target === modal) {
-    closeSettingsModal();
+  if (modal && event.target === modal && modal.classList.contains('active')) {
+    closeSettingsModal(false);
+  }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') {
+    const modal = document.getElementById('settingsModal');
+    if (modal && modal.classList.contains('active')) {
+      closeSettingsModal(false);
+    }
   }
 });
 
@@ -3533,16 +3741,6 @@ function switchSettingsSection(sectionName) {
   // Add active class to clicked nav item
   event?.target?.closest('.settings-nav-item')?.classList.add('active');
 }
-
-// Keyboard shortcut for closing modal (ESC key)
-document.addEventListener('keydown', function(event) {
-  if (event.key === 'Escape') {
-    const modal = document.getElementById('settingsModal');
-    if (modal && modal.classList.contains('active')) {
-      closeSettingsModal();
-    }
-  }
-});
 
 // Self-Test Functions
 function runSelfTest() {
@@ -3635,7 +3833,8 @@ function runSelfTest() {
 let serialMonitorActive = false;
 let serialMonitorPollInterval = null;
 let serialMonitorBuffer = [];
-let lastSeenTimestamp = 0;
+let lastSeenTimestampBanner = 0;   // advances always
+let lastSeenTimestampUI = 0;       // advances only when serial monitor is open
 const MAX_SERIAL_LINES = 500;
 
 function toggleSerialMonitor() {
@@ -3653,7 +3852,7 @@ function startSerialMonitor() {
   button.textContent = 'Stop Monitor';
   button.style.backgroundColor = '#ff5555';
   serialMonitorActive = true;
-  lastSeenTimestamp = 0;
+  lastSeenTimestampUI = 0;
   
   // Clear monitor and show starting message
   monitor.innerHTML = '<div style="color: #4ade80;">[SYSTEM] Serial monitor started</div>';
@@ -3665,8 +3864,19 @@ function startSerialMonitor() {
   pollDebugLogs();
 }
 
+// Call this on every incoming log line (cheap string checks)
+function handleLogForCalibrationBanner(line) {
+  if (!line) return;
+
+  if (line.includes('Setting frequency to')) {
+    showCalibrationBanner();
+  } else if (line.includes('RX5808 frequency verified properly')) {
+    hideCalibrationBanner();
+  }
+}
+
 function pollDebugLogs() {
-  if (!serialMonitorActive) return;
+  if (!servicesStarted && !usbConnected) return;
   
   fetch('/api/debuglog')
     .then(response => response.json())
@@ -3674,9 +3884,16 @@ function pollDebugLogs() {
       if (data.logs && data.logs.length > 0) {
         // Add new logs that we haven't seen yet
         data.logs.forEach(log => {
-          if (log.timestamp > lastSeenTimestamp) {
+          // 1) Always process for banner (real-time UX)
+          if (log.timestamp > lastSeenTimestampBanner) {
+            handleLogForCalibrationBanner(log.message);
+            lastSeenTimestampBanner = log.timestamp;
+          }
+
+          // 2) Only advance the UI pointer when the serial monitor is open
+          if (serialMonitorActive && log.timestamp > lastSeenTimestampUI) {
             appendSerialLine(log.message, '#00ff00', log.timestamp);
-            lastSeenTimestamp = log.timestamp;
+            lastSeenTimestampUI = log.timestamp;
           }
         });
       }
@@ -3866,30 +4083,36 @@ function updateDistanceDisplay() {
 let currentEditTrackId = null;
 let allTracks = [];
 
-function toggleTracksEnabled(enabled) {
+function setTracksUI(enabled) {
   const tracksContent = document.getElementById('tracksContent');
   if (tracksContent) {
     tracksContent.style.display = enabled ? 'block' : 'none';
   }
-  
-  // Save to config
+  if (enabled) {
+    loadTracks();
+  }
+}
+
+// Backwards-compatible: HTML calls toggleTracksEnabled(this.checked)
+function toggleTracksEnabled(enabled, opts = {}) {
+  const save = (opts.save !== undefined) ? !!opts.save : true;
+
+  // Always update UI
+  setTracksUI(enabled);
+
+  // Only persist when user actually toggles it
+  if (!save) return;
+
   fetch('/config', {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      tracksEnabled: enabled ? 1 : 0
-    })
+    body: JSON.stringify({ tracksEnabled: enabled ? 1 : 0 })
   })
-  .then(response => response.json())
-  .then(() => {
-    if (enabled) {
-      loadTracks();
-    }
-  })
-  .catch(error => console.error('Error toggling tracks:', error));
+  .then(r => r.json())
+  .catch(err => console.error('Error toggling tracks:', err));
 }
 
 function loadTracks() {
@@ -4114,28 +4337,26 @@ function selectTrack() {
 
 // ===== WEBHOOK MANAGEMENT =====
 
-function toggleWebhooks(enabled) {
+function setWebhooksUI(enabled) {
   const webhooksContent = document.getElementById('webhooksContent');
   if (webhooksContent) {
     webhooksContent.style.display = enabled ? 'block' : 'none';
   }
-  
-  // Enable/disable webhooks on backend
-  fetch('/webhooks/enable', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: 'enabled=' + (enabled ? '1' : '0')
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log('Webhooks:', enabled ? 'enabled' : 'disabled', data);
-    if (enabled) {
-      loadWebhooks();
-    }
-  })
-  .catch(error => console.error('Error toggling webhooks:', error));
+  if (enabled) {
+    loadWebhooks();
+  }
+}
+
+function toggleWebhooks(enabled, opts = {}) {
+  // Keep your existing UI behavior (show/hide related stuff) if you have it,
+  // but DO NOT write to backend here.
+  const webhooksCheckbox = document.getElementById('webhooksEnabled');
+  if (webhooksCheckbox) webhooksCheckbox.checked = !!enabled;
+
+  // If you have UI sections to show/hide, keep doing it here...
+
+  // Stage-only
+  autoSaveConfig();
 }
 
 function loadWebhooks() {
@@ -4172,6 +4393,16 @@ function displayWebhooks(webhooks) {
   
   html += '</div>';
   webhooksListContent.innerHTML = html;
+}
+
+function showCalibrationBanner() {
+  const banner = document.getElementById('calibrationBanner');
+  if (banner) banner.style.display = 'block';
+}
+
+function hideCalibrationBanner() {
+  const banner = document.getElementById('calibrationBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 function addWebhook() {
@@ -4267,6 +4498,7 @@ function testWebhook() {
 
 // Load tracks when settings modal opens
 function openSettingsModal() {
+  settingsLoading = true;
   const modal = document.getElementById('settingsModal');
   if (modal) {
     modal.classList.add('active');
@@ -4275,6 +4507,7 @@ function openSettingsModal() {
     fetch('/config')
       .then(response => response.json())
       .then(config => {
+        baselineConfig = { ...config };   // snapshot what the device says right now
         // Populate all device config fields
         if (config.freq !== undefined) setBandChannelIndex(config.freq);
         if (config.minLap !== undefined) {
@@ -4378,7 +4611,7 @@ function openSettingsModal() {
         const tracksCheckbox = document.getElementById('tracksEnabled');
         if (tracksCheckbox) {
           tracksCheckbox.checked = tracksEnabled;
-          toggleTracksEnabled(tracksEnabled);
+          toggleTracksEnabled(tracksEnabled, { save: false });
         }
         
         // Set selected track
@@ -4394,10 +4627,16 @@ function openSettingsModal() {
         const webhooksCheckbox = document.getElementById('webhooksEnabled');
         if (webhooksCheckbox) {
           webhooksCheckbox.checked = webhooksEnabled;
-          toggleWebhooks(webhooksEnabled);
+          toggleWebhooks(webhooksEnabled, { save: false });
         }
+        clearStagedConfig();     // resets stagedConfig + stagedDirty + indicator
+        settingsLoading = false; // now user actions can mark dirty
+
       })
-      .catch(error => console.error('Error loading config:', error));
+      .catch(error => {
+        console.error('Error loading config:', error);
+        settingsLoading = false;   // ← THIS IS THE MISSING PIECE
+      });
     
     // Switch to general section by default
     switchSettingsSection('general');

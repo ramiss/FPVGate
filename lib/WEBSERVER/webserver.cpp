@@ -369,11 +369,13 @@ static void startMDNS() {
 
 void Webserver::startServices() {
     if (servicesStarted) {
-        // Restart mDNS when WiFi mode changes
-        MDNS.end();
-        delay(100);  // Give mDNS time to shut down
-        startMDNS();
-        DEBUG("mDNS restarted for mode change\n");
+        if (captiveDnsEnabled) {
+            // Restart mDNS when WiFi mode changes
+            MDNS.end();
+            delay(100);  // Give mDNS time to shut down
+            startMDNS();
+            DEBUG("mDNS restarted for mode change\n");
+        }
         return;
     }
 
@@ -1421,11 +1423,12 @@ EEPROM:\n\
     if (captiveDnsEnabled) {
         dnsServer.start(DNS_PORT, "*", ipAddress);
         dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+        startMDNS();
     } else {
         DEBUG("[DNS] Captive DNS disabled (use http://192.168.4.1)\n");
     }
 
-    startMDNS();
+    
 
     servicesStarted = true;
 }

@@ -1,6 +1,6 @@
 # FPVGate
 
-**Personal FPV Lap Timer for ESP32-C6 Hardware coming soon!**
+**Personal FPV Lap Timer - Hardware coming soon!**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32--S3-orange.svg)](https://platformio.org/)
@@ -68,12 +68,28 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 - Open source (MIT License)
 
 **Supported Bands:**
-- **A (Boscam A)** - 5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725
-- **B (Boscam B)** - 5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866
-- **E (Boscam E)** - 5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945
-- **F (Fatshark)** - 5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880
-- **R (RaceBand)** - 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
-- **L (LowBand)** -  5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621
+- **A (Boscam A)**      - 5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725
+- **B (Boscam B)**      - 5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866
+- **E (Boscam E)**      - 5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945
+- **F (Fatshark)**      - 5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880
+- **R (RaceBand)**      - 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
+- **L (LowBand)**       - 5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621
+- **DJIv1 25 Mhz**      - 5660, 5695, 5735, 5770, 5805, 5878, 5914, 5839
+- **DJIv1-25CE**        - 5735, 5770, 5805, 5839
+- **DJIv1_50**          - 5695, 5770, 5878, 5839
+- **DJI03/04-10/20**    - 5669, 5705, 5768, 5804, 5839, 5876, 5912
+- **DJI03/04-20CE**     - 5768, 5804, 5839
+- **DJI03/04-40**       - 5677, 5794, 5902
+- **DJI03/04-40CE**     - 5794
+- **DJI04-R**           - 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
+- **HDZero-R**          - 5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917
+- **HDZero-E**          - 5707
+- **HDZero-F**          - 5740, 5760, 5800
+- **HDZero-CE**         - 5732, 5769, 5806, 5843
+- **WLKSnail-R**        - 5658, 5659, 5732, 5769, 5806, 5843, 5880, 5917
+- **WLKSnail-25**       - 5660, 5695, 5735, 5770, 5805, 5878, 5914, 5839
+- **WLKSnail-25CE**     - 5735, 5770, 5805, 5839
+- **WLKSnail-50**       - 5695, 5770, 5878, 5839 
 ---
 
 ## Quick Start
@@ -106,7 +122,6 @@ Pre-made and flashed hardware link coming soon!
 
 **[Getting Started](docs/GETTING_STARTED.md)** - Hardware setup, wiring, flashing, initial config  
 **[User Guide](docs/USER_GUIDE.md)** - How to connect, calibrate, race, and use features  
-**[Features Guide](docs/FEATURES.md)** - In-depth feature documentation   
 
 **Additional Docs:**
 - [Quick Start](QUICKSTART.md) - Fast track for experienced users
@@ -145,77 +160,20 @@ Exit  ├/──────────\─
 ### Recent Updates
 
 **v0.9.0 (Latest - Beta)**
-- Forked and ported to Seediuno ESP32-C6 for specific hardware available for purchase.
+- Forked from [FPVGate](https://github.com/LouisHitchcock/FPVGate)
+- Ported to the FPVGate Persoanl Lap Timer hardware (Seediuno ESP32-C6) available for purchase (link coming soon!).
+- Added all the popular digital bands and channels.
 - Removed Track Management and auto race saving because we don't use an SD Card.
-- Added the ability to export/import the current race in memory.
-- Cleanly hides the SDCard Tracks, VBat and LED functionality if those pins aren't defined.
+- Tweaked the ability to download/import the current race in memory.
+- Cleanly hides the SDCard Tracks, VBat, LED and other asset functionality - if those pins aren't defined.
 - Removed captive DNS so the mobile device simultaneously connects to the cellular network at the same time.
 - Fixed a bug where we were stuck on RaceBand Ch 1.
-- 
-
-**v1.4.0 (forked from LouisHitchcock)**
-- Track Management System - Create, edit, and manage track profiles with images
-- Distance Tracking - Real-time distance display and statistics
-- Webhook System - HTTP webhooks for external LED controller integration
-- Gate LED Control - Granular control over webhook triggers (race start/stop, laps)
-- Enhanced Self-Tests - Comprehensive diagnostics for all device features (19 tests)
-- WiFi Reboot Fix - Apply WiFi settings button now properly reboots device
-- Enhanced Race Editing - Edit race metadata, lap times, and track associations
-- Track Selection - Choose active track before racing (persists to EEPROM)
-- Improved Configuration UI - Full-screen modal with organized sections
-
-**v1.3.3**
-- Modern Configuration UI with full-screen overlay modal
-- WebSocket Stability with SSE keepalive mechanism
-- Fixed duplicate element IDs and WiFi configuration issues
-
-**v1.3.2**
-- WiFi Status Display with real-time connection monitoring
-- Marshalling Mode for post-race lap editing
-- LED settings persistence to EEPROM
-
-**v1.3.1**
-- Fixed race history storage initialization bug
-- Improved calibration wizard with 3-peak marking system
-- Enhanced threshold calculation (peak-relative instead of baseline-relative)
-- Added visual smoothing to calibration chart for easier peak identification
-
-**v1.3.0**
-- iOS/Safari full audio support with vibration feedback
-- Mobile-responsive interface for phones and tablets
-- USB Serial CDC connectivity with Electron desktop app
-- OSD overlay system for streaming (transparent, real-time)
-- Cross-device race storage on SD card
-- Race tagging, naming, and detailed analysis
-- Enhanced race management with import/export
-
-**v1.2.1**
-- SD card storage for audio files
-- Automatic flash-to-SD migration
-- Enhanced OTA capacity (2MB updates)
-- Graceful fallback to LittleFS
-
-**v1.2.0**
-- System self-test diagnostics
-- PiperTTS integration
-- Enhanced LED presets with color pickers
-- Complete config export/import
-
-**[Full changelog →](CHANGELOG.md)**
-
----
-
-## Community & Support
-
-- **Bug Reports:** [GitHub Issues](https://github.com/LouisHitchcock/FPVGate/issues)
-- **Feature Requests:** [GitHub Discussions](https://github.com/LouisHitchcock/FPVGate/discussions)
-- **Star this repo** if you find it useful!
 
 ---
 
 ## Credits
 
-FPVGate is a heavily modified fork of [PhobosLT](https://github.com/phobos-/PhobosLT) by phobos-. The original project provided the foundation for RSSI-based lap timing.
+This version of FPVGate is ported and modified from [FPVGate](https://github.com/LouisHitchcock/FPVGate), which is a heavily modified fork of [PhobosLT](https://github.com/phobos-/PhobosLT) by phobos-. The original project provided the foundation for RSSI-based lap timing.
 
 Portions of the timing logic are inspired by [RotorHazard](https://github.com/RotorHazard/RotorHazard).
 
@@ -227,4 +185,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Made with care for the FPV community**
+**Built for Pilots!**

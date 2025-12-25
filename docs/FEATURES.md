@@ -2,7 +2,7 @@
 
 In-depth documentation of all FPVGate capabilities and technical details.
 
-** Navigation:** [Home](../README.md) | [Getting Started](GETTING_STARTED.md) | [User Guide](USER_GUIDE.md) | [Hardware Guide](HARDWARE_GUIDE.md)
+** Navigation:** [Home](../README.md) | [Getting Started](GETTING_STARTED.md) | [User Guide](USER_GUIDE.md) 
 
 ---
 
@@ -75,15 +75,15 @@ Direct USB connection for zero-latency control.
 **Architecture:**
 
 ```
-+--------------+         USB Cable        +--------------+
-¦   Computer   ¦ ?----------------------? ¦  ESP32-S3    ¦
-¦              ¦                           ¦              ¦
-¦  Electron    ¦   JSON Command Protocol   ¦  Transport   ¦
-¦  Browser     ¦   {"method":"POST"...}    ¦  Manager     ¦
-¦              ¦                           ¦              ¦
-¦ USB-Transport¦                           ¦  Webserver   ¦
-¦    .js       ¦                           ¦  Handlers    ¦
-+--------------+                           +--------------+
++-----------0---+         USB Cable          +---------------+
+ï¿½   Computer   ï¿½ ?-----------------------? ï¿½  ESP32-S3    ï¿½
+ï¿½              ï¿½                           ï¿½              ï¿½
+ï¿½  Electron    ï¿½   JSON Command Protocol   ï¿½  Transport   ï¿½
+ï¿½  Browser     ï¿½   {"method":"POST"...}    ï¿½  Manager     ï¿½
+ï¿½              ï¿½                           ï¿½              ï¿½
+ï¿½ USB-Transportï¿½                           ï¿½  Webserver   ï¿½
+ï¿½    .js       ï¿½                           ï¿½  Handlers    ï¿½
++---------------+                            +---------------+
 ```
 
 **Command Protocol:**
@@ -153,7 +153,7 @@ USB and WiFi can operate simultaneously!
      Race Director (USB)
             ? Commands
        +---------+
-       ¦ ESP32-S3¦
+       ï¿½ ESP32-S3ï¿½
        +---------+
          ?     ?
     WiFi  WiFi  WiFi
@@ -242,15 +242,15 @@ Drone VTx signal strength (RSSI) peaks when passing through gate.
 
 | Factor | Impact | Mitigation |
 |--------|--------|------------|
-| **RSSI Sampling Rate** | ±5ms | 100Hz sampling |
-| **Peak Detection** | ±10ms | 3-point average |
-| **System Timer** | ±1ms | millis() function |
+| **RSSI Sampling Rate** | ï¿½5ms | 100Hz sampling |
+| **Peak Detection** | ï¿½10ms | 3-point average |
+| **System Timer** | ï¿½1ms | millis() function |
 | **WiFi Latency** | 20-30ms | Use USB mode |
 
 **Expected Accuracy:**
-- **Best Case (USB):** ±10-15ms
-- **WiFi Mode:** ±30-40ms
-- **For Comparison:** MultiGP standard is ±50ms
+- **Best Case (USB):** ï¿½10-15ms
+- **WiFi Mode:** ï¿½30-40ms
+- **For Comparison:** MultiGP standard is ï¿½50ms
 
 ### Gate Pass Classification
 
@@ -452,7 +452,7 @@ Ensure correct pronunciation of pilot names.
 **Implementation:**
 - I2S audio playback with adjustable sample rate
 - 1.0 = 44100 Hz
-- 1.5 = 66150 Hz (1.5× faster)
+- 1.5 = 66150 Hz (1.5ï¿½ faster)
 
 ---
 
@@ -466,7 +466,7 @@ Individually addressable RGB LEDs using single-wire protocol.
 **Technical Details:**
 - **Protocol:** WS2812B (NeoPixel)
 - **Data Rate:** 800 kHz
-- **Color Depth:** 24-bit (8 bits per channel × RGB)
+- **Color Depth:** 24-bit (8 bits per channel ï¿½ RGB)
 - **Update Rate:** ~60 FPS
 - **Max LEDs:** 256 (practical limit ~100 for smooth animation)
 
@@ -541,9 +541,9 @@ Each LED receives 24 bits: `GRB` (Green-Red-Blue order)
 
 | Event | LED Behavior |
 |-------|--------------|
-| **Race Start** | Flash green (3×, 200ms each) |
-| **Lap Detected** | Flash white (1×, 150ms) |
-| **Race Stop** | Flash red (3×, 200ms each) |
+| **Race Start** | Flash green (3ï¿½, 200ms each) |
+| **Lap Detected** | Flash white (1ï¿½, 150ms) |
+| **Race Stop** | Flash red (3ï¿½, 200ms each) |
 | **Between Events** | Resume selected preset |
 
 **Implementation:**
@@ -673,7 +673,7 @@ for i in range(0, num_laps - 2):
 **Columns:**
 1. **Lap #** - "Gate 1", "Lap 1", "Lap 2"...
 2. **Lap Time** - MM:SS.ss format
-3. **Delta** - Difference from previous lap (±)
+3. **Delta** - Difference from previous lap (ï¿½)
 
 **Fastest Lap Highlight:**
 - Gold background (#FFD700)
@@ -777,8 +777,8 @@ FPVGate sends HTTP POST requests to the following endpoints:
 
 | Endpoint | Trigger | Description |
 |----------|---------|-------------|
-| `/RaceStart` | Race starts | 2× Green flashes |
-| `/RaceStop` | Race stops | 2× Red flashes |
+| `/RaceStart` | Race starts | 2ï¿½ Green flashes |
+| `/RaceStop` | Race stops | 2ï¿½ Red flashes |
 | `/Lap` | Lap detected | White flash (0.5s) |
 | `/GhostLap` | Future feature | White flash (0.5s) |
 | `/off` | Manual | Turn off LEDs |
@@ -886,7 +886,7 @@ Manually trigger test flash to all webhooks
 ESP8266/ESP32 LED controller:
 ```cpp
 server.on("/RaceStart", HTTP_POST, []() {
-  flashGreen(2);  // 2× green flashes
+  flashGreen(2);  // 2ï¿½ green flashes
   server.send(200, "text/plain", "OK");
 });
 
@@ -1416,19 +1416,19 @@ Modify TTS options
 src/
 +-- main.cpp              # Entry point, setup/loop
 +-- lib/
-¦   +-- CALIBRATION/      # RSSI calibration logic
-¦   +-- CONFIG/           # Configuration management
-¦   +-- FASTLED/          # LED control
-¦   +-- FREQUENCY/        # Band/channel/frequency
-¦   +-- RACEHISTORY/      # Race data storage
-¦   +-- RACELOGIC/        # Timing state machine
-¦   +-- RX5808/           # RX5808 SPI driver
-¦   +-- SELFTEST/         # Diagnostic system
-¦   +-- TRANSPORT/        # Transport abstraction
-¦   +-- TTS/              # Text-to-speech
-¦   +-- USB/              # USB Serial CDC transport
-¦   +-- WEBSERVER/        # HTTP + WebSocket server
-¦   +-- WIFIMAN/          # WiFi management
+ï¿½   +-- CALIBRATION/      # RSSI calibration logic
+ï¿½   +-- CONFIG/           # Configuration management
+ï¿½   +-- FASTLED/          # LED control
+ï¿½   +-- FREQUENCY/        # Band/channel/frequency
+ï¿½   +-- RACEHISTORY/      # Race data storage
+ï¿½   +-- RACELOGIC/        # Timing state machine
+ï¿½   +-- RX5808/           # RX5808 SPI driver
+ï¿½   +-- SELFTEST/         # Diagnostic system
+ï¿½   +-- TRANSPORT/        # Transport abstraction
+ï¿½   +-- TTS/              # Text-to-speech
+ï¿½   +-- USB/              # USB Serial CDC transport
+ï¿½   +-- WEBSERVER/        # HTTP + WebSocket server
+ï¿½   +-- WIFIMAN/          # WiFi management
 ```
 
 ### Web Interface Structure
