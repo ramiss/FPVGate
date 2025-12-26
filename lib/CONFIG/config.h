@@ -107,6 +107,8 @@
 #define EEPROM_CHECK_TIME_MS 1000
 
 typedef struct {
+    uint8_t bandIndex;    
+    uint8_t channelIndex; 
     uint32_t version;
     uint16_t frequency;
     uint8_t minLap;
@@ -163,6 +165,8 @@ class Config {
     bool loadFromSD();
 
     // getters and setters
+    uint8_t getBandIndex();
+    uint8_t getChannelIndex();
     uint16_t getFrequency();
     uint32_t getMinLapMs();
     uint8_t getAlarmThreshold();
@@ -196,6 +200,9 @@ class Config {
     char* getSelectedVoice();
     char* getLapFormat();
     
+    // added because we use multiple bands with the same channels and revere freq lookup no longer works
+    void setBandIndex(uint8_t band);
+    void setChannelIndex(uint8_t ch);
     // Setters for RotorHazard node mode
     void setFrequency(uint16_t freq);
     void setEnterRssi(uint8_t rssi);

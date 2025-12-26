@@ -455,7 +455,24 @@ onload = async function (e) {
   }
 
   {
-    if (configData.freq !== undefined) setBandChannelIndex(configData.freq);
+    // old reverse freq lookup no longer works due to multiple bands having same channels
+    //if (configData.freq !== undefined) setBandChannelIndex(configData.freq);
+    if (configData.band !== undefined && configData.chan !== undefined) {
+      // Apply band/chan directly (no ambiguity)
+      bandSelect.selectedIndex = configData.band;
+      updateChannelOptionsForBand(configData.band);
+
+      // channelIndex is 0-based; dropdown value is "1".."8"
+      const desiredValue = String((configData.chan | 0) + 1);
+      const exists = Array.from(channelSelect.options).some(o => o.value === desiredValue);
+      if (exists) channelSelect.value = desiredValue;
+
+      populateFreqOutput();
+    } else if (configData.freq !== undefined) {
+      // Backward compatible fallback
+      setBandChannelIndex(configData.freq);
+    }
+
 
     if (configData.minLap !== undefined) {
       minLapInput.value = (parseFloat(configData.minLap) / 10).toFixed(1);
@@ -893,6 +910,16 @@ function updateExitRssi(obj, value) {
   }
 }
 
+function stageBandChan() {
+  // band index is 0-based
+  stageConfig('band', bandSelect.selectedIndex);
+
+  // channelSelect.value is "1".."8" per our current convention
+  const chanNum = parseInt(channelSelect.value, 10);
+  const chanIndex = Number.isFinite(chanNum) ? (chanNum - 1) : 0;
+  stageConfig('chan', chanIndex);
+}
+
 function buildConfigSnapshotFromUI() {
   // Read UI into one config object (same shape your backend expects)
 
@@ -934,6 +961,13 @@ function buildConfigSnapshotFromUI() {
 
   // Build payload (match backend keys)
   const cfg = {
+    // Pilot band/channel persistence
+    band: bandSelect ? bandSelect.selectedIndex : 0,
+    chan: (() => {
+      const n = parseInt(channelSelect?.value ?? "1", 10); // "1".."8"
+      if (!Number.isFinite(n)) return 0;
+      return Math.max(0, Math.min(7, n - 1)); // 0-based index
+    })(),
     // Core timing + RSSI
     freq: typeof frequency !== 'undefined' ? frequency : 0,
     minLap: parseInt(parseFloat(minLapInput?.value || 0) * 10),
@@ -1172,6 +1206,7 @@ function populateFreqOutput() {
 
 bcf.addEventListener("change", function handleChange(event) {
   populateFreqOutput();
+  stageBandChan();
   autoSaveConfig();
 });
 
@@ -4509,7 +4544,26 @@ function openSettingsModal() {
       .then(config => {
         baselineConfig = { ...config };   // snapshot what the device says right now
         // Populate all device config fields
-        if (config.freq !== undefined) setBandChannelIndex(config.freq);
+        //if (config.freq !== undefined) setBandChannelIndex(config.freq);
+        // Prefer band+chan (unambiguous). Fall back to freq for older configs.
+        if (config.band !== undefined && config.chan !== undefined) {
+          // Apply band
+          const b = Math.max(0, Math.min(bandSelect.options.length - 1, (config.band | 0)));
+          bandSelect.selectedIndex = b;
+
+          // Rebuild channel dropdown for that band (hides 0-freq channels)
+          updateChannelOptionsForBand(b);
+
+          // chan is 0-based; dropdown values are "1".."8"
+          const desiredValue = String(((config.chan | 0) + 1));
+          const exists = Array.from(channelSelect.options).some(o => o.value === desiredValue);
+          if (exists) channelSelect.value = desiredValue;
+
+          populateFreqOutput();
+        } else if (config.freq !== undefined) {
+          setBandChannelIndex(config.freq); // legacy fallback
+          populateFreqOutput();
+        }
         if (config.minLap !== undefined) {
           minLapInput.value = (parseFloat(config.minLap) / 10).toFixed(1);
           updateMinLap(minLapInput, minLapInput.value);

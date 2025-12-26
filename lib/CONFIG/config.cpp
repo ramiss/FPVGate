@@ -76,7 +76,9 @@ void Config::write(void) {
 
 void Config::toJson(AsyncResponseStream& destination) {
     // Use https://arduinojson.org/v6/assistant to estimate memory
-    DynamicJsonDocument config(512);
+    DynamicJsonDocument config(550);
+    config["band"] = conf.bandIndex;
+    config["chan"] = conf.channelIndex;
     config["freq"] = conf.frequency;
     config["minLap"] = conf.minLap;
     config["alarm"] = conf.alarm;
@@ -133,6 +135,8 @@ void Config::toJson(AsyncResponseStream& destination) {
 
 void Config::toJsonString(char* buf) {
     DynamicJsonDocument config(512);
+    config["band"] = conf.bandIndex;
+    config["chan"] = conf.channelIndex;
     config["freq"] = conf.frequency;
     config["minLap"] = conf.minLap;
     config["alarm"] = conf.alarm;
@@ -212,6 +216,20 @@ void Config::fromJson(JsonObject source) {
             modified = true;
         }
     };
+
+    if (source.containsKey("band")) {
+        int b = source["band"].as<int>();
+        if (b < 0) b = 0;
+        if (b > 255) b = 255;
+        setBandIndex((uint8_t)b);
+    }
+
+    if (source.containsKey("chan")) {
+        int c = source["chan"].as<int>();
+        if (c < 0) c = 0;
+        if (c > 7) c = 7;
+        setChannelIndex((uint8_t)c);
+    }
 
     // ===== Core timing / RF =====
     // Frequency (MHz). Allow 0 only if you really use it; otherwise clamp to plausible band.
@@ -524,6 +542,14 @@ void Config::fromJson(JsonObject source) {
 }
     */
 
+uint8_t Config::getBandIndex() {
+  return conf.bandIndex;
+}
+
+uint8_t Config::getChannelIndex() {
+  return conf.channelIndex;
+}
+
 uint16_t Config::getFrequency() {
     // === TEMPORARY HARDCODE FOR RX5808 CH1 PIN ISSUE ===
     // Hardcoded to R1 (5658 MHz) - Raceband Channel 1
@@ -658,6 +684,20 @@ char* Config::getSelectedVoice() {
 
 char* Config::getLapFormat() {
     return conf.lapFormat;
+}
+
+void Config::setBandIndex(uint8_t band) {
+  if (conf.bandIndex != band) {
+    conf.bandIndex = band;
+    modified = true;
+  }
+}
+
+void Config::setChannelIndex(uint8_t ch) {
+  if (conf.channelIndex != ch) {
+    conf.channelIndex = ch;
+    modified = true;
+  }
 }
 
 // Setters for RotorHazard node mode
@@ -834,6 +874,8 @@ void Config::setDefaults(void) {
     // Reset everything to 0/false and then just set anything that zero is not appropriate
     memset(&conf, 0, sizeof(conf));
     conf.version = CONFIG_VERSION | CONFIG_MAGIC;
+    conf.bandIndex = 4;  // RaceBand
+    conf.channelIndex = 0;  // Channel 1
     conf.frequency = 5658;  // RaceBand Channel 1 (R1) - 5658 MHz
     conf.minLap = 20;  // 2.0 seconds
     conf.alarm = 0;  // Alarm disabled
