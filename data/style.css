@@ -454,6 +454,7 @@ main {
   padding: 8px; 
 }
 
+
 .config-container {
   display: flex;
   flex-direction: column;
@@ -1559,6 +1560,14 @@ footer {
   .nav-links a {
     padding: 6px 12px;
     font-size: 14px;
+  }
+
+  .nav-links a.tablinks,
+  .nav-links a.tablinks * {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
   }
 }
 

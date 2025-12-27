@@ -4745,3 +4745,18 @@ function openSettingsModal() {
   }
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  // Ensure only the Race tab is visible on first load (prevents panels stacking)
+  const tabIds = ['race', 'history', 'calib', 'ota', 'config'];
+
+  tabIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = (id === 'race') ? '' : 'none';
+  });
+
+  // Ensure nav "active" state is correct on first load
+  document.querySelectorAll('.nav-links .tablinks').forEach(a => a.classList.remove('active'));
+  const raceLink = document.getElementById('nav-link-race');
+  if (raceLink) raceLink.classList.add('active');
+});

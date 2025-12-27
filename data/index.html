@@ -45,10 +45,10 @@
         Calibrating pilot frequency, please wait approx 20 secs...
       </div>
       <ul class="nav-links">
-        <li><a id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
-        <li><a id="nav-link-history" class="tablinks" onclick="openTab(event, 'history')">Race History</a></li>
-        <li><a id="nav-link-calib" class="tablinks" onclick="openTab(event, 'calib')">Calibration</a></li>
-        <li><a id="nav-link-config" class="tablinks" onclick="openSettingsModal()">Configuration</a></li>
+        <li><a href="#" id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
+        <li><a href="#" id="nav-link-history" class="tablinks" onclick="openTab(event, 'history')">Race History</a></li>
+        <li><a href="#" id="nav-link-calib" class="tablinks" onclick="openTab(event, 'calib')">Calibration</a></li>
+        <li><a href="#" id="nav-link-config" class="tablinks" onclick="openSettingsModal()">Configuration</a></li>
       </ul>
     </header>
 
@@ -57,7 +57,7 @@
         <!-- Config moved to settings modal -->
       </div>
 
-      <div id="race" class="tabcontent">
+      <div id="race" class="tabcontent" style="display: block;">
         <span id="timer">00:00:00s</span>
         <div id="lapCounter" style="text-align: center; font-size: 18px; font-weight: bold; color: var(--primary-color); margin: 8px 0;">Lap 0</div>
         <div class="racebuttons">
@@ -112,7 +112,7 @@
         </div>
       </div>
 
-      <div id="history" class="tabcontent">
+      <div id="history" class="tabcontent" style="display: none;">
         <h2>Race History</h2>
         <!--<div id="raceHistoryStorageLabel" class="info-label" style="margin: 8px 0; font-size: 0.95em;"></div>-->
         <div class="history-controls">
@@ -171,7 +171,7 @@
         </div>
       </div>
 
-      <div id="calib" class="tabcontent">
+      <div id="calib" class="tabcontent" style="display: none;">
         <div style="margin-bottom: 16px;">
           <button id="startWizardButton" onclick="startCalibrationWizard()" style="width: 100%; padding: 12px; font-size: 16px; background-color: var(--primary-color);">Start Calibration Wizard</button>
         </div>

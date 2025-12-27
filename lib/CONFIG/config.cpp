@@ -893,12 +893,12 @@ void Config::setDefaults(void) {
     conf.ledStrobeColor = 0xFFFFFF;  // White for strobe
     conf.ledManualOverride = 0;  // Manual override off by default
     conf.operationMode = 0;  // WiFi mode by default
-    conf.tracksEnabled = 1;  // Tracks enabled by default
+    conf.tracksEnabled = 0;  // Tracks enabled by default
     conf.selectedTrackId = 0;  // No track selected by default (will be set on first track creation)
     conf.webhooksEnabled = 0;  // Webhooks disabled by default (no IPs configured)
     conf.webhookCount = 0;  // No webhooks configured
     memset(conf.webhookIPs, 0, sizeof(conf.webhookIPs));  // Clear all webhook IPs
-    conf.gateLEDsEnabled = 1;  // Gate LEDs enabled by default
+    conf.gateLEDsEnabled = 0;  // Gate LEDs enabled by default
     conf.webhookRaceStart = 1;  // Race start enabled by default
     conf.webhookRaceStop = 1;  // Race stop enabled by default
     conf.webhookLap = 1;  // Lap enabled by default
