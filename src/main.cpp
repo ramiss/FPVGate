@@ -94,6 +94,19 @@ static void initParallelTask() {
 }
 
 void setup() {
+
+    // set antenna option
+    #ifdef USE_EXT_ANTENNA
+        pinMode(WIFI_ENABLE, OUTPUT); // pinMode(3, OUTPUT);
+        digitalWrite(WIFI_ENABLE, LOW); // digitalWrite(3, LOW); // Activate RF switch control
+
+        delay(100);
+
+        pinMode(WIFI_ANT_CONFIG, OUTPUT); // pinMode(14, OUTPUT);
+        digitalWrite(WIFI_ANT_CONFIG, HIGH); // digitalWrite(14, HIGH); // Use external antenna
+    #endif
+
+
     // ====================================================================
     // ROTORHAZARD MODE DETECTION - CURRENTLY DISABLED
     // Mode switching has been disabled - system now runs in WiFi mode only
@@ -130,6 +143,10 @@ void setup() {
         }
     }
     */
+
+    // set LED pin
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
     
     // Initialize serial (115200)
     Serial.begin(115200);
@@ -227,8 +244,13 @@ void setup() {
     
     DEBUG("Transport system initialized (WiFi + USB)\n");
     
-    led.on(400);
-    buzzer.beep(200);
+    #ifdef PIN_LED
+        led.on(400);
+    #endif
+    #ifdef PIN_BUZZER
+        buzzer.beep(200);
+        buzzer.beep(200);
+    #endif
     initParallelTask();  // Start Core 0 task
     
     /* DISABLED: RotorHazard mode initialization

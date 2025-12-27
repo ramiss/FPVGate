@@ -61,7 +61,7 @@
 #elif defined(APP_BOARD_XIAO_C6)
 
 #define USE_EXT_ANTENNA true
-//#define PIN_LED LED_BUILTIN
+//#define PIN_LED 0
 //#define PIN_VBAT 35
 //#define VBAT_SCALE 2
 //#define VBAT_ADD 2

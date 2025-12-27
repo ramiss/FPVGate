@@ -552,6 +552,13 @@ EEPROM:\n\
         DEBUG("\n");
 #endif
         conf->fromJson(jsonObj);
+
+        // This endpoint is only hit on an explicit user "Save" action.
+        // Persist immediately so /config reflects the new values right away
+        // and we don't lose changes if the unit reboots before the periodic
+        // EEPROM handler runs.
+        conf->write();
+
         request->send(200, "application/json", "{\"status\": \"OK\"}");
         led->on(200);
     });

@@ -893,22 +893,35 @@ function openTab(evt, tabName) {
 function updateEnterRssi(obj, value) {
   enterRssi = parseInt(value);
   enterRssiSpan.textContent = enterRssi;
+
   if (enterRssi <= exitRssi) {
     exitRssi = Math.max(0, enterRssi - 1);
     exitRssiInput.value = exitRssi;
     exitRssiSpan.textContent = exitRssi;
   }
+
+  // Persist via staged config model (Save button commits to /config)
+  // Stage BOTH values because this function may adjust exitRssi automatically.
+  stageConfig('enterRssi', enterRssi);
+  stageConfig('exitRssi', exitRssi);
 }
 
 function updateExitRssi(obj, value) {
   exitRssi = parseInt(value);
   exitRssiSpan.textContent = exitRssi;
+
   if (exitRssi >= enterRssi) {
     enterRssi = Math.min(255, exitRssi + 1);
     enterRssiInput.value = enterRssi;
     enterRssiSpan.textContent = enterRssi;
   }
+
+  // Persist via staged config model (Save button commits to /config)
+  // Stage BOTH values because this function may adjust enterRssi automatically.
+  stageConfig('exitRssi', exitRssi);
+  stageConfig('enterRssi', enterRssi);
 }
+
 
 function stageBandChan() {
   // band index is 0-based
@@ -3910,9 +3923,7 @@ function handleLogForCalibrationBanner(line) {
   }
 }
 
-function pollDebugLogs() {
-  if (!servicesStarted && !usbConnected) return;
-  
+function pollDebugLogs() {  
   fetch('/api/debuglog')
     .then(response => response.json())
     .then(data => {
@@ -4431,11 +4442,13 @@ function displayWebhooks(webhooks) {
 }
 
 function showCalibrationBanner() {
+  console.log('showCalibrationBanner');
   const banner = document.getElementById('calibrationBanner');
   if (banner) banner.style.display = 'block';
 }
 
 function hideCalibrationBanner() {
+  console.log('hideCalibrationBanner');
   const banner = document.getElementById('calibrationBanner');
   if (banner) banner.style.display = 'none';
 }
