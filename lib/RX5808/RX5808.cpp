@@ -166,6 +166,7 @@ uint8_t RX5808::readRssi() {
     // rssi = rssi / RSSI_READS; // average of RSSI_READS readings
 
     // reads 5V value as 0-4095, RX5808 is 3.3V powered so RSSI pin will never output the full range
+    //Serial.println("[DEBUG] Analog pin: " + String(rssiInputPin));
     rssi = analogRead(rssiInputPin);
     // clamp upper range to fit scaling
     if (rssi > 2047) rssi = 2047;

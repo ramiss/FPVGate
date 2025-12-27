@@ -15,6 +15,8 @@ class RX5808 {
     void setFrequency(uint16_t frequency);
     uint8_t readRssi();
     void handleFrequencyChange(uint32_t currentTimeMs, uint16_t potentiallyNewFreq);
+    bool verifyFrequency();
+    bool recentSetFreqFlag = false;
 
    private:
     uint8_t rx5808DataPin = 0;  // DATA (CH1) output line to RX5808 module
@@ -25,7 +27,6 @@ class RX5808 {
     uint16_t currentFrequency = 0;
 
     bool rxPoweredDown = false;
-    bool recentSetFreqFlag = false;
     uint32_t lastSetFreqTimeMs = 0;
 
     void rx5808SerialSendBit1();
@@ -37,7 +38,6 @@ class RX5808 {
     void resetRxModule();
     void setupRxModule();
     void powerDownRxModule();
-    bool verifyFrequency();
 
     static uint16_t freqMhzToRegVal(uint16_t freqInMhz);
 };

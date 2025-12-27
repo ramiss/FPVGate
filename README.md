@@ -6,8 +6,6 @@
 
 A compact, self-contained RSSI-based lap timing solution for 5.8GHz FPV drones. Perfect for personal practice sessions, small indoor tracks, and training.
 
-![FPVGate](SVG/BlackLogo.svg)
-
 ---
 
 ## What is FPVGate?
@@ -22,7 +20,7 @@ FPVGate measures lap times by detecting your drone's video transmitter signal st
 
 | Calibration Wizard | Race History |
 |:------------------:|:------------:|
-| ![Calibration Wizard](screenshots/12-12-2025/Calibration%20Wizard%20Recording%20-%2012-12-2025.png) | ![Race History](screenshots/12-12-2025/Race%20History%20-%2012-12-2025.png) |
+| ![Calibration Wizard](screenshots/12-12-2025/Calibration%20Wizard%20Recording%20-%2012-12-2025.png) | ![Calibration Wizard](screenshots/12-12-2025/Calibration%20Wizard%20Completed%20-%2012-12-2025.png) |
 
 ### Key Features
 

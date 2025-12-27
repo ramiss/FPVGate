@@ -1437,11 +1437,11 @@ function updateMaxLaps(obj, value) {
   maxLaps = parseInt(value);
   let displayText;
   if (maxLaps === 0) {
-    displayText = "Infinite";
+    displayText = "Inf.";
   } else if (maxLaps === 1) {
-    displayText = "1 lap";
+    displayText = "1";
   } else {
-    displayText = maxLaps + " laps";
+    displayText = maxLaps;
   }
   $(obj)
     .parent()

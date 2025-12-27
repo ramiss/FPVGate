@@ -955,6 +955,8 @@ EEPROM:\n\
     server.addHandler(trackCreateHandler);
     server.addHandler(trackUpdateHandler);
 
+    /*  // NOTE: /api/selftest is defined later with the full per-module test suite (RX5808, timer, etc).
+        // Keeping only one registration prevents route conflicts.
     // Self-test endpoint
     server.on("/api/selftest", HTTP_GET, [this](AsyncWebServerRequest *request) {
         selftest->runAllTests();
@@ -962,6 +964,7 @@ EEPROM:\n\
         request->send(200, "application/json", json);
         led->on(200);
     });
+    */
     
     // Debug log endpoint for serial monitor
     server.on("/api/debuglog", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -1246,8 +1249,10 @@ EEPROM:\n\
         // Run Config test
         TestResult configTest = selftest->testConfig(conf);
         
-        // Run Race History test
-        TestResult historyTest = selftest->testRaceHistory(history);
+        #ifdef PIN_SD_CS
+            // Run Race History test
+            TestResult historyTest = selftest->testRaceHistory(history);
+        #endif
         
         // Run Web Server test
         TestResult webTest = selftest->testWebServer();
@@ -1255,8 +1260,10 @@ EEPROM:\n\
         // Run OTA test
         TestResult otaTest = selftest->testOTA();
         
-        // Run Storage test
-        TestResult storageTest = selftest->testStorage();
+        #ifdef PIN_SD_CS
+            // Run Storage test
+            TestResult storageTest = selftest->testStorage();
+        #endif
         
         // Run LittleFS test
         TestResult littleFSTest = selftest->testLittleFS();
@@ -1267,11 +1274,15 @@ EEPROM:\n\
         // Run WiFi test
         TestResult wifiTest = selftest->testWiFi();
         
-        // Run Battery test
-        TestResult batteryTest = selftest->testBattery();
+        #ifdef PIN_VBAT
+            // Run Battery test
+            TestResult batteryTest = selftest->testBattery();
+        #endif
         
+        #ifdef PIN_SD_CS
         // Run Track Manager test
         TestResult trackTest = selftest->testTrackManager();
+        #endif
         
         // Run Webhooks test
         TestResult webhookTest = selftest->testWebhooks();
@@ -1300,15 +1311,23 @@ EEPROM:\n\
         addTest(timerTest);
         addTest(audioTest);
         addTest(configTest);
-        addTest(historyTest);
+        #ifdef PIN_SD_CS
+            addTest(historyTest);
+        #endif
         addTest(webTest);
         addTest(otaTest);
-        addTest(storageTest);
+        #ifdef PIN_SD_CS
+            addTest(storageTest);
+        #endif
         addTest(littleFSTest);
         addTest(eepromTest);
         addTest(wifiTest);
-        addTest(batteryTest);
-        addTest(trackTest);
+        #ifdef PIN_VBAT
+            addTest(batteryTest);
+        #endif
+        #ifdef PIN_SD_CS
+            addTest(trackTest);
+        #endif
         addTest(webhookTest);
         addTest(transportTest);
 #ifdef ESP32S3

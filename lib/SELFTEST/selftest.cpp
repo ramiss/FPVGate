@@ -30,6 +30,12 @@ bool SelfTest::runAllTests() {
     DEBUG("Starting self-tests...\n");
     results.clear();
     allPassed = true;
+
+    // Test RX5808
+    RX5808 *rx;
+    TestResult RX5808Test = testRX5808(rx);  // Pass nullptr for RX5808 instance
+    results.push_back(RX5808Test);  
+    if (!RX5808Test.passed) allPassed = false;
     
     // Test storage
     TestResult storageTest = testStorage();
@@ -194,10 +200,12 @@ TestResult SelfTest::testLittleFS() {
     
     uint64_t totalBytes = LittleFS.totalBytes();
     uint64_t usedBytes = LittleFS.usedBytes();
+    uint64_t freeBytes = totalBytes - usedBytes;
     
     result.passed = true;
     result.details = String("Total: ") + String(totalBytes / 1024) + "KB, " +
-                    "Used: " + String(usedBytes / 1024) + "KB";
+                    "Used: " + String(usedBytes / 1024) + "KB" +
+                    "Free: " + String(freeBytes / 1024) + "KB";
     result.duration_ms = millis() - start;
     return result;
 }
@@ -280,38 +288,104 @@ TestResult SelfTest::testBattery() {
 
 TestResult SelfTest::testRX5808(RX5808* rx5808) {
     TestResult result;
-    result.name = "RX5808 Module";
+    result.name = "RX5808 RF Receive";
     uint32_t start = millis();
-    
+
     if (!rx5808) {
         result.passed = false;
-        result.details = "RX5808 not initialized";
+        result.details = "RX5808 pointer is null";
         result.duration_ms = millis() - start;
         return result;
     }
-    
-    // Read RSSI multiple times
-    uint8_t rssi1 = rx5808->readRssi();
-    delay(50);
-    uint8_t rssi2 = rx5808->readRssi();
-    delay(50);
-    uint8_t rssi3 = rx5808->readRssi();
-    
-    // Check if readings are in valid range
-    if (rssi1 == 0 && rssi2 == 0 && rssi3 == 0) {
+
+    // We can't truly "verify frequency" (RX5808 has no readback).
+    // Instead, infer operation by scanning a few common channels and looking
+    // for RSSI variation / peaks that suggest real RF energy is being received.
+
+    // Common channels (mix of bands) - chosen to catch typical VTX usage.
+    const uint16_t freqs[] = {
+        5645, 5685, 5705, 5740, 5760, 5780, 5800, 5806, 5820, 5840, 5860, 5880, 5917
+    };
+    const int nFreqs = (int)(sizeof(freqs) / sizeof(freqs[0]));
+
+    // Sampling params
+    const uint16_t tuneDelayMs = RX5808_MIN_TUNETIME;       // allow RX to settle after tune
+    const uint8_t samplesPerFreq = 6;      // average a few reads
+    const uint16_t sampleDelayMs = 6;
+
+    uint8_t minRssi = 255;
+    uint8_t maxRssi = 0;
+    uint16_t minFreq = 0;
+    uint16_t maxFreq = 0;
+
+    // For reporting: keep a couple representative points
+    uint8_t firstAvg = 0;
+    uint8_t midAvg = 0;
+    uint8_t lastAvg = 0;
+
+    for (int i = 0; i < nFreqs; i++) {
+        rx5808->setFrequency(freqs[i]);
+        delay(tuneDelayMs);
+        rx5808->recentSetFreqFlag = false;  // Allow RSSI reads now
+
+        uint16_t sum = 0;
+        for (uint8_t s = 0; s < samplesPerFreq; s++) {
+            Serial.println("RX5808 RSSI: " + String(rx5808->readRssi()));
+            sum += rx5808->readRssi();
+            delay(sampleDelayMs);
+        }
+        uint8_t avg = (uint8_t)(sum / samplesPerFreq);
+
+        if (i == 0) firstAvg = avg;
+        if (i == nFreqs / 2) midAvg = avg;
+        if (i == nFreqs - 1) lastAvg = avg;
+
+        if (avg < minRssi) { minRssi = avg; minFreq = freqs[i]; }
+        if (avg > maxRssi) { maxRssi = avg; maxFreq = freqs[i]; }
+    }
+
+    const uint8_t span = (uint8_t)(maxRssi - minRssi);
+
+    // Heuristics:
+    // - If maxRssi is non-zero and we see a meaningful span, we're likely receiving RF energy.
+    // - If everything is 0 (min=max=0), we cannot infer anything -> FAIL (but with clear guidance).
+    // Tune these thresholds based on your typical environment.
+    const uint8_t kMinPeak = 8;     // "saw something above dead-flat"
+    const uint8_t kMinSpan = 6;     // "variation indicates signal vs flatline"
+
+    if (maxRssi == 0 && minRssi == 0) {
         result.passed = false;
-        result.details = "No RSSI signal (check wiring)";
+        result.details =
+            "RSSI flatlined at 0 across scan. "
+            "If receiver works elsewhere, this may be ADC scaling/attenuation or no RF present.";
         result.duration_ms = millis() - start;
         return result;
     }
-    
-    uint8_t avgRssi = (rssi1 + rssi2 + rssi3) / 3;
-    
+
+    // Pass if we saw either a decent peak or decent variation.
+    const bool inferred = (maxRssi >= kMinPeak) || (span >= kMinSpan);
+
+    if (!inferred) {
+        result.passed = false;
+        result.details =
+            "RX5808 RSSI is very low/flat during scan (min=" + String(minRssi) + " @ " + String(minFreq) +
+            " MHz, max=" + String(maxRssi) + " @ " + String(maxFreq) +
+            " MHz, span=" + String(span) + "). "
+            "Try powering a VTX near the gate and re-run selftest.";
+        result.duration_ms = millis() - start;
+        return result;
+    }
+
     result.passed = true;
-    result.details = String("RSSI reads OK, Avg: ") + String(avgRssi);
+    result.details =
+        "RF receive (min=" + String(minRssi) + " @ " + String(minFreq) +
+        " MHz, max=" + String(maxRssi) + " @ " + String(maxFreq) +
+        " MHz, span=" + String(span) +
+        ", samples=" + String(firstAvg) + "/" + String(midAvg) + "/" + String(lastAvg) + ").";
     result.duration_ms = millis() - start;
     return result;
 }
+
 
 TestResult SelfTest::testLapTimer(LapTimer* timer) {
     TestResult result;
@@ -335,20 +409,26 @@ TestResult SelfTest::testLapTimer(LapTimer* timer) {
 }
 
 TestResult SelfTest::testAudio(Buzzer* buzzer) {
-    TestResult result;
-    result.name = "Audio/Buzzer";
-    uint32_t start = millis();
-    
-    if (!buzzer) {
-        result.passed = false;
-        result.details = "Buzzer not initialized";
-        result.duration_ms = millis() - start;
-        return result;
-    }
-    
-    // Test buzzer beep
-    buzzer->beep(100);
-    delay(150);
+    #ifdef PIN_BUZZER
+        TestResult result;
+        result.name = "Audio/Buzzer";
+        uint32_t start = millis();
+        
+        if (!buzzer) {
+            result.passed = false;
+            result.details = "Buzzer not initialized";
+            result.duration_ms = millis() - start;
+            return result;
+        }
+        
+        // Test buzzer beep
+        buzzer->beep(100);
+        delay(150);
+    #else
+        TestResult result;
+        result.name = "Audio";
+        uint32_t start = millis();
+    #endif
     
     // Check if audio announcer JavaScript exists
     bool audioJsExists = LittleFS.exists("/audio-announcer.js");
@@ -361,7 +441,11 @@ TestResult SelfTest::testAudio(Buzzer* buzzer) {
     }
     
     result.passed = true;
-    result.details = "Buzzer OK, Audio JS loaded";
+    #ifdef PIN_BUZZER
+        result.details = "Buzzer OK, Audio JS loaded";
+    #else
+        result.details = "Audio JS loaded";
+    #endif
     result.duration_ms = millis() - start;
     return result;
 }
