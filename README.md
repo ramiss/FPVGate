@@ -3,12 +3,10 @@
 **Personal FPV Lap Timer - Hardware coming soon!**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32--S3-orange.svg)](https://platformio.org/)
-[![GitHub release](https://img.shields.io/github/v/release/LouisHitchcock/FPVGate)](https://github.com/LouisHitchcock/FPVGate/releases)
 
 A compact, self-contained RSSI-based lap timing solution for 5.8GHz FPV drones. Perfect for personal practice sessions, small indoor tracks, and training.
 
-![FPVGate](assets/logo-black.svg)
+![FPVGate](SVG/BlackLogo.svg)
 
 ---
 
@@ -160,7 +158,7 @@ Exit  ├/──────────\─
 ### Recent Updates
 
 **v0.9.0 (Latest - Beta)**
-- Forked from [FPVGate](https://github.com/LouisHitchcock/FPVGate)
+- Forked from [FPVGate](https://github.com/LouisHitchcock/FPVGate) v1.4.1
 - Ported to the FPVGate Persoanl Lap Timer hardware (Seediuno ESP32-C6) available for purchase (link coming soon!).
 - Added all the popular digital bands and channels.
 - Removed Track Management and auto race saving because we don't use an SD Card.

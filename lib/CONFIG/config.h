@@ -102,7 +102,7 @@
 #define EEPROM_RESERVED_SIZE 512
 #define CONFIG_MAGIC_MASK (0b11U << 30)
 #define CONFIG_MAGIC (0b01U << 30)
-#define CONFIG_VERSION 6U
+#define CONFIG_VERSION 7
 
 #define EEPROM_CHECK_TIME_MS 1000
 
@@ -117,6 +117,7 @@ typedef struct {
     uint8_t announcerRate;
     uint8_t enterRssi;
     uint8_t exitRssi;
+    uint8_t rssiSens;          // 0=Normal(Legacy), 1=High(1.5x Boost)
     uint8_t maxLaps;
     uint8_t ledMode;           // 0=off, 1=solid, 2=pulse, 3=rainbow (legacy, kept for migration)
     uint8_t ledBrightness;     // 0-255

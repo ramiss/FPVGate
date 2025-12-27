@@ -86,6 +86,7 @@ void Config::toJson(AsyncResponseStream& destination) {
     config["anRate"] = conf.announcerRate;
     config["enterRssi"] = conf.enterRssi;
     config["exitRssi"] = conf.exitRssi;
+    config["rssiSens"] = conf.rssiSens;
     config["maxLaps"] = conf.maxLaps;
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
@@ -144,6 +145,7 @@ void Config::toJsonString(char* buf) {
     config["anRate"] = conf.announcerRate;
     config["enterRssi"] = conf.enterRssi;
     config["exitRssi"] = conf.exitRssi;
+    config["rssiSens"] = conf.rssiSens;
     config["maxLaps"] = conf.maxLaps;
     config["ledMode"] = conf.ledMode;
     config["ledBrightness"] = conf.ledBrightness;
@@ -260,6 +262,7 @@ void Config::fromJson(JsonObject source) {
     // RSSI + race settings
     setU8("enterRssi", conf.enterRssi,    0, 255);
     setU8("exitRssi",  conf.exitRssi,     0, 255);
+    setU8("rssiSens", conf.rssiSens,      0, 1);
     setU8("maxLaps",   conf.maxLaps,      0, 255);
 
     // ===== LED settings =====
@@ -883,6 +886,7 @@ void Config::setDefaults(void) {
     conf.announcerRate = 10;
     conf.enterRssi = 72;
     conf.exitRssi = 68;
+    conf.rssiSens = 0;  // Normal sensitivity (Legacy)
     conf.maxLaps = 0;
     conf.ledMode = 3;  // Rainbow wave by default (legacy)
     conf.ledBrightness = 120;

@@ -29,7 +29,7 @@
       </nav>
       <div id="raceTabDownloadReminder" class="banner-warning"
           style="display:none; margin: 10px 0; padding: 6px 10px; border-radius: 8px;">
-        <span>Download the race before unplugging power if you want to save it.</span>
+        <span>Races are lost when unplugged. Download under Race History to save.</span>
         <a href="#" id="raceTabDownloadReminderHide" style="margin-left:auto;">hide</a>
       </div>
       <div id="calibrationBanner" style="
@@ -460,28 +460,28 @@
                 <div class="config-item">
                   <label for="bandSelect">Band:</label>
                   <select id="bandSelect">
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="E">E</option>
-                    <option value="F">F</option>
-                    <option value="R">R</option>
-                    <option value="L">L</option>
-                    <option value="DJIv1-25">DJIv1-25</option>
-                    <option value="DJIv1-25CE">DJIv1-25CE</option>
-                    <option value="DJIv1_50">DJIv1_50</option>
-                    <option value="DJI03/04-10/20">DJI03/04-10/20</option>
-                    <option value="DJI03/04-20CE">DJI03/04-20CE</option>
-                    <option value="DJI03/04-40">DJI03/04-40</option>
-                    <option value="DJI03/04-40CE">DJI03/04-40CE</option>
-                    <option value="DJI04-R">DJI04-R</option>
-                    <option value="HDZero-R">HDZero-R</option>
-                    <option value="HDZero-E">HDZero-E</option>
-                    <option value="HDZero-F">HDZero-F</option>
-                    <option value="HDZero-CE">HDZero-CE</option>
-                    <option value="WLKSnail-R">WLKSnail-R</option>
-                    <option value="WLKSnail-25">WLKSnail-25</option>
-                    <option value="WLKSnail-25CE">WLKSnail-25CE</option>
-                    <option value="WLKSnail-50">WLKSnail-50</option>
+                    <option value="A">Analog A</option>
+                    <option value="B">Analog B</option>
+                    <option value="E">Analog E</option>
+                    <option value="F">Analog F</option>
+                    <option value="R">Analog R</option>
+                    <option value="L">Analog L</option>
+                    <option value="DJIv1-25">DJIv1 (25Mhz)</option>
+                    <option value="DJIv1-25CE">DJIv1 (25Mhz)CE</option>
+                    <option value="DJIv1_50">DJIv1 (50Mhz)</option>
+                    <option value="DJI03/04-10/20">DJI03 & 04 (10/20Mhz)</option>
+                    <option value="DJI03/04-20CE">DJI03 & 04 (20Mhz)CE</option>
+                    <option value="DJI03/04-40">DJI03 & 04 (40Mhz)</option>
+                    <option value="DJI03/04-40CE">DJI03 & 04 (40Mhz)CE</option>
+                    <option value="DJI04-R">DJI04 Race</option>
+                    <option value="HDZero-R">HDZero Race</option>
+                    <option value="HDZero-E">HDZero E</option>
+                    <option value="HDZero-F">HDZero F</option>
+                    <option value="HDZero-CE">HDZero CE</option>
+                    <option value="WLKSnail-R">WLKSnail Race</option>
+                    <option value="WLKSnail-25">WLKSnail (25Mhz)</option>
+                    <option value="WLKSnail-25CE">WLKSnail (25Mhz)CE</option>
+                    <option value="WLKSnail-50">WLKSnail (50Mhz)</option>
                   </select>
                 </div>
                 
@@ -504,7 +504,7 @@
                 </div>
               </div>
               <div style="font-size: 12px; color: var(--secondary-color); margin-left:0px; margin-top: -12px; margin-bottom: 10px;">
-                  Wait approx. 30 seconds after changing band/channel for frequency to update
+                  Wait approx. 20 seconds after changing band/channel for new frequency to calibrate
               </div>
 
               <div class="config-item">
@@ -719,10 +719,10 @@
               <h3 style="margin-top: 0;">Connection Mode</h3>
               <div class="config-item">
                 <label for="connectionMode">Connection Mode:</label>
-                <select id="connectionMode" onchange="changeConnectionMode()">
+                <select id="connectionMode">
                   <option value="auto" selected>Auto (WiFi/USB)</option>
                   <option value="wifi">WiFi Only</option>
-                  <option value="usb">USB Only</option>
+                  <!--<option value="usb">USB Only</option>-->
                 </select>
               </div>
               <div style="font-size: 12px; color: var(--secondary-color); margin-left: 170px; margin-top: -8px;">
@@ -854,7 +854,7 @@
               <h3 style="margin-top: 0;">RSSI Detection</h3>
               <div class="config-item">
                 <label for="rssiSensitivity">RSSI Sensitivity:</label>
-                <select id="rssiSensitivity">
+                <select id="rssiSensitivity" onchange="autoSaveConfig()">
                   <option value="0">Normal (Legacy)</option>
                   <option value="1" selected>High (1.5x Boost)</option>
                 </select>

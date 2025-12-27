@@ -417,6 +417,8 @@ onload = async function (e) {
   race.style.display = "block";
   calib.style.display = "none";
 
+  attachConfigStagingListeners();
+
   // Initialize transport (USB/WiFi)
   await initializeTransport();
 
@@ -715,21 +717,41 @@ function stageConfig(key, value) {
   // Do not mark dirty while we are simply populating the UI during modal open.
   if (settingsLoading) return;
 
-  // If value is unchanged from what we loaded, do not mark dirty.
-  // (This prevents "false dirty" from UI toggles calling stageConfig redundantly.)
-  if (baselineConfig && Object.prototype.hasOwnProperty.call(baselineConfig, key)) {
+  const norm = (v) => (v === true ? 1 : v === false ? 0 : v);
+
+  const hasBaseline = baselineConfig && Object.prototype.hasOwnProperty.call(baselineConfig, key);
+
+  // If matches baseline => UN-stage it
+  if (hasBaseline) {
     const base = baselineConfig[key];
 
-    // Normalize booleans/0/1 commonly used in your config
-    const norm = (v) => (v === true ? 1 : v === false ? 0 : v);
-    if (norm(base) === norm(value)) return;
+    // For arrays (webhookIPs), compare shallow
+    const bothArrays = Array.isArray(base) && Array.isArray(value);
+    if (bothArrays) {
+      const same =
+        base.length === value.length &&
+        base.every((x, i) => String(x) === String(value[i]));
+
+      if (same) {
+        delete stagedConfig[key];
+      } else {
+        stagedConfig[key] = value;
+      }
+    } else {
+      if (norm(base) === norm(value)) {
+        delete stagedConfig[key];
+      } else {
+        stagedConfig[key] = value;
+      }
+    }
+  } else {
+    stagedConfig[key] = value;
   }
 
-  stagedConfig[key] = value;
-  stagedDirty = true;
+  stagedDirty = Object.keys(stagedConfig).length > 0;
 
   const d = document.getElementById('configDirtyIndicator');
-  if (d) d.style.display = 'inline';
+  if (d) d.style.display = stagedDirty ? 'inline' : 'none';
 }
 
 
@@ -952,108 +974,160 @@ function stageBandChan() {
 }
 
 function buildConfigSnapshotFromUI() {
-  // Read UI into one config object (same shape your backend expects)
-
   // Pilot settings
   const callsignInput = document.getElementById('pcallsign');
   const phoneticInput = document.getElementById('pphonetic');
   const colorInput = document.getElementById('pilotColor');
 
-  // Convert hex color to integer
-  let pilotColorInt = 0x0080FF; // default
+  let pilotColorInt = 0x0080FF;
   if (colorInput && colorInput.value) {
     pilotColorInt = parseInt(colorInput.value.replace('#', ''), 16);
   }
 
-  // RSSI sensitivity
+  // RSSI sensitivity (0/1)
   const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
+  const rssiSens = rssiSensitivitySelect ? parseInt(rssiSensitivitySelect.value, 10) : 1;
 
   // Theme / voice / lap format
   const themeSelect = document.getElementById('themeSelect');
   const voiceSelect = document.getElementById('voiceSelect');
   const lapFormatSelect = document.getElementById('lapFormatSelect');
 
-  // LED settings UI
+  // Core timing
+  const minLapInput = document.getElementById('minLap');
+  const alarmThreshold = document.getElementById('alarmThreshold');
+  const announcerSelect = document.getElementById('announcerSelect');
+  const announcerRateInput = document.getElementById('announcerRate');
+  const enterRssiInput = document.getElementById('enter');
+  const exitRssiInput = document.getElementById('exit');
+  const maxLapsInput = document.getElementById('maxLaps');
+
+  // LED settings
   const ledPresetSelect = document.getElementById('ledPreset');
   const ledBrightnessInput = document.getElementById('ledBrightness');
-  const ledColorInput = document.getElementById('ledColor');
+  const ledSpeedInput = document.getElementById('ledSpeed');
 
-  // Gate LED + webhooks UI
+  // IMPORTANT: your HTML uses ledSolidColor (not ledColor)
+  const ledSolidColorInput = document.getElementById('ledSolidColor');
+  const ledFadeColorInput = document.getElementById('ledFadeColor');
+  const ledStrobeColorInput = document.getElementById('ledStrobeColor');
+  const ledManualOverrideToggle = document.getElementById('ledManualOverride');
+
+  const parseColor = (el, fallbackHex) => {
+    const hex = (el && el.value) ? el.value : fallbackHex;
+    return parseInt(hex.replace('#', ''), 16);
+  };
+
+  const ledColorInt = parseColor(ledSolidColorInput, '#0080FF');
+  const ledFadeColorInt = parseColor(ledFadeColorInput, '#00FF00');
+  const ledStrobeColorInt = parseColor(ledStrobeColorInput, '#FFFFFF');
+
+  // Tracks
+  const tracksEnabledToggle = document.getElementById('tracksEnabled');
+  const selectedTrackSelect = document.getElementById('selectedTrack');
+  const selectedTrackId = selectedTrackSelect ? parseInt(selectedTrackSelect.value, 10) : 0;
+
+  // Webhooks
+  const webhooksEnabledToggle = document.getElementById('webhooksEnabled');
+
+  // We maintain this global from displayWebhooks() (see drop-in below)
+  const ips = Array.isArray(window.currentWebhookIPs) ? window.currentWebhookIPs : [];
+
+  // Gate LED + race event toggles
   const gateLEDsEnabledToggle = document.getElementById('gateLEDsEnabled');
   const webhookRaceStartToggle = document.getElementById('webhookRaceStart');
   const webhookRaceStopToggle = document.getElementById('webhookRaceStop');
   const webhookLapToggle = document.getElementById('webhookLap');
 
-  // Battery monitoring UI
+  // Battery / antenna (only if present)
   const batteryToggle = document.getElementById('batteryMonitorToggle');
-
-  // External antenna UI (if present)
   const externalAntennaToggle = document.getElementById('externalAntennaToggle');
 
-  // Build payload (match backend keys)
+  // WiFi credentials
+  const ssidInput = document.getElementById('ssid');
+  const pwdInput = document.getElementById('pwd');
+
+  // Band/channel
+  const bandSelect = document.getElementById('bandSelect');
+  const channelSelect = document.getElementById('channelSelect');
+
   const cfg = {
-    // Pilot band/channel persistence
     band: bandSelect ? bandSelect.selectedIndex : 0,
     chan: (() => {
-      const n = parseInt(channelSelect?.value ?? "1", 10); // "1".."8"
+      const n = parseInt(channelSelect?.value ?? "1", 10);
       if (!Number.isFinite(n)) return 0;
-      return Math.max(0, Math.min(7, n - 1)); // 0-based index
+      return Math.max(0, Math.min(7, n - 1));
     })(),
-    // Core timing + RSSI
-    freq: typeof frequency !== 'undefined' ? frequency : 0,
+
+    // Frequency used by backend too
+    freq: (typeof frequency !== 'undefined') ? frequency : 0,
+
+    // Units stored x10 (0.1s)
     minLap: parseInt(parseFloat(minLapInput?.value || 0) * 10),
     alarm: parseInt(parseFloat(alarmThreshold?.value || 0) * 10),
     anType: announcerSelect ? announcerSelect.selectedIndex : 0,
-    anRate: parseInt(parseFloat((typeof announcerRate !== 'undefined' ? announcerRate : 1)) * 10),
-    enterRssi: typeof enterRssi !== 'undefined' ? parseInt(enterRssi) : 0,
-    exitRssi: typeof exitRssi !== 'undefined' ? parseInt(exitRssi) : 0,
-    maxLaps: typeof maxLaps !== 'undefined' ? parseInt(maxLaps) : 0,
-    rssiSens: rssiSensitivitySelect ? parseInt(rssiSensitivitySelect.value) : 1,
+    anRate: parseInt(parseFloat(announcerRateInput?.value || 0)),
+    enterRssi: parseInt(enterRssiInput?.value || 0),
+    exitRssi: parseInt(exitRssiInput?.value || 0),
+    maxLaps: parseInt(maxLapsInput?.value || 0),
 
-    // Pilot + WiFi credentials
-    name: pilotNameInput ? pilotNameInput.value : '',
+    // NEW: RSSI sensitivity (must be supported in firmware; see section B)
+    rssiSens: Number.isFinite(rssiSens) ? rssiSens : 1,
+
+    // LED config (matches firmware keys)
+    ledPreset: ledPresetSelect ? parseInt(ledPresetSelect.value, 10) : 0,
+    ledBrightness: ledBrightnessInput ? parseInt(ledBrightnessInput.value, 10) : 128,
+    ledSpeed: ledSpeedInput ? parseInt(ledSpeedInput.value, 10) : 10,
+    ledColor: ledColorInt,
+    ledFadeColor: ledFadeColorInt,
+    ledStrobeColor: ledStrobeColorInt,
+    ledManualOverride: (ledManualOverrideToggle && ledManualOverrideToggle.checked) ? 1 : 0,
+
+    // Tracks
+    tracksEnabled: (tracksEnabledToggle && tracksEnabledToggle.checked) ? 1 : 0,
+    selectedTrackId: Number.isFinite(selectedTrackId) ? selectedTrackId : 0,
+
+    // Webhooks
+    webhooksEnabled: (webhooksEnabledToggle && webhooksEnabledToggle.checked) ? 1 : 0,
+    webhookIPs: ips,
+
+    // Gate LED + event webhooks
+    gateLEDsEnabled: (gateLEDsEnabledToggle && gateLEDsEnabledToggle.checked) ? 1 : 0,
+    webhookRaceStart: (webhookRaceStartToggle && webhookRaceStartToggle.checked) ? 1 : 0,
+    webhookRaceStop: (webhookRaceStopToggle && webhookRaceStopToggle.checked) ? 1 : 0,
+    webhookLap: (webhookLapToggle && webhookLapToggle.checked) ? 1 : 0,
+
+    // Pilot
+    name: (document.getElementById('pname')?.value || ''),
     pilotCallsign: callsignInput ? callsignInput.value : '',
     pilotPhonetic: phoneticInput ? phoneticInput.value : '',
     pilotColor: pilotColorInt,
+
+    // UI prefs
+    theme: themeSelect ? themeSelect.value : '',
+    selectedVoice: voiceSelect ? voiceSelect.value : '',
+    lapFormat: lapFormatSelect ? lapFormatSelect.value : '',
+
+    // WiFi
     ssid: ssidInput ? ssidInput.value : '',
     pwd: pwdInput ? pwdInput.value : '',
 
-    // UI-driven persistent settings
-    theme: themeSelect ? themeSelect.value : (localStorage.getItem('theme') || 'oceanic'),
-    selectedVoice: voiceSelect ? voiceSelect.value : (localStorage.getItem('selectedVoice') || 'default'),
-    lapFormat: lapFormatSelect ? lapFormatSelect.value : (localStorage.getItem('lapFormat') || 'full'),
-
-    // LED persisted config
-    ledPreset: ledPresetSelect ? parseInt(ledPresetSelect.value) : 0,
-    ledBrightness: ledBrightnessInput ? parseInt(ledBrightnessInput.value) : 0,
-    ledColor: ledColorInput && ledColorInput.value
-      ? parseInt(ledColorInput.value.replace('#', ''), 16)
-      : 0,
-
-    // Gate LED + webhooks persisted config
-    gateLEDsEnabled: gateLEDsEnabledToggle && gateLEDsEnabledToggle.checked ? 1 : 0,
-    webhookRaceStart: webhookRaceStartToggle && webhookRaceStartToggle.checked ? 1 : 0,
-    webhookRaceStop: webhookRaceStopToggle && webhookRaceStopToggle.checked ? 1 : 0,
-    webhookLap: webhookLapToggle && webhookLapToggle.checked ? 1 : 0,
-
-    // Battery persisted config (only if UI exists)
-    batteryMonitor: batteryToggle && batteryToggle.checked ? 1 : 0,
-
-    // External antenna persisted config (only if UI exists)
-    extAntenna: externalAntennaToggle && externalAntennaToggle.checked ? 1 : 0,
+    // Optional platform features
+    batteryMonitor: (batteryToggle && batteryToggle.checked) ? 1 : 0,
+    extAntenna: (externalAntennaToggle && externalAntennaToggle.checked) ? 1 : 0,
   };
 
   return cfg;
 }
 
-function autoSaveConfig() {
-  // In "Save button only" mode, this means: STAGE ONLY (no flash writes).
-  stagedConfig = buildConfigSnapshotFromUI();
-  stagedDirty = true;
 
-  const d = document.getElementById('configDirtyIndicator');
-  if (d) d.style.display = 'inline';
+function autoSaveConfig() {
+  // Stage ONLY: compute snapshot and stage each key vs baseline
+  const snap = buildConfigSnapshotFromUI();
+  Object.keys(snap).forEach(k => stageConfig(k, snap[k]));
 }
+
+
 
 async function saveConfig() {
   // Commit staged config to device (single write)
@@ -1091,6 +1165,59 @@ async function saveConfig() {
     // Keep stagedDirty=true so user can try saving again
   }
 }
+
+let configStagingListenersAttached = false;
+
+function attachConfigStagingListeners() {
+  if (configStagingListenersAttached) return;
+  configStagingListenersAttached = true;
+
+  // Helper: attach change/input and stage via autoSaveConfig
+  const wire = (id, evt = 'change') => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener(evt, autoSaveConfig);
+  };
+
+  // --- Configuration tab controls (stage everything) ---
+
+  // RSSI sensitivity (your current missing one)
+  wire('rssiSensitivity', 'change');
+
+  // Theme / Voice / Lap format
+  wire('themeSelect', 'change');
+  wire('voiceSelect', 'change');
+  wire('lapFormatSelect', 'change');
+
+  // LED controls
+  wire('ledPreset', 'change');
+  wire('ledBrightness', 'input');
+  wire('ledColor', 'input');
+
+  // Gate LED + Webhooks
+  wire('gateLEDsEnabled', 'change');
+  wire('webhookRaceStart', 'change');
+  wire('webhookRaceStop', 'change');
+  wire('webhookLap', 'change');
+
+  // Battery + External antenna (if present in this build)
+  wire('batteryMonitorToggle', 'change');
+  wire('externalAntennaToggle', 'change');
+
+  // Pilot settings
+  wire('pcallsign', 'input');
+  wire('pphonetic', 'input');
+  wire('pilotColor', 'input');
+
+  // WiFi credentials
+  wire('ssid', 'input');
+  wire('pwd', 'input');
+
+  // NOTE:
+  // Your minLap/alarm/maxLaps/announcerRate/etc already call autoSaveConfig()
+  // inside their updateX() functions, so they are covered.
+}
+
 
 /* Don't use this one because it saves to flash immediately on every change.
 // Debounced auto-save to prevent excessive API calls
@@ -1698,79 +1825,98 @@ function updateLedPresetUI() {
   }
 }
 
-// Change LED preset (UI update + send command to device)
 function changeLedPreset() {
   const presetSelect = document.getElementById('ledPreset');
-  const preset = parseInt(presetSelect.value);
-  
-  // Update UI
+  const preset = parseInt(presetSelect.value, 10);
+
   updateLedPresetUI();
-  
-  // If Pilot Colour preset (9) is selected, use pilot color
+
+  // Keep existing live behavior
   if (preset === 9) {
     const pilotColor = document.getElementById('pilotColor')?.value || '#0080FF';
-    const color = pilotColor.substring(1); // Remove #
-    sendLedCommand('color', { color })
-      .catch(err => console.error('Failed to set pilot color:', err));
+    const color = pilotColor.substring(1);
+    sendLedCommand('color', { color }).catch(err => console.error('Failed to set pilot color:', err));
+  } else if (preset === 2) {
+    setSolidColor();
+  } else if (preset === 6) {
+    setFadeColor();
+  } else if (preset === 7) {
+    setStrobeColor();
   }
-  
-  // Send preset command to device
-  sendLedCommand('preset', { preset })
-    .then(data => console.log('LED preset changed:', data))
-    .catch(err => console.error('Failed to change LED preset:', err));
+
+  // Stage config
+  stageConfig('ledPreset', Number.isFinite(preset) ? preset : 0);
 }
+
 
 function setSolidColor() {
   const colorInput = document.getElementById('ledSolidColor');
-  const color = colorInput.value.substring(1);
-  
-  sendLedCommand('color', { color })
+  const colorHex = colorInput.value.substring(1);
+
+  sendLedCommand('color', { color: colorHex })
     .then(data => console.log('LED solid color changed:', data))
     .catch(err => console.error('Failed to change LED solid color:', err));
+
+  stageConfig('ledColor', parseInt(colorHex, 16));
 }
 
 function setFadeColor() {
   const colorInput = document.getElementById('ledFadeColor');
-  const color = colorInput.value.substring(1);
-  
-  sendLedCommand('fadecolor', { color })
+  const colorHex = colorInput.value.substring(1);
+
+  sendLedCommand('fadecolor', { color: colorHex })
     .then(data => console.log('LED fade color changed:', data))
     .catch(err => console.error('Failed to change LED fade color:', err));
+
+  stageConfig('ledFadeColor', parseInt(colorHex, 16));
 }
 
 function setStrobeColor() {
   const colorInput = document.getElementById('ledStrobeColor');
-  const color = colorInput.value.substring(1);
-  
-  sendLedCommand('strobecolor', { color })
+  const colorHex = colorInput.value.substring(1);
+
+  sendLedCommand('strobecolor', { color: colorHex })
     .then(data => console.log('LED strobe color changed:', data))
     .catch(err => console.error('Failed to change LED strobe color:', err));
+
+  stageConfig('ledStrobeColor', parseInt(colorHex, 16));
 }
 
 function updateLedBrightness(obj, value) {
-  const brightness = parseInt(value);
+  const brightness = parseInt(value, 10);
   $(obj).parent().find('span').text(brightness);
-  
+
+  // Keep existing live behavior
   sendLedCommand('brightness', { brightness })
     .then(data => console.log('LED brightness changed:', data))
     .catch(err => console.error('Failed to change LED brightness:', err));
+
+  // Stage config
+  stageConfig('ledBrightness', Number.isFinite(brightness) ? brightness : 128);
 }
 
+
 function updateLedSpeed(obj, value) {
-  const speed = parseInt(value);
+  const speed = parseInt(value, 10);
   $(obj).parent().find('span').text(speed);
-  
+
+  // Keep existing live behavior
   sendLedCommand('speed', { speed })
     .then(data => console.log('LED speed changed:', data))
     .catch(err => console.error('Failed to change LED speed:', err));
+
+  // Stage config
+  stageConfig('ledSpeed', Number.isFinite(speed) ? speed : 10);
 }
 
 function toggleLedManualOverride(enabled) {
   const enable = enabled ? 1 : 0;
-  
+
   sendLedCommand('override', { enable })
     .then(data => console.log('LED manual override:', enabled ? 'enabled' : 'disabled', data))
     .catch(err => console.error('Failed to toggle LED manual override:', err));
+
+  stageConfig('ledManualOverride', enable);
 }
 
 function toggleGateLEDs(enabled) {
@@ -4176,26 +4322,14 @@ function setTracksUI(enabled) {
   }
 }
 
-// Backwards-compatible: HTML calls toggleTracksEnabled(this.checked)
 function toggleTracksEnabled(enabled, opts = {}) {
   const save = (opts.save !== undefined) ? !!opts.save : true;
 
-  // Always update UI
   setTracksUI(enabled);
 
-  // Only persist when user actually toggles it
   if (!save) return;
 
-  fetch('/config', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ tracksEnabled: enabled ? 1 : 0 })
-  })
-  .then(r => r.json())
-  .catch(err => console.error('Error toggling tracks:', err));
+  stageConfig('tracksEnabled', enabled ? 1 : 0);
 }
 
 function loadTracks() {
@@ -4374,9 +4508,9 @@ function deleteTrack(trackId) {
 
 function selectTrack() {
   const selectEl = document.getElementById('selectedTrack');
-  const trackId = parseInt(selectEl.value);
-  
-  // Update local track length when track is selected
+  const trackId = parseInt(selectEl.value, 10) || 0;
+
+  // Existing UI/runtime behavior
   if (trackId === 0) {
     trackLapLength = 0;
     currentTrackId = 0;
@@ -4390,32 +4524,18 @@ function selectTrack() {
       console.log(`Track selected: ${selectedTrack.name}, length: ${trackLapLength}m`);
     }
   }
-  
+
+  // Keep existing backend behavior
   fetch('/tracks/select', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'trackId=' + trackId
   })
   .then(response => response.json())
-  .then(data => {
-    if (data.status === 'OK') {
-      console.log('Track selected on backend:', trackId);
-      // Save to config
-      fetch('/config', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selectedTrackId: trackId
-        })
-      });
-    }
-  })
-  .catch(error => console.error('Error selecting track:', error));
+  .catch(err => console.error('Error selecting track:', err));
+
+  // Stage config
+  stageConfig('selectedTrackId', trackId);
 }
 
 // ===== WEBHOOK MANAGEMENT =====
@@ -4452,16 +4572,23 @@ function loadWebhooks() {
 }
 
 function displayWebhooks(webhooks) {
+  // Keep a stable list so Save Config can send it (webhookIPs)
+  window.currentWebhookIPs = Array.isArray(webhooks) ? webhooks.slice() : [];
+
+  // Stage it (unless settingsLoading)
+  stageConfig('webhookIPs', window.currentWebhookIPs);
+
   const webhooksListContent = document.getElementById('webhooksListContent');
   if (!webhooksListContent) return;
-  
+
   if (webhooks.length === 0) {
-    webhooksListContent.innerHTML = '<p style="color: var(--secondary-color); text-align: center; padding: 16px;">No webhooks configured yet</p>';
+    webhooksListContent.innerHTML =
+      '<p style="color: var(--secondary-color); text-align: center; padding: 16px;">No webhooks configured yet</p>';
     return;
   }
-  
+
   let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-  
+
   webhooks.forEach(ip => {
     html += `
       <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--bg-secondary); border-radius: 8px; border-left: 4px solid var(--accent-color);">
@@ -4469,11 +4596,11 @@ function displayWebhooks(webhooks) {
           <div style="font-weight: bold; font-size: 15px;">${ip}</div>
           <div style="font-size: 13px; color: var(--secondary-color); margin-top: 2px;">http://${ip}/Lap, /RaceStart, /RaceStop</div>
         </div>
-        <button onclick="removeWebhook('${ip}')" style="padding: 6px 12px; font-size: 14px; background-color: var(--danger-color);">Remove</button>
+        <button onclick="removeWebhook('${ip}')" style="padding: 6px 10px; font-size: 14px; background-color: var(--danger-color);">Remove</button>
       </div>
     `;
   });
-  
+
   html += '</div>';
   webhooksListContent.innerHTML = html;
 }
@@ -4733,6 +4860,13 @@ function openSettingsModal() {
         }
         clearStagedConfig();     // resets stagedConfig + stagedDirty + indicator
         settingsLoading = false; // now user actions can mark dirty
+
+        // RSSI sensitivity
+        const rssiSensitivitySelect = document.getElementById('rssiSensitivity');
+        if (rssiSensitivitySelect && config.rssiSens !== undefined) {
+          rssiSensitivitySelect.value = String(config.rssiSens);
+        }
+
 
       })
       .catch(error => {
