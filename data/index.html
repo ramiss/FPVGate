@@ -27,8 +27,10 @@
           </div>
         </div>
       </nav>
-      <div id="raceTabDownloadReminder" class="banner-warning" style="display:none; margin: 10px 0; padding: 2px; border-radius: 8px;">
-          Download the race before unplugging power if you want to save it.
+      <div id="raceTabDownloadReminder" class="banner-warning"
+          style="display:none; margin: 10px 0; padding: 6px 10px; border-radius: 8px;">
+        <span>Download the race before unplugging power if you want to save it.</span>
+        <a href="#" id="raceTabDownloadReminderHide" style="margin-left:auto;">hide</a>
       </div>
       <div id="calibrationBanner" style="
         display: none;
@@ -40,7 +42,7 @@
         border-bottom: 2px solid #cc8f00;
         z-index: 1000;
       ">
-        Calibrating pilot frequency, please wait...
+        Calibrating pilot frequency, please wait approx 20 secs...
       </div>
       <ul class="nav-links">
         <li><a id="nav-link-race" class="tablinks active" onclick="openTab(event, 'race')">Race</a></li>
@@ -196,9 +198,40 @@
 
       <div id="ota" class="tabcontent" style="display: none;">
         <div class="firmware-update">
-            <iframe src="http://www.fpvgate.xyz/update" width="100%" height="600px" frameborder="0"></iframe>
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+            <a
+              href="http://www.fpvgate.xyz/update"
+              target="_blank"
+              rel="noopener noreferrer"
+              style="display:inline-block; padding:10px 14px; border-radius:8px; text-decoration:none; background:var(--accent-color); color:white;"
+            >
+              Open Update Page (new tab)
+            </a>
+
+            <button id="loadUpdateInlineBtn" onclick="loadOtaUpdateInline()"
+                    style="background-color: var(--secondary-color);">
+              Load Update Page Inline
+            </button>
+
+            <span style="opacity:0.8; font-size: 0.9em;">
+              (Inline iframe can trigger password-manager console errors; new tab is safest)
+            </span>
+          </div>
+
+          <iframe
+            id="otaUpdateFrame"
+            src="about:blank"
+            width="100%"
+            height="600px"
+            frameborder="0"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            sandbox="allow-scripts"
+            style="background: transparent; border-radius: 10px;"
+          ></iframe>
         </div>
       </div>
+
     </main>
 
     <footer></footer>

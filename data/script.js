@@ -436,6 +436,24 @@ onload = async function (e) {
     console.error('[Script] Failed to load race history on startup:', err);
   }
 
+  console.log('[Script] Starting Debug Listener...');
+  try{
+    startDebugListener();
+    console.log('[Script] Debug Listener started OK');
+  } catch (err) {
+      console.error('[Script] Debug Listener failed:', err);
+  }
+
+  // Wire the "hide" link on the Race tab banner
+  const hideLink = document.getElementById("raceTabDownloadReminderHide");
+  if (hideLink) {
+    hideLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      hideRaceDownloadReminder();
+      applyRaceHistoryModeUI(); // re-apply to honor the sessionStorage flag immediately
+    });
+  }
+
   // Fetch config using appropriate transport
   let configData;
   try {
@@ -1513,6 +1531,14 @@ function saveLapFormat() {
   }
 }
 
+function hideRaceDownloadReminder() {
+  const banner = document.getElementById("raceTabDownloadReminder");
+  if (banner) {
+    banner.style.display = "none";
+    sessionStorage.setItem("hideRaceDownloadReminder", "1");
+  }
+}
+
 function saveVoiceSelection() {
   const voiceSelect = document.getElementById('voiceSelect');
   if (voiceSelect) {
@@ -2371,23 +2397,30 @@ function applyRaceHistoryModeUI() {
   if (storageLabel) {
     if (raceHistoryPersistent) {
       storageLabel.textContent = 'Storage: SD card (race history is saved on the device).';
-      storageLabel.style.opacity = '0.9';
     } else {
-      storageLabel.textContent = 'Storage: RAM-only (no SD). Race history is NOT saved on the device.';
-      storageLabel.style.opacity = '1.0';
+      storageLabel.textContent = 'Storage: RAM only (race history is NOT saved after power off).';
     }
   }
 
+  // Banner logic (RAM-only reminder), with "hide" persisted for this browser session
   if (raceTabBanner) {
-    if (raceHistoryPersistent) {
+    const userHidden = sessionStorage.getItem("hideRaceDownloadReminder") === "1";
+
+    if (raceHistoryPersistent || userHidden) {
       raceTabBanner.style.display = 'none';
     } else {
-      raceTabBanner.style.display = '';
+      // Use flex so the "hide" link can be right-justified
+      raceTabBanner.style.display = 'flex';
+      raceTabBanner.style.alignItems = 'center';
+      raceTabBanner.style.justifyContent = 'space-between';
+      raceTabBanner.style.gap = '10px';
+
       raceTabBanner.style.border = '1px solid rgba(255, 200, 0, 0.6)';
       raceTabBanner.style.background = 'rgba(255, 200, 0, 0.12)';
     }
   }
 }
+
 
 
 
@@ -3893,6 +3926,21 @@ function toggleSerialMonitor() {
   }
 }
 
+function startDebugListener() {
+  // Poll for new debug logs every 500ms
+  serialMonitorPollInterval = setInterval(pollDebugLogs, 500);
+  
+  // Initial poll
+  pollDebugLogs();
+}
+
+function stopDebugListener() {
+  if (serialMonitorPollInterval) {
+    clearInterval(serialMonitorPollInterval);
+    serialMonitorPollInterval = null;
+  }
+}
+
 function startSerialMonitor() {
   const button = document.getElementById('serialMonitorToggle');
   const monitor = document.getElementById('serialMonitor');
@@ -3904,12 +3952,6 @@ function startSerialMonitor() {
   
   // Clear monitor and show starting message
   monitor.innerHTML = '<div style="color: #4ade80;">[SYSTEM] Serial monitor started</div>';
-  
-  // Poll for new debug logs every 500ms
-  serialMonitorPollInterval = setInterval(pollDebugLogs, 500);
-  
-  // Initial poll
-  pollDebugLogs();
 }
 
 // Call this on every incoming log line (cheap string checks)
@@ -3958,12 +4000,7 @@ function stopSerialMonitor() {
   button.textContent = 'Start Monitor';
   button.style.backgroundColor = '';
   serialMonitorActive = false;
-  
-  if (serialMonitorPollInterval) {
-    clearInterval(serialMonitorPollInterval);
-    serialMonitorPollInterval = null;
-  }
-  
+    
   const line = document.createElement('div');
   line.style.color = '#888';
   line.textContent = '[SYSTEM] Serial monitor stopped';
@@ -4442,13 +4479,11 @@ function displayWebhooks(webhooks) {
 }
 
 function showCalibrationBanner() {
-  console.log('showCalibrationBanner');
   const banner = document.getElementById('calibrationBanner');
   if (banner) banner.style.display = 'block';
 }
 
 function hideCalibrationBanner() {
-  console.log('hideCalibrationBanner');
   const banner = document.getElementById('calibrationBanner');
   if (banner) banner.style.display = 'none';
 }
