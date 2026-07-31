@@ -1,6 +1,7 @@
 #include "selftest.h"
 #include "debug.h"
 #include "config.h"
+#include "mac_util.h"
 #include "storage.h"
 #include "RX5808.h"
 #include "laptimer.h"
@@ -259,11 +260,24 @@ TestResult SelfTest::testWiFi() {
         return result;
     }
     
-    String modeStr = (mode == WIFI_AP) ? "AP" : 
+    String modeStr = (mode == WIFI_AP) ? "AP" :
                      (mode == WIFI_STA) ? "STA" : "AP+STA";
-    
+
+    // Report the MAC of the interface(s) actually running.  WiFi.macAddress()
+    // was used here previously, but it queries the STA netif — which is never
+    // started in AP-only mode, so the page showed 00:00:00:00:00:00.  Read
+    // from eFuse instead (see lib/MACUTIL/mac_util.h).
+    String macStr;
+    if (mode == WIFI_AP) {
+        macStr = String("AP ") + getApMacString();
+    } else if (mode == WIFI_STA) {
+        macStr = String("STA ") + getStaMacString();
+    } else {
+        macStr = String("AP ") + getApMacString() + " / STA " + getStaMacString();
+    }
+
     result.passed = true;
-    result.details = String("Mode: ") + modeStr + ", MAC: " + WiFi.macAddress();
+    result.details = String("Mode: ") + modeStr + ", MAC: " + macStr;
     result.duration_ms = millis() - start;
     return result;
 }

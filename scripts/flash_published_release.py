@@ -1,5 +1,5 @@
 """
-Flash a published GitHub Release onto the connected device.
+Flash a published GitHub Release onto every connected device.
 
 Why this exists:
   A local `deploy_all` builds the firmware/filesystem on your machine — same
@@ -15,19 +15,34 @@ Flow:
   2. Query the Releases API for the latest release, or the tag in
      $RELEASE_TAG if set.
   3. Verify the release carries the two required assets
-     (FPVRaceOne-firmware.bin + FPVRaceOne-littlefs.bin).
-  4. Download both into .pio/build/published/<tag>/.
-  5. Auto-detect the ESP32-C6 USB serial port.
-  6. Flash firmware.bin to the OTA_0 entry (0x10000) and littlefs.bin to
-     the LittleFS partition (0x320000).
+     (FPVRaceOne-merged.bin + FPVRaceOne-littlefs.bin).
+  4. Download both into .pio/build/published/<tag>/ (cached per tag).
+  5. Auto-detect ALL connected ESP32-C6 USB serial ports.
+  6. For every detected device: FULL CHIP ERASE, then flash merged.bin to
+     0x0 and littlefs.bin to 0x320000.
+     A failure on one device does not stop the others — a per-device
+     OK/FAILED summary is printed at the end and the task exits non-zero
+     if any device failed.
 
 Non-interactive use:
     set RELEASE_TAG=v0.1.2-beta.5
     pio run -t flash_published_release
 
-Bootloader and partition table are NOT included — they live on the device
-already (the OTA flow doesn't touch them either).  If the device is in a
-totally bricked state, do a manual `pio run -t upload` first, then this.
+WHY merged.bin AND WHY A FULL ERASE
+  merged.bin is the CI-built full-flash image: bootloader (0x0), partition
+  table (0x8000), boot_app0/otadata (0xE000) and the app (0x10000) in one
+  blob, with the NVS gap at 0x9000 left as 0xFF.  It ends well below the
+  LittleFS partition at 0x320000, so the two writes never overlap.
+
+  Because merged.bin restores the bootloader and partition table, a full
+  `erase_flash` is safe here — unlike a firmware-only flash, which would
+  brick the device if the bootloader were erased first.  The erase gives a
+  genuinely pristine device: NVS config wiped, both OTA slots cleared,
+  coredump cleared, no stale LittleFS remnants.
+
+  Net result is a device byte-identical to a factory unit running this
+  release — a stronger guarantee than OTA, which preserves NVS and only
+  rewrites the app + filesystem.
 """
 
 import json
@@ -49,14 +64,14 @@ except (AttributeError, ValueError):
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Flash layout for the seeed_xiao_esp32c6 target.  These MUST match
-# extra_script.py's FS_OFFSET and platformio.ini's
-# board_upload.offset_address.  Keep all three in sync if the partition
-# table ever changes.
-FW_OFFSET = "0x10000"   # OTA_0 entry (board_upload.offset_address)
-FS_OFFSET = "0x320000"  # LittleFS partition (extra_script.py FS_OFFSET)
+# partitions_two_ota_XIAO_ESP32_C6.csv, extra_script.py's FS_OFFSET, and
+# the merge-bin offsets in .github/workflows/release.yml.  Keep them in
+# sync if the partition table ever changes.
+MERGED_OFFSET = "0x0"       # bootloader + partitions + boot_app0 + app
+FS_OFFSET     = "0x320000"  # LittleFS partition (extra_script.py FS_OFFSET)
 
-FW_ASSET = "FPVRaceOne-firmware.bin"
-FS_ASSET = "FPVRaceOne-littlefs.bin"
+MERGED_ASSET = "FPVRaceOne-merged.bin"
+FS_ASSET     = "FPVRaceOne-littlefs.bin"
 
 # Same USB vendor IDs extra_script.py uses to identify an attached XIAO.
 ESP32_VIDS = {
@@ -173,26 +188,28 @@ def main():
           f"published {release.get('published_at', '?')}")
 
     assets = {a["name"]: a["browser_download_url"] for a in release.get("assets", [])}
-    missing = [n for n in (FW_ASSET, FS_ASSET) if n not in assets]
+    missing = [n for n in (MERGED_ASSET, FS_ASSET) if n not in assets]
     if missing:
         _fail(
             f"Release {tag_name} is missing required asset(s): {', '.join(missing)}.\n"
             f"Assets present: {', '.join(assets) if assets else '(none)'}\n"
-            "Was the release built by .github/workflows/release.yml?"
+            "Was the release built by .github/workflows/release.yml?  Releases\n"
+            "published before the merged-image contract was added carry no\n"
+            "assets at all and cannot be flashed by this task."
         )
 
     # Cache downloads per-tag so re-running the task on the same release is
     # near-instant after the first run.
     out_dir = REPO_ROOT / ".pio" / "build" / "published" / tag_name
     out_dir.mkdir(parents=True, exist_ok=True)
-    fw_path = out_dir / FW_ASSET
-    fs_path = out_dir / FS_ASSET
+    merged_path = out_dir / MERGED_ASSET
+    fs_path     = out_dir / FS_ASSET
 
     print(f"\n[2/4] Downloading to {out_dir.relative_to(REPO_ROOT).as_posix()}/")
-    _download(assets[FW_ASSET], fw_path, FW_ASSET)
-    _download(assets[FS_ASSET], fs_path, FS_ASSET)
+    _download(assets[MERGED_ASSET], merged_path, MERGED_ASSET)
+    _download(assets[FS_ASSET],     fs_path,     FS_ASSET)
 
-    print("\n[3/4] Locating connected device...")
+    print("\n[3/4] Locating connected device(s)...")
     ports = _find_esp32_ports()
     if ports is None:
         _fail("pyserial isn't installed in this Python.  "
@@ -200,38 +217,98 @@ def main():
     if not ports:
         _fail("No ESP32 USB device detected.\n"
               "Plug the device in (USB-C cable in a USB port — not a charge-only cable) and retry.")
-    print(f"      Found: {', '.join(ports)}")
+    print(f"      Found {len(ports)} device(s): {', '.join(ports)}")
 
-    print(f"\n[4/4] Flashing {tag_name}...")
-    print(f"      firmware.bin  → {FW_OFFSET}")
+    print(f"\n[4/4] Erasing + flashing {tag_name} on {len(ports)} device(s)...")
+    print(f"      FULL CHIP ERASE (wipes NVS config, OTA slots, coredump, LittleFS)")
+    print(f"      merged.bin    → {MERGED_OFFSET}   (bootloader + partitions + boot_app0 + app)")
     print(f"      littlefs.bin  → {FS_OFFSET}")
 
-    for port in ports:
-        print(f"\n   ── {port} ──")
-        cmd = [
+    # Erase + flash every detected device, continuing past failures so one
+    # flaky cable doesn't leave the remaining nodes untouched.  Matches
+    # extra_script.py's do_upload_firmware / do_upload_fs behaviour: collect
+    # a per-port result, print an OK/FAILED summary, then exit non-zero if
+    # any port failed so PIO still marks the task as failed.
+    #
+    # Erase and write are separate esptool invocations rather than
+    # `write_flash -e` so a failure can be attributed to the right phase —
+    # an erase that succeeds followed by a write that fails leaves a blank
+    # device, which is a materially different situation to report than an
+    # erase that never ran.
+    def _esptool(port, args):
+        return subprocess.run([
             sys.executable, "-m", "esptool",
             "--chip", "esp32c6",
             "--port", port,
             "--baud", "460800",
             "--before", "default_reset",
             "--after", "hard_reset",
+        ] + args).returncode
+
+    results = {}
+    blanked = []          # erased OK but write failed → device is now empty
+    for port in ports:
+        print(f"\n   ── {port} ──")
+
+        print(f"   [1/2] Erasing entire flash...")
+        rc = _esptool(port, ["erase_flash"])
+        if rc != 0:
+            results[port] = False
+            print(f"   [FAILED] erase_flash exited {rc} on {port} — device untouched, "
+                  f"continuing with remaining device(s).", file=sys.stderr)
+            continue
+
+        print(f"   [2/2] Writing {MERGED_ASSET} + {FS_ASSET}...")
+        rc = _esptool(port, [
             "write_flash",
-            FW_OFFSET, str(fw_path),
-            FS_OFFSET, str(fs_path),
-        ]
-        result = subprocess.run(cmd)
-        if result.returncode != 0:
-            _fail(f"esptool exited {result.returncode} on {port}.", code=result.returncode)
+            MERGED_OFFSET, str(merged_path),
+            FS_OFFSET,     str(fs_path),
+        ])
+        results[port] = (rc == 0)
+        if rc != 0:
+            blanked.append(port)
+            print(f"   [FAILED] write_flash exited {rc} on {port} — flash was already "
+                  f"erased, so this device is now BLANK and will not boot until "
+                  f"re-flashed.  Continuing with remaining device(s).", file=sys.stderr)
+
+    ok_count   = sum(1 for v in results.values() if v)
+    fail_count = len(results) - ok_count
 
     print()
+    print(f"=== Flash Published Release Summary ({tag_name}) ===")
+    for port, ok in results.items():
+        print(f"  {port}: {'OK' if ok else 'FAILED'}")
+    print()
+
+    if fail_count:
+        print("=" * 60)
+        print(f"  PARTIAL — {ok_count} of {len(results)} device(s) now running {tag_name}")
+        print("=" * 60)
+        if blanked:
+            print(f"  !! {len(blanked)} device(s) were ERASED but not written and are")
+            print(f"     now BLANK — they will not boot until re-flashed:")
+            for p in blanked:
+                print(f"       {p}")
+            print()
+        print(f"  Re-run the task to retry.  Downloads below are cached, so a")
+        print(f"  retry is fast; already-flashed devices are simply redone.")
+        print()
+        print(f"  Cached downloads (keep / clean as you wish):")
+        print(f"    {merged_path}")
+        print(f"    {fs_path}")
+        print()
+        sys.exit(1)
+
     print("=" * 60)
-    print(f"  SUCCESS — device(s) now running {tag_name}")
+    print(f"  SUCCESS — {ok_count} device(s) now running {tag_name}")
     print("=" * 60)
-    print(f"  The flashed binaries are byte-for-byte identical to what an")
-    print(f"  OTA `Check for Updates` would deliver for this release.")
+    print(f"  Each device was fully erased and re-imaged from the published")
+    print(f"  release: bootloader, partition table, app and filesystem are")
+    print(f"  byte-for-byte identical to a factory unit on {tag_name}.")
+    print(f"  NVS config was wiped, so devices boot with default settings.")
     print()
     print(f"  Cached downloads (keep / clean as you wish):")
-    print(f"    {fw_path}")
+    print(f"    {merged_path}")
     print(f"    {fs_path}")
     print()
 

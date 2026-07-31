@@ -7,6 +7,7 @@
 #include <HTTPClient.h>
 #include <esp_wifi.h>
 #include <esp_mac.h>
+#include "mac_util.h"
 
 // Defined in webserver.cpp.  Format: "FPVRaceOne_<6-hex>".
 extern String wifi_ap_ssid;
@@ -27,15 +28,12 @@ static inline char slotLetter(uint8_t nodeId) {
 // the SSID issue we fixed with esp_read_mac).  When two clients report the
 // same MAC, handleRegister's macMatch path overwrites slot 1 for the second
 // client instead of opening slot 2.
-// Reading eFuse directly is what we already do for the SoftAP MAC and is
-// guaranteed to return this chip's actual unique STA MAC.
-static String _readStaMacString() {
-    uint8_t mac[6] = {0};
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    char buf[18];
-    snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return String(buf);
+//
+// The implementation now lives in lib/MACUTIL/mac_util.h so the webserver,
+// selftest and USB transport share it — they were all still calling
+// WiFi.macAddress() and reporting 00:00:00:00:00:00 in AP-only mode.
+static inline String _readStaMacString() {
+    return getStaMacString();
 }
 
 void MultiNodeManager::init(Config* config, Led* led, Webserver* webserver) {

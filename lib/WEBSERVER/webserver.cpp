@@ -13,6 +13,7 @@
 #include "selftest.h"
 #include "storage.h"
 #include "webhook.h"
+#include "mac_util.h"
 #include <HTTPClient.h>
 
 #include <DNSServer.h>
@@ -419,7 +420,12 @@ static String _buildDirectorStatePayload(MultiNodeManager *multiNode, LapTimer *
     // so the restore flow keys every entry by MAC and the master is no
     // exception — without this field the master's slot couldn't be matched
     // by a backup file later.
-    String masterMac = WiFi.macAddress();
+    // Must come from eFuse, not WiFi.macAddress().  A master boots AP-only,
+    // so the STA netif is never started and the Arduino wrapper returned
+    // 00:00:00:00:00:00 — which collides across every master and would let a
+    // pilot-backup restore apply one device's hardware-specific calibration
+    // to a different device.
+    String masterMac = getStaMacString();
     out += "{\"nodes\":[{\"nodeId\":0,\"isMaster\":true,\"online\":true";
     out += ",\"mac\":\"";        _jsonEscapeAppend(out, masterMac); out += "\"";
     out += ",\"pilotName\":\"";  _jsonEscapeAppend(out, pilotName); out += "\"";
@@ -1004,7 +1010,10 @@ static void startMDNS() {
         return;
     }
 
-    String instance = String(wifi_hostname) + "_" + WiFi.macAddress();
+    // eFuse-backed so the instance name is genuinely unique per chip.  With
+    // WiFi.macAddress() every AP-mode unit advertised the identical instance
+    // "FPVRaceOne_000000000000", defeating the point of the suffix.
+    String instance = String(wifi_hostname) + "_" + getStaMacString();
     instance.replace(":", "");
     MDNS.setInstanceName(instance);
     MDNS.addService("http", "tcp", 80);
@@ -1242,7 +1251,7 @@ EEPROM:\n\
                  ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap(),
                  storage->getStorageType().c_str(), storage->getUsedBytes(), storage->getTotalBytes(), storage->getFreeBytes(),
                  ESP.getChipModel(), ESP.getChipRevision(), ESP.getChipCores(), ESP.getSdkVersion(), ESP.getFlashChipSize(), ESP.getFlashChipSpeed() / 1000000, getCpuFrequencyMhz(),
-                 WiFi.localIP().toString().c_str(), WiFi.macAddress().c_str(), configBuf);
+                 WiFi.localIP().toString().c_str(), getStaMacString().c_str(), configBuf);
         request->send(200, "text/plain", buf);
         led->on(200);
     });

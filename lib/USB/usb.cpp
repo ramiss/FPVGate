@@ -1,5 +1,6 @@
 #include "usb.h"
 #include "debug.h"
+#include "mac_util.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -431,7 +432,8 @@ void USBTransport::sendStatusResponse(uint32_t id) {
     // Network info
     JsonObject network = data.createNestedObject("network");
     network["ip"] = WiFi.localIP().toString();
-    network["mac"] = WiFi.macAddress();
+    // eFuse-backed: WiFi.macAddress() reports zeros in AP-only mode.
+    network["mac"] = getStaMacString();
 
     // Battery monitoring was removed (monitor is always nullptr here); previously
     // this unconditionally dereferenced `monitor`, crashing on any `status` command.

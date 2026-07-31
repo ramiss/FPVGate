@@ -334,13 +334,21 @@ env.AddCustomTarget(
     description="Tag with a -beta.N suffix and push; CI publishes with the Pre-release flag set"
 )
 
-# ── Flash the latest published release onto the device ──────────────────────
+# ── Erase + flash the latest published release onto every device ────────────
 #
-# Downloads the firmware + filesystem assets directly from the GitHub
-# Releases page and writes them to the device, giving you byte-for-byte
-# parity with what an OTA `Check for Updates` would deliver.  Useful for
-# pre-release acceptance testing on hardware, or for resetting a test
-# device back to the published baseline after local experimentation.
+# Downloads the merged full-flash image + filesystem directly from the
+# GitHub Releases page, FULLY ERASES each connected ESP32, then re-images
+# it.  The result is byte-for-byte identical to a factory unit running that
+# release — bootloader, partition table, app and filesystem all from CI.
+#
+# Useful for pre-release acceptance testing on hardware, or for resetting
+# test devices to a known-clean baseline after local experimentation.
+#
+# The full erase is safe here (unlike a firmware-only flash) because
+# merged.bin restores the bootloader and partition table.  Side effect: NVS
+# is wiped, so devices come back with DEFAULT CONFIG — pilot names, WiFi
+# credentials, calibration and node mode are all reset.  Use deploy_all
+# instead if you want to keep device config.
 
 def flash_published_release(source, target, env):
     script = os.path.join(env.subst("$PROJECT_DIR"), "scripts", "flash_published_release.py")
@@ -354,6 +362,6 @@ env.AddCustomTarget(
     name="flash_published_release",
     dependencies=None,
     actions=flash_published_release,
-    title="Flash Published Release (GitHub binaries)",
-    description="Download the latest GitHub Release's firmware + filesystem and flash them — matches OTA output exactly"
+    title="Erase + Flash Published Release (All Devices)",
+    description="Fully erase every connected ESP32 and re-image it from the latest GitHub Release (merged.bin + littlefs.bin) — WIPES NVS CONFIG"
 )
