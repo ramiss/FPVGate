@@ -4,7 +4,7 @@
 
 **Personal FPV Lap Timer**
 
-[- Click here to purchase your FPVRaceOne at our Etsy store -](https://www.etsy.com/listing/4542323349/fpvraceone-a-personal-lap-timer-for-fpv)
+[- Click here to purchase your FPVRaceOne at our store -](https://fpvwidgets.square.site)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -154,7 +154,7 @@ Network **up to 8 devices** together using on-board Wifi (no router or extra har
 
 ### Hardware
 
-Pre-made and flashed hardware — [- Click here to purchase your FPVRaceOne at our Etsy store -](https://www.etsy.com/listing/4542323349/fpvraceone-a-personal-lap-timer-for-fpv)
+Pre-made and flashed hardware — [- Click here to purchase your FPVRaceOne at our store -](https://fpvwidgets.square.site)
 
 **[Detailed hardware setup →](docs/GETTING_STARTED.md)**
 
